@@ -1,5 +1,12 @@
-lib/
-node_modules/
-.dsh/
-*.log
 .DS_Store
+.derived
+.build
+DerivedData
+xcuserdata
+*.xcuserstate
+*.moved-aside
+.swiftpm
+.idea
+.vscode
+*.log
+Aureways.app

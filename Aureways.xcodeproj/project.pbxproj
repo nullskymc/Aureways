@@ -1,0 +1,419 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10100000000000000000001 /* AurewaysApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000001 /* AurewaysApp.swift */; };
+		B10100000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* AppModel.swift */; };
+		B10100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
+		B10100000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000004 /* Models.swift */; };
+		B10100000000000000000005 /* Catalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000005 /* Catalog.swift */; };
+		B10100000000000000000006 /* ClientOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000006 /* ClientOps.swift */; };
+		B10100000000000000000007 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000007 /* Connection.swift */; };
+		B10100000000000000000008 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000008 /* RootView.swift */; };
+		B10100000000000000000009 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000009 /* Sidebar.swift */; };
+		B1010000000000000000000A /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000A /* Transcript.swift */; };
+		B1010000000000000000000B /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000B /* Composer.swift */; };
+		B1010000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000C /* Assets.xcassets */; };
+		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
+		B20100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
+		B20100000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000004 /* Models.swift */; };
+		B20100000000000000000005 /* Catalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000005 /* Catalog.swift */; };
+		B20100000000000000000006 /* ClientOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000006 /* ClientOps.swift */; };
+		B20100000000000000000007 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000007 /* Connection.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C10100000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = P10100000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = T10100000000000000000001;
+			remoteInfo = Aureways;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		F00000000000000000000001 /* Aureways.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aureways.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F00000000000000000000002 /* AurewaysTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AurewaysTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10100000000000000000001 /* AurewaysApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurewaysApp.swift; sourceTree = "<group>"; };
+		F10100000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		F10100000000000000000003 /* JSONRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONRPC.swift; sourceTree = "<group>"; };
+		F10100000000000000000004 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		F10100000000000000000005 /* Catalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
+		F10100000000000000000006 /* ClientOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOps.swift; sourceTree = "<group>"; };
+		F10100000000000000000007 /* Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
+		F10100000000000000000008 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		F10100000000000000000009 /* Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sidebar.swift; sourceTree = "<group>"; };
+		F1010000000000000000000A /* Transcript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcript.swift; sourceTree = "<group>"; };
+		F1010000000000000000000B /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
+		F1010000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		S10100000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		S20100000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G10100000000000000000000 = {
+			isa = PBXGroup;
+			children = (
+				G10100000000000000000001 /* Aureways */,
+				G20100000000000000000001 /* AurewaysTests */,
+				G10100000000000000000009 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G10100000000000000000001 /* Aureways */ = {
+			isa = PBXGroup;
+			children = (
+				F10100000000000000000001 /* AurewaysApp.swift */,
+				F10100000000000000000002 /* AppModel.swift */,
+				G10100000000000000000002 /* ACP */,
+				G10100000000000000000003 /* Views */,
+				F1010000000000000000000C /* Assets.xcassets */,
+			);
+			path = Aureways;
+			sourceTree = "<group>";
+		};
+		G10100000000000000000002 /* ACP */ = {
+			isa = PBXGroup;
+			children = (
+				F10100000000000000000003 /* JSONRPC.swift */,
+				F10100000000000000000004 /* Models.swift */,
+				F10100000000000000000005 /* Catalog.swift */,
+				F10100000000000000000006 /* ClientOps.swift */,
+				F10100000000000000000007 /* Connection.swift */,
+			);
+			path = ACP;
+			sourceTree = "<group>";
+		};
+		G10100000000000000000003 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F10100000000000000000008 /* RootView.swift */,
+				F10100000000000000000009 /* Sidebar.swift */,
+				F1010000000000000000000A /* Transcript.swift */,
+				F1010000000000000000000B /* Composer.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		G10100000000000000000009 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000001 /* Aureways.app */,
+				F00000000000000000000002 /* AurewaysTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		G20100000000000000000001 /* AurewaysTests */ = {
+			isa = PBXGroup;
+			children = (
+				F20100000000000000000001 /* ProtocolTests.swift */,
+			);
+			path = AurewaysTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		T10100000000000000000001 /* Aureways */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L10100000000000000000001 /* Build configuration list for PBXNativeTarget "Aureways" */;
+			buildPhases = (
+				S10100000000000000000001 /* Sources */,
+				S10100000000000000000002 /* Frameworks */,
+				S10100000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Aureways;
+			productName = Aureways;
+			productReference = F00000000000000000000001 /* Aureways.app */;
+			productType = "com.apple.product-type.application";
+		};
+		T20100000000000000000001 /* AurewaysTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L20100000000000000000001 /* Build configuration list for PBXNativeTarget "AurewaysTests" */;
+			buildPhases = (
+				S20100000000000000000001 /* Sources */,
+				S20100000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AurewaysTests;
+			productName = AurewaysTests;
+			productReference = F00000000000000000000002 /* AurewaysTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		P10100000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					T10100000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					T20100000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = T10100000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = L00100000000000000000001 /* Build configuration list for PBXProject "Aureways" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = G10100000000000000000000;
+			productRefGroup = G10100000000000000000009 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				T10100000000000000000001 /* Aureways */,
+				T20100000000000000000001 /* AurewaysTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		S10100000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1010000000000000000000C /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		S10100000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10100000000000000000001 /* AurewaysApp.swift in Sources */,
+				B10100000000000000000002 /* AppModel.swift in Sources */,
+				B10100000000000000000003 /* JSONRPC.swift in Sources */,
+				B10100000000000000000004 /* Models.swift in Sources */,
+				B10100000000000000000005 /* Catalog.swift in Sources */,
+				B10100000000000000000006 /* ClientOps.swift in Sources */,
+				B10100000000000000000007 /* Connection.swift in Sources */,
+				B10100000000000000000008 /* RootView.swift in Sources */,
+				B10100000000000000000009 /* Sidebar.swift in Sources */,
+				B1010000000000000000000A /* Transcript.swift in Sources */,
+				B1010000000000000000000B /* Composer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		S20100000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
+				B20100000000000000000003 /* JSONRPC.swift in Sources */,
+				B20100000000000000000004 /* Models.swift in Sources */,
+				B20100000000000000000005 /* Catalog.swift in Sources */,
+				B20100000000000000000006 /* ClientOps.swift in Sources */,
+				B20100000000000000000007 /* Connection.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D10100000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = T10100000000000000000001 /* Aureways */;
+			targetProxy = C10100000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		K00100000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		K00100000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		K10100000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		K10100000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		K20100000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		K20100000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		L00100000000000000000001 /* Build configuration list for PBXProject "Aureways" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				K00100000000000000000001 /* Debug */,
+				K00100000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		L10100000000000000000001 /* Build configuration list for PBXNativeTarget "Aureways" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				K10100000000000000000001 /* Debug */,
+				K10100000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		L20100000000000000000001 /* Build configuration list for PBXNativeTarget "AurewaysTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				K20100000000000000000001 /* Debug */,
+				K20100000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = P10100000000000000000001 /* Project object */;
+}
