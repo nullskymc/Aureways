@@ -118,7 +118,7 @@ struct MainWorkspaceView: View {
                 set: { model.inspectorOpen = $0 }
             )) {
                 InspectorPaneView()
-                    .inspectorColumnWidth(min: 260, ideal: 320, max: 450)
+                    .inspectorColumnWidth(min: 320, ideal: 440, max: 600)
             }
         .sheet(isPresented: Binding(
             get: { model.sessions.contains { $0.pendingPermission != nil } },

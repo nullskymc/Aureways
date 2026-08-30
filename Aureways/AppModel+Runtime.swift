@@ -279,6 +279,9 @@ extension AppModel {
     }
 
     func appendFileOp(agentId: String, type: String, path: String) {
+        if type == "write" {
+            agentWroteFile(path)
+        }
         if let selected = selectedSession, selected.agent.id == agentId {
             selected.recordFileOp(type: type, path: path)
             return

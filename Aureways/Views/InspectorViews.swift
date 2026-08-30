@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Inspector Pane View (Right Panel)
@@ -6,248 +7,79 @@ struct InspectorPaneView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Picker("", selection: $model.selectedInspectorTab) {
-                    ForEach(InspectorTab.allCases) { tab in
-                        Label(tab.rawValue, systemImage: tab.icon)
-                            .tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+            PaneTabBar()
 
-                Spacer()
-            }
-            .padding(8)
-
-            Divider()
-
-            Group {
-                switch model.selectedInspectorTab {
-                case .review:
-                    ReviewInspectorTab(session: model.selectedSession)
-                case .terminal:
-                    TerminalInspectorTab(session: model.selectedSession)
-                case .logs:
-                    LogsInspectorTab(session: model.selectedSession)
-                case .files:
-                    FilesInspectorTab()
-                case .info:
-                    InfoInspectorTab(session: model.selectedSession)
+            ZStack {
+                // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
+                ForEach(model.paneTabs) { tab in
+                    let isActive = model.activePaneTabId == tab.id
+                    tabContent(tab)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .alert("文件已被外部修改", isPresented: Binding(
+            get: { model.pendingSavePath != nil },
+            set: { if !$0 { model.cancelPendingSave() } }
+        )) {
+            Button("仍然覆盖") {
+                if let path = model.pendingSavePath, let content = model.pendingSaveContent {
+                    model.writeFileTab(path: path, content: content)
+                } else {
+                    model.cancelPendingSave()
+                }
+            }
+            Button("放弃我的修改", role: .destructive) {
+                if let path = model.pendingSavePath {
+                    model.cancelPendingSave()
+                    model.reloadFileTab(path)
+                }
+            }
+            Button("取消", role: .cancel) {
+                model.cancelPendingSave()
+            }
+        } message: {
+            Text("“\(model.pendingSavePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 在你打开后被外部修改过，保存会覆盖新内容。")
+        }
+        .alert("有未保存的修改", isPresented: Binding(
+            get: { model.pendingClosePath != nil },
+            set: { if !$0 { model.pendingClosePath = nil } }
+        )) {
+            Button("保存并关闭") {
+                model.resolvePendingCloseFileTab(save: true)
+            }
+            Button("不保存", role: .destructive) {
+                model.resolvePendingCloseFileTab(save: false)
+            }
+            Button("取消", role: .cancel) {
+                model.pendingClosePath = nil
+            }
+        } message: {
+            Text("“\(model.pendingClosePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 还有未保存的修改。")
+        }
     }
-}
 
-// MARK: - Inspector Tabs
-
-struct ReviewInspectorTab: View {
-    let session: ChatSession?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("文件读写与变更审查")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Palette.accent)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-
-            if let ops = session?.fileOps, !ops.isEmpty {
-                Text("按 Agent 进程归因：同一 Agent 的多个会话共用一个进程，这里可能混入其它会话触发的读写。")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 14)
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        ForEach(ops) { op in
-                            HStack(spacing: 8) {
-                                Text(op.type.uppercased())
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(op.type == "write" ? Palette.moss : Palette.sky)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(op.fileName)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                    Text(op.path)
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                            }
-                            .padding(8)
-                            .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "doc.badge.gearshape")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.tertiary)
-                    Text("当前会话暂无文件读写记录")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+    @ViewBuilder
+    private func tabContent(_ tab: PaneTab) -> some View {
+        switch tab {
+        case .browser:
+            FileBrowserTabView()
+        case .info:
+            InfoInspectorTab(session: model.selectedSession)
+        case .file(let path):
+            FileEditorTabView(path: path)
+        case .terminal(let id):
+            if let terminal = model.interactiveTerminals[id] {
+                TerminalTabView(terminal: terminal)
             }
         }
     }
 }
 
-struct TerminalInspectorTab: View {
-    let session: ChatSession?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("活动终端")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Palette.accent)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-
-            VStack(spacing: 8) {
-                Image(systemName: "terminal")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.tertiary)
-                Text("终端由 Agent 按需通过 ACP 动态启动与执行")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-}
-
-struct LogsInspectorTab: View {
-    let session: ChatSession?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Agent stderr 日志")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.accent)
-                Spacer()
-                if let count = session?.logs.count, count > 0 {
-                    Text("\(count) 条")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-
-            if let logs = session?.logs, !logs.isEmpty {
-                Text("stderr 来自 Agent 进程，同一 Agent 的多个会话共用，可能混入其它会话的日志。")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 14)
-                ScrollView {
-                    Text(logs.joined(separator: "\n"))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(12)
-                }
-                .scrollContentBackground(.hidden)
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.tertiary)
-                    Text("暂无 stderr 日志输出")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-}
-
-private struct WorkspaceEntry: Identifiable {
-    let id: String
-    let name: String
-    let isDirectory: Bool
-}
-
-struct FilesInspectorTab: View {
-    @Environment(AppModel.self) private var model
-    @State private var files: [WorkspaceEntry] = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("工作区文件")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.accent)
-                Spacer()
-                Button {
-                    loadFiles()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(files) { file in
-                        HStack(spacing: 6) {
-                            Image(systemName: file.isDirectory ? "folder" : "doc.text")
-                                .font(.system(size: 11))
-                                .foregroundStyle(file.isDirectory ? Palette.accent : .secondary)
-                            Text(file.name)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 3)
-                    }
-                }
-            }
-        }
-        .onAppear { loadFiles() }
-        .onChange(of: model.workspacePath) { loadFiles() }
-    }
-
-    private func loadFiles() {
-        let url = URL(fileURLWithPath: model.workspacePath, isDirectory: true)
-        let keys: [URLResourceKey] = [.isDirectoryKey, .nameKey]
-        let urls = (try? FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        files = urls.compactMap { item -> WorkspaceEntry? in
-            let values = try? item.resourceValues(forKeys: Set(keys))
-            let name = values?.name ?? item.lastPathComponent
-            return WorkspaceEntry(id: item.path, name: name, isDirectory: values?.isDirectory == true)
-        }
-        .sorted { lhs, rhs in
-            if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory && !rhs.isDirectory }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-        }
-    }
-}
+// MARK: - Info Tab
 
 struct InfoInspectorTab: View {
     @Environment(AppModel.self) private var model
@@ -257,8 +89,8 @@ struct InfoInspectorTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("会话与协议信息")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.accent)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 8) {
                     infoRow(title: "协议版本", value: "ACP v1 (protocolVersion: 1)")
@@ -283,8 +115,8 @@ struct InfoInspectorTab: View {
 
                 if let s = session, s.phase.isReady, !s.configOptions.isEmpty {
                     Text("会话配置（ACP 透传）")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Palette.accent)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
                     Text("由当前 harness 声明，不写入 Aureways 自己的设置。")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -347,4 +179,3 @@ struct InfoInspectorTab: View {
         }
     }
 }
-

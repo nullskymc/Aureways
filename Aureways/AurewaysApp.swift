@@ -1,7 +1,17 @@
 import SwiftUI
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    // 应用退出时显式终止交互终端；不依赖 PTY master 关闭带来的 SIGHUP，有竞态。
+    nonisolated func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            AppModel.shared?.terminateAllTerminals()
+        }
+    }
+}
+
 @main
 struct AurewaysApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     init() {

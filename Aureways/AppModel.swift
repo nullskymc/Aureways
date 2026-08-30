@@ -5,6 +5,8 @@ import SwiftUI
 @Observable
 @MainActor
 final class AppModel {
+    static weak var shared: AppModel?
+
     var agents: [AgentProfile]
     var availability: [String: Bool] = [:]
     var sessions: [ChatSession] = []
@@ -26,7 +28,16 @@ final class AppModel {
     }
     var autoApprove = false
     var inspectorOpen = false
-    var selectedInspectorTab: InspectorTab = .logs
+    var paneTabs: [PaneTab] = [.browser]
+    var activePaneTabId = PaneTab.browser.id
+    var fileTabStates: [String: FileTabState] = [:]
+    var interactiveTerminals: [UUID: InteractiveTerminal] = [:]
+    var browserInvalidationToken = 0
+    var pendingSavePath: String?
+    var pendingSaveContent: String?
+    var pendingClosePath: String?
+    var editorDrafts: [String: String] = [:]
+    var terminalTitles: [UUID: String] = [:]
     var searchQuery = ""
     var draftPrompt = ""
     var errorMessage: String?
@@ -97,6 +108,7 @@ final class AppModel {
         refreshAvailability()
         bootstrapWorkspaces(currentPath: initialWorkspace)
         updateWorkspaceBranch()
+        AppModel.shared = self
     }
 
     func refreshAvailability() {

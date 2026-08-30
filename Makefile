@@ -19,11 +19,15 @@ endif
 
 .PHONY: build test open clean
 
+# SwiftTerm ships a build tool plugin; skip interactive plugin validation so
+# command-line builds do not stall on approval.
+XCBUILD_FLAGS := -skipPackagePluginValidation
+
 build:
-	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) build
+	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
 test:
-	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) test
+	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 open: build
 	open $(DERIVED)/Build/Products/Debug/Aureways.app

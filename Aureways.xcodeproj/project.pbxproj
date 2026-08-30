@@ -65,6 +65,12 @@
 		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		BF10100000000000000000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* MarkdownUI */; };
+		BF10200000000000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = PD10200000000000000000001 /* SwiftTerm */; };
+		B1010000000000000000002B /* AppModel+Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002B /* AppModel+Inspector.swift */; };
+		B1010000000000000000002C /* PaneTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002C /* PaneTabBar.swift */; };
+		B1010000000000000000002D /* FileBrowserTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002D /* FileBrowserTab.swift */; };
+		B1010000000000000000002E /* FileEditorTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002E /* FileEditorTab.swift */; };
+		B1010000000000000000002F /* TerminalTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002F /* TerminalTab.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -120,6 +126,11 @@
 		F10100000000000000000027 /* Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cursor.swift; sourceTree = "<group>"; };
 		F10100000000000000000028 /* OpenCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCode.swift; sourceTree = "<group>"; };
 		F10100000000000000000029 /* CustomHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomHarness.swift; sourceTree = "<group>"; };
+		F1010000000000000000002B /* AppModel+Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Inspector.swift"; sourceTree = "<group>"; };
+		F1010000000000000000002C /* PaneTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTabBar.swift; sourceTree = "<group>"; };
+		F1010000000000000000002D /* FileBrowserTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserTab.swift; sourceTree = "<group>"; };
+		F1010000000000000000002E /* FileEditorTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileEditorTab.swift; sourceTree = "<group>"; };
+		F1010000000000000000002F /* TerminalTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTab.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,6 +139,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF10100000000000000000001 /* MarkdownUI in Frameworks */,
+				BF10200000000000000000001 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -158,6 +170,7 @@
 				F10100000000000000000019 /* AppModel+Workspace.swift */,
 				F1010000000000000000001A /* AppModel+Sessions.swift */,
 				F1010000000000000000001B /* AppModel+Runtime.swift */,
+				F1010000000000000000002B /* AppModel+Inspector.swift */,
 				F10100000000000000000012 /* ChatSession.swift */,
 				F1010000000000000000000D /* SessionStore.swift */,
 				G10100000000000000000004 /* Harness */,
@@ -194,6 +207,10 @@
 				F10100000000000000000014 /* TranscriptBlocks.swift */,
 				F10100000000000000000015 /* ToolViews.swift */,
 				F10100000000000000000016 /* InspectorViews.swift */,
+				F1010000000000000000002C /* PaneTabBar.swift */,
+				F1010000000000000000002D /* FileBrowserTab.swift */,
+				F1010000000000000000002E /* FileEditorTab.swift */,
+				F1010000000000000000002F /* TerminalTab.swift */,
 				F10100000000000000000017 /* WorkspaceTree.swift */,
 				F10100000000000000000018 /* AgentSheets.swift */,
 				F1010000000000000000001E /* Palette.swift */,
@@ -255,6 +272,7 @@
 			name = Aureways;
 			packageProductDependencies = (
 				PD10100000000000000000001 /* MarkdownUI */,
+				PD10200000000000000000001 /* SwiftTerm */,
 			);
 			productName = Aureways;
 			productReference = F00000000000000000000001 /* Aureways.app */;
@@ -306,6 +324,7 @@
 			mainGroup = G10100000000000000000000;
 			packageReferences = (
 				PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			productRefGroup = G10100000000000000000009 /* Products */;
 			projectDirPath = "";
@@ -351,11 +370,16 @@
 				B10100000000000000000014 /* TranscriptBlocks.swift in Sources */,
 				B10100000000000000000015 /* ToolViews.swift in Sources */,
 				B10100000000000000000016 /* InspectorViews.swift in Sources */,
+				B1010000000000000000002C /* PaneTabBar.swift in Sources */,
+				B1010000000000000000002D /* FileBrowserTab.swift in Sources */,
+				B1010000000000000000002E /* FileEditorTab.swift in Sources */,
+				B1010000000000000000002F /* TerminalTab.swift in Sources */,
 				B10100000000000000000017 /* WorkspaceTree.swift in Sources */,
 				B10100000000000000000018 /* AgentSheets.swift in Sources */,
 				B10100000000000000000019 /* AppModel+Workspace.swift in Sources */,
 				B1010000000000000000001A /* AppModel+Sessions.swift in Sources */,
 				B1010000000000000000001B /* AppModel+Runtime.swift in Sources */,
+				B1010000000000000000002B /* AppModel+Inspector.swift in Sources */,
 				B1010000000000000000001C /* SessionModels.swift in Sources */,
 				B1010000000000000000001D /* UpdateModels.swift in Sources */,
 				B1010000000000000000001E /* Palette.swift in Sources */,
@@ -572,6 +596,14 @@
 				minimumVersion = 2.4.1;
 			};
 		};
+		PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -579,6 +611,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
+		};
+		PD10200000000000000000001 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

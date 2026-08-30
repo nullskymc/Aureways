@@ -12,26 +12,6 @@ struct FileOpRecord: Identifiable, Sendable, Equatable {
     }
 }
 
-enum InspectorTab: String, CaseIterable, Identifiable {
-    case review = "审查"
-    case terminal = "终端"
-    case logs = "日志"
-    case files = "文件"
-    case info = "信息"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .review: return "doc.badge.gearshape"
-        case .terminal: return "terminal"
-        case .logs: return "list.bullet.rectangle"
-        case .files: return "folder"
-        case .info: return "info.circle"
-        }
-    }
-}
-
 enum SessionTitle {
     static let placeholder = "新对话"
     static let maxLength = 42
