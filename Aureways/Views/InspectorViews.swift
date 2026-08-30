@@ -53,7 +53,6 @@ struct InspectorPaneView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .liquidGlassBackdrop()
     }
 }
 

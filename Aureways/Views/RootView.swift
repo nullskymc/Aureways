@@ -18,7 +18,6 @@ struct RootView: View {
         .toolbarTitleMenu {
             workspaceMenu
         }
-        .environment(\.liquidGlass, model.useLiquidGlass)
         .searchable(text: $model.searchQuery, placement: .sidebar, prompt: "搜索会话")
         .toolbar {
             if let session = model.selectedSession {
@@ -53,7 +52,7 @@ struct RootView: View {
                 .keyboardShortcut("b", modifiers: [.command])
             }
         }
-        .liquidGlassWindow(model.useLiquidGlass, opaqueFill: Palette.ink, appearance: model.colorScheme)
+        .liquidGlassWindow(appearance: model.colorScheme)
         .alert("出错了", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -129,13 +128,6 @@ struct MainWorkspaceView: View {
                 PermissionSheet(prompt: prompt) { decision in
                     model.resolvePermission(decision)
                 }
-            }
-        }
-        .background {
-            if model.useLiquidGlass {
-                Color.clear
-            } else {
-                Palette.ink
             }
         }
     }

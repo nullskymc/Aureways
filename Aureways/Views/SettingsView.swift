@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.liquidGlass) private var liquidGlass
 
     var body: some View {
         TabView {
@@ -16,7 +15,7 @@ struct SettingsView: View {
                 .tabItem { Label("权限", systemImage: "checkmark.shield") }
         }
         .frame(width: 560, height: 520)
-        .liquidGlassWindow(liquidGlass, opaqueFill: Palette.panel, appearance: model.colorScheme)
+        .liquidGlassWindow(appearance: model.colorScheme)
     }
 }
 
@@ -32,8 +31,7 @@ struct GeneralSettingsPage: View {
                     Text("浅色").tag("light")
                     Text("深色").tag("dark")
                 }
-                Toggle("Liquid Glass 材质", isOn: $model.useLiquidGlass)
-                Text("开启后为浮层卡片与胶囊启用 Liquid Glass 磨砂玻璃质感与斜向高光；关闭后使用经典实色风格。")
+                Text("窗口与控件材质跟随系统的 Liquid Glass 外观。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -70,7 +70,7 @@
 - **外观模式设置**：可在偏好设置（`⌘,`）中自由切换 **系统默认 / 浅色模式 / 深色模式**。
 
 ### 3.2 Liquid Glass 质感系统
-- **窗口基底**：保持原生 macOS 实体不透明窗口（`isOpaque = true`，主区域基于 `Palette.ink`，侧栏/检查器基于 `Palette.panel`），避免全透明导致的桌面穿透与可读性问题。
+- **窗口基底**：完全交由系统原生渲染——标题栏、工具栏、侧栏材质均使用 macOS 26 系统默认的 Liquid Glass 表现；应用只把用户的深浅色偏好写到 `NSWindow.appearance`，保证 AppKit 材质与 SwiftUI 内容不出现深浅混色。窗口不再手动设置 `isOpaque`/`backgroundColor`/`titlebarAppearsTransparent`。
 - **浮层与 Chrome 卡片**：
   - **超薄磨砂材质基底**：`.ultraThinMaterial` 实时模糊底层内容。
   - **自适应透光层**：叠加浅色/深色模式自适应半透明光层。

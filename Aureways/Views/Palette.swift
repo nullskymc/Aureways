@@ -15,14 +15,6 @@ enum Palette {
         light: Color(red: 0.98, green: 0.98, blue: 0.99),
         dark: Color(red: 0.09, green: 0.09, blue: 0.10)
     )
-    static let panel = Color.adaptive(
-        light: Color(red: 0.94, green: 0.94, blue: 0.96),
-        dark: Color(red: 0.13, green: 0.13, blue: 0.14)
-    )
-    static let card = Color.adaptive(
-        light: Color(red: 1.0, green: 1.0, blue: 1.0),
-        dark: Color(red: 0.17, green: 0.17, blue: 0.19)
-    )
     static let cardHover = Color.adaptive(
         light: Color(red: 0.92, green: 0.92, blue: 0.95),
         dark: Color(red: 0.22, green: 0.22, blue: 0.25)

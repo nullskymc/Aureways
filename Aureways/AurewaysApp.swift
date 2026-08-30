@@ -13,7 +13,6 @@ struct AurewaysApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .environment(\.liquidGlass, model.useLiquidGlass)
                 .preferredColorScheme(model.colorScheme)
                 .frame(minWidth: 980, minHeight: 640)
         }
@@ -32,7 +31,6 @@ struct AurewaysApp: App {
         Settings {
             SettingsView()
                 .environment(model)
-                .environment(\.liquidGlass, model.useLiquidGlass)
                 .preferredColorScheme(model.colorScheme)
         }
     }

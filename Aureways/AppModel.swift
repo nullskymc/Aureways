@@ -24,11 +24,6 @@ final class AppModel {
             UserDefaults.standard.set(appearance, forKey: "appAppearance")
         }
     }
-    var useLiquidGlass: Bool {
-        didSet {
-            UserDefaults.standard.set(useLiquidGlass, forKey: "appLiquidGlass")
-        }
-    }
     var autoApprove = false
     var inspectorOpen = false
     var selectedInspectorTab: InspectorTab = .logs
@@ -70,7 +65,6 @@ final class AppModel {
         let initialWorkspace = stored ?? FileManager.default.homeDirectoryForCurrentUser.path
         workspacePath = initialWorkspace
         appearance = UserDefaults.standard.string(forKey: "appAppearance") ?? "system"
-        useLiquidGlass = UserDefaults.standard.object(forKey: "appLiquidGlass") as? Bool ?? true
 
         let custom = (UserDefaults.standard.array(forKey: "customAgents") as? [Data] ?? [])
             .compactMap { try? JSONDecoder().decode(AgentProfile.self, from: $0) }
