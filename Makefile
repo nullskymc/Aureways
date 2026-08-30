@@ -1,8 +1,18 @@
 DERIVED ?= .derived
 SCHEME ?= Aureways
 
-# Optional. Defaults to `xcode-select -p`.
-# make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+# Command Line Tools does not ship xcodebuild. Prefer a full Xcode.app if
+# xcode-select still points at /Library/Developer/CommandLineTools.
+ifeq ($(origin DEVELOPER_DIR), undefined)
+XCODE_SELECT := $(shell xcode-select -p 2>/dev/null)
+ifneq ($(findstring CommandLineTools,$(XCODE_SELECT)),)
+ifneq ($(wildcard /Applications/Xcode.app/Contents/Developer),)
+DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
+else ifneq ($(wildcard /Applications/Xcode-beta.app/Contents/Developer),)
+DEVELOPER_DIR := /Applications/Xcode-beta.app/Contents/Developer
+endif
+endif
+endif
 ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif

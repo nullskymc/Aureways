@@ -7,12 +7,16 @@
 | 方法 | 实现 | 说明 |
 | --- | --- | --- |
 | `initialize` | 有 | capabilities + clientInfo |
-| `session/new` | 有 | `cwd`、空 `mcpServers`；可选 `_meta.yoloMode` |
+| `session/new` | 有 | `cwd`、空 `mcpServers`；可选 `_meta`（由当前 Harness 提供，Grok 为 `yoloMode`） |
 | `session/prompt` | 有 | 仅 text content block |
 | `session/cancel` | 有 | notification |
 | `authenticate` | 有 | initialize 返回 `authMethods` 时用第一个 method 调用 |
-| `session/load` / `resume` / `list` / `delete` | 无 | |
-| `session/set_mode` / `set_config_option` | 无 | |
+| `session/load` | 有 | Agent 声明 `loadSession` 时；回放 `session/update` |
+| `session/list` | 有 | Agent 声明 `sessionCapabilities.list` 时，带 cursor 分页 |
+| `session/delete` | 有 | Agent 声明 `sessionCapabilities.delete` 时 |
+| `session/set_config_option` | 有 | 按 Agent 在 `session/new`/`load` 声明的 `configOptions` 透传 |
+| `session/set_mode` | 有 | 仅当没有 `configOptions` 时作为旧版 mode 退路 |
+| `session/resume` | 无 | |
 
 ## Agent → Client
 
@@ -73,5 +77,8 @@ session/cancel（可选，打断当前 turn）
 - catalog 命令行拆分（引号）
 - 内嵌 Python mock：`initialize` → `session/new` → `session/prompt` 收到 `hello from mock`
 - mock 在 prompt 中反向 `fs/read_text_file`（`line=2, limit=1`）
+- sqlite 会话缓存 insert/replace/delete
+- 带 `list`/`load`/`delete` 的 mock：prompt 后 `session/list`、`session/load` 回放、`session/delete`
+- `session/new` 的 `configOptions` / `modes` 解码；`config_option_update`
 
 未覆盖真实 Codex / Grok / Claude 二进制。

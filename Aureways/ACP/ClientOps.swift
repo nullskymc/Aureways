@@ -1,10 +1,17 @@
 import Foundation
 
 actor FileOps {
-    private let workspace: URL
+    private var roots: [URL]
 
     init(workspace: String) {
-        self.workspace = URL(fileURLWithPath: workspace, isDirectory: true).standardizedFileURL
+        roots = [URL(fileURLWithPath: workspace, isDirectory: true).standardizedFileURL]
+    }
+
+    func addWorkspace(_ path: String) {
+        let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        if !roots.contains(url) {
+            roots.append(url)
+        }
     }
 
     func readText(path: String, line: Int?, limit: Int?) throws -> String {
@@ -32,17 +39,19 @@ actor FileOps {
         let url: URL
         if (path as NSString).isAbsolutePath {
             url = URL(fileURLWithPath: path).standardizedFileURL
+        } else if let primary = roots.first {
+            url = URL(fileURLWithPath: path, relativeTo: primary).standardizedFileURL
         } else {
-            url = URL(fileURLWithPath: path, relativeTo: workspace).standardizedFileURL
-        }
-        let root = workspace.path
-        let candidate = url.path
-        if candidate == root { return url }
-        let prefix = root.hasSuffix("/") ? root : root + "/"
-        guard candidate.hasPrefix(prefix) else {
             throw ACPError.agent(-32602, "path is outside the workspace")
         }
-        return url
+        let candidate = url.path
+        for root in roots {
+            let rootPath = root.path
+            if candidate == rootPath { return url }
+            let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+            if candidate.hasPrefix(prefix) { return url }
+        }
+        throw ACPError.agent(-32602, "path is outside the workspace")
     }
 }
 

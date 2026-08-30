@@ -25,7 +25,7 @@
 | Grok Build | `grok agent stdio` |
 | Codex | `npx -y @agentclientprotocol/codex-acp` |
 | Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` |
-| Gemini CLI | `gemini --acp` |
+| Antigravity | `agy --acp`（否则 `npx -y agy-acp`） |
 | GitHub Copilot | `copilot --acp --stdio` |
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
@@ -49,7 +49,7 @@ open Aureways.xcodeproj
 
 在 Xcode 中选 scheme **Aureways**、目的地 **My Mac**，按 `Cmd + R`。
 
-要求：macOS 14.4+，Xcode 15+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。默认使用当前 `xcode-select` 工具链；若要用某个 Xcode.app：
+要求：macOS 26+，Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。默认使用当前 `xcode-select` 工具链；若要用某个 Xcode.app：
 
 ```bash
 make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer

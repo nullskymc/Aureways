@@ -6,13 +6,15 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `Catalog.swift` | `AgentProfile`、内置配方、命令行拆分、`HostEnvironment` |
+| `Harness/Harness.swift` | 基类 `Harness`、`AgentProfile`、`HarnessRegistry`、`HostEnvironment` |
+| `Harness/*.swift` | 各家启动命令、可用性、`session/_meta` |
+| `Harness/HarnessRuntime.swift` | 一 harness 一 ACP 进程 |
 | `JSONRPC.swift` | `JSONValue`、`JSONRPCMessage`（request / notification / response / error） |
 | `Models.swift` | ACP 载荷：initialize、session、content、tool call、permission |
 | `Connection.swift` | 子进程生命周期与方法路由 |
 | `ClientOps.swift` | `FileOps`、`AgentTerminal` / `TerminalHost` |
 
-`AppModel.connect` 是唯一编排方：launch → initialize → 若 `authMethods` 非空则先 `authenticate` 第一个方法 → session/new → 把 `ACPConnection` 挂到 `ChatSession`。
+`AppModel.ensureRuntime` 按 Agent 复用进程：`Harness.makeRuntime()` → launch → initialize → 若 `authMethods` 非空则先 `authenticate` 第一个方法。然后按能力 `session/list`，新对话 `session/new`，打开历史 `session/load`。`ACPConnection` 挂在 `HarnessRuntime` 上，不挂在单条 `ChatSession`。各家差异（参数、环境、`_meta`）写在对应 `Harness` 子类里，不要塞进 `AppModel`。
 
 ## 启动 Harness
 
@@ -28,7 +30,7 @@
 
 侧栏绿点 = 启动命令（如 `grok`、`npx`）在 PATH 上，不保证该 harness 已登录或能完成 `initialize`。
 
-Grok + Auto-approve 时参数替换为 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 里再声明一次。
+Auto-approve 时由当前 `Harness.sessionMeta` / `launchArguments` 决定透传。Grok Build 把参数换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 里再声明一次。
 
 ## JSON-RPC 循环
 
@@ -60,19 +62,22 @@ Agent 回调实现：
 | `terminal/wait_for_exit` | 等到退出码 |
 | `terminal/kill` / `release` | SIGTERM 并可选丢弃 |
 
-终端不是完整 PTY，是 `Process` + Pipe。`fs/*` 限制在会话 `cwd` 之下；终端命令仍按 harness 传入的 `cwd`/`env` 执行。应用未开 App Sandbox。
+终端不是完整 PTY，是 `Process` + Pipe。`fs/*` 限制在已添加的工作区目录之下（当前 `cwd` 以及工作区目录列表里的路径）；终端命令仍按 harness 传入的 `cwd`/`env` 执行。应用未开 App Sandbox。
 
 ## 发给 Agent 的方法
 
 | 方法 | 时机 |
 | --- | --- |
 | `initialize` | 连接后第一条 |
-| `session/new` | 每个 UI 会话 |
+| `session/new` | 新对话 |
+| `session/load` | 打开 harness 已有 session；回放历史 |
+| `session/list` | 刷新该 Agent 的侧栏缓存 |
+| `session/delete` | 从 harness 删除会话 |
 | `session/prompt` | 用户发送；`prompt: [{type:text}]` |
 | `session/cancel` | 通知，无 id |
 | `authenticate` | initialize 若返回 `authMethods`，连接时用第一个 methodId 调用 |
 
-未实现：`session/load`、`session/list`、`session/resume`、WebSocket / HTTP 传输。
+未实现：`session/resume`、WebSocket / HTTP 传输。
 
 ## 环境注意
 

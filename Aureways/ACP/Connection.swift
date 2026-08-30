@@ -12,6 +12,7 @@ struct ACPHandlers: Sendable {
     var onPermission: @Sendable (PermissionPrompt) async -> PermissionDecision
     var onLog: @Sendable (String) async -> Void
     var onFileOp: (@Sendable (String, String) async -> Void)? = nil
+    var onExit: (@Sendable (Int32) async -> Void)? = nil
 }
 
 actor ACPConnection {
@@ -80,14 +81,48 @@ actor ACPConnection {
         return try JSONDecoder.acp.decode(InitializeResponse.self, from: data)
     }
 
-    func newSession(cwd: String, yolo: Bool) async throws -> NewSessionResponse {
+    func isActive() -> Bool {
+        !closed && process.isRunning
+    }
+
+    func allowWorkspace(_ path: String) async {
+        await fileOps.addWorkspace(path)
+    }
+
+    func newSession(cwd: String, meta: [String: JSONValue]? = nil) async throws -> NewSessionResponse {
         var requestBody = NewSessionRequest(cwd: cwd)
-        if yolo {
-            requestBody.meta = ["yoloMode": .bool(true)]
-        }
+        requestBody.meta = meta
         let result = try await request("session/new", params: encodeJSON(requestBody))
         let data = try result.encode()
         return try JSONDecoder.acp.decode(NewSessionResponse.self, from: data)
+    }
+
+    func loadSession(sessionId: String, cwd: String, meta: [String: JSONValue]? = nil) async throws -> LoadSessionResponse {
+        var requestBody = LoadSessionRequest(sessionId: sessionId, cwd: cwd)
+        requestBody.meta = meta
+        let result = try await request("session/load", params: encodeJSON(requestBody))
+        let data = try result.encode()
+        return try JSONDecoder.acp.decode(LoadSessionResponse.self, from: data)
+    }
+
+    func listSessions(cwd: String? = nil) async throws -> [SessionListItem] {
+        var cursor: String?
+        var sessions: [SessionListItem] = []
+        for _ in 0..<20 {
+            let result = try await request(
+                "session/list",
+                params: encodeJSON(ListSessionsRequest(cwd: cwd, cursor: cursor))
+            )
+            let page = try JSONDecoder.acp.decode(ListSessionsResponse.self, from: try result.encode())
+            sessions.append(contentsOf: page.sessions)
+            guard let next = page.nextCursor, !next.isEmpty else { break }
+            cursor = next
+        }
+        return sessions
+    }
+
+    func deleteSession(sessionId: String) async throws {
+        _ = try await request("session/delete", params: encodeJSON(DeleteSessionRequest(sessionId: sessionId)))
     }
 
     func prompt(sessionId: String, text: String) async throws -> PromptResponse {
@@ -105,6 +140,27 @@ actor ACPConnection {
         _ = try await request(
             "authenticate",
             params: .object(["methodId": .string(methodId)])
+        )
+    }
+
+    func setConfigOption(sessionId: String, configId: String, value: JSONValue) async throws {
+        _ = try await request(
+            "session/set_config_option",
+            params: .object([
+                "sessionId": .string(sessionId),
+                "configId": .string(configId),
+                "value": value,
+            ])
+        )
+    }
+
+    func setMode(sessionId: String, modeId: String) async throws {
+        _ = try await request(
+            "session/set_mode",
+            params: .object([
+                "sessionId": .string(sessionId),
+                "modeId": .string(modeId),
+            ])
         )
     }
 
@@ -184,6 +240,12 @@ actor ACPConnection {
         }
         if !asLog {
             stdoutFinished = true
+            if process.isRunning {
+                if let pendingExitCode {
+                    await handleExit(code: pendingExitCode)
+                }
+                return
+            }
             await handleExit(code: pendingExitCode ?? process.terminationStatus)
         }
     }
@@ -293,6 +355,7 @@ actor ACPConnection {
         await terminals.shutdown()
         failPending(ACPError.transportClosed("agent exited (\(code))"))
         await handlers.onLog("agent exited with status \(code)")
+        await handlers.onExit?(code)
     }
 
     private func finishPending(id: JSONRPCID, _ result: Result<JSONValue, Error>) {

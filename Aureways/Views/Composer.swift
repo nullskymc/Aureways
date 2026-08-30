@@ -1,10 +1,60 @@
+import AppKit
 import SwiftUI
+
+/// Floating input card only — not a system bottom bar.
+/// Overlay is only as wide as the card so it does not steal scroll/clicks.
+struct ComposerDock: View {
+    let session: ChatSession?
+
+    var body: some View {
+        ComposerCard(session: session)
+            .frame(maxWidth: Chrome.composerMaxWidth)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
+                }
+            }
+    }
+}
+
+extension View {
+    func composerBar(session: ChatSession?) -> some View {
+        modifier(ComposerBarModifier(session: session))
+    }
+}
+
+private struct ComposerBarModifier: ViewModifier {
+    let session: ChatSession?
+
+    func body(content: Content) -> some View {
+        // Overlay, not safeAreaInset: the transcript behind must stay clear
+        // so glass can sample the conversation. Alignment `.bottom` centers
+        // the capped card; do not expand the overlay to full width.
+        content.overlay(alignment: .bottom) {
+            ComposerDock(session: session)
+        }
+    }
+}
+
+struct ComposerHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 20
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
 
 struct ComposerCard: View {
     @Environment(AppModel.self) private var model
     let session: ChatSession?
     @State private var draft = ""
+    @State private var measuredHeight: CGFloat = 20
     @FocusState private var isFocused: Bool
+
+    private let editorMinHeight: CGFloat = 20
+    private let editorMaxHeight: CGFloat = 126
 
     var currentSession: ChatSession? {
         session ?? model.selectedSession
@@ -14,188 +64,147 @@ struct ComposerCard: View {
         currentSession?.isStreaming ?? false
     }
 
+    private var editorHeight: CGFloat {
+        min(editorMaxHeight, max(editorMinHeight, measuredHeight + 2))
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Button(action: model.pickWorkspace) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "folder")
-                                .font(.system(size: 11))
-                            Text(model.currentWorkspaceName)
-                                .font(.system(size: 11.5, weight: .medium))
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: "laptopcomputer")
-                            .font(.system(size: 11))
-                        Text("本地")
-                            .font(.system(size: 11.5, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-
-                    if let branch = model.workspaceBranch {
-                        HStack(spacing: 4) {
-                            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                                .font(.system(size: 11))
-                            Text(branch)
-                                .font(.system(size: 11.5, weight: .medium))
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
-
-                TextField(placeholder, text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13.5))
-                    .lineLimit(1...8)
-                    .focused($isFocused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
-                    .disabled(isStreaming)
-                    .onSubmit {
-                        if !NSEvent.modifierFlags.contains(.shift) {
-                            submit()
-                        }
-                    }
-
-                HStack(alignment: .center, spacing: 8) {
-                    Menu {
-                        if let available = currentSession?.availableCommands, !available.isEmpty {
-                            Section("可用指令 (Slash Commands)") {
-                                ForEach(available) { command in
-                                    Button("/\(command.name) - \(command.description ?? "")") {
-                                        draft = "/\(command.name) "
-                                        isFocused = true
-                                    }
-                                }
-                            }
-                            Divider()
-                        }
-                        Section("快捷指令") {
-                            Button("/help - 帮助说明") { draft = "/help "; isFocused = true }
-                            Button("/clear - 清空上下文") { draft = "/clear "; isFocused = true }
-                        }
-                        Divider()
-                        Button("切换工作区...") { model.pickWorkspace() }
-                        Button("管理 Agents...") { model.isShowingCustomSheet = true }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24, height: 24)
-                            .background(Palette.cardHover, in: Circle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-
-                    Button {
-                        model.autoApprove.toggle()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: model.autoApprove ? "checkmark.shield.fill" : "shield")
-                                .font(.system(size: 11))
-                                .foregroundStyle(model.autoApprove ? Palette.moss : .secondary)
-                            Text(model.autoApprove ? "帮我批准" : "需我确认")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(model.autoApprove ? .primary : .secondary)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(model.autoApprove ? Palette.moss.opacity(0.12) : Palette.cardHover, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(model.autoApprove ? "自动批准权限已开启" : "需要手动批准工具调用")
-
-                    Spacer()
-
-                    Menu {
-                        ForEach(model.agents) { agent in
-                            Button {
-                                model.selectedAgentId = agent.id
-                            } label: {
-                                HStack {
-                                    Text(agent.title)
-                                    if model.availability[agent.id] == true {
-                                        Text("(可用)")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(model.availability[model.selectedAgent.id] == true ? Palette.moss : Color.secondary.opacity(0.4))
-                                .frame(width: 6, height: 6)
-
-                            Text(model.selectedAgent.title)
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(.primary)
-
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(Palette.cardHover, in: Capsule())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-
-                    if isStreaming {
-                        Button {
-                            model.cancel()
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.red.opacity(0.85))
-                                    .frame(width: 28, height: 28)
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(.white)
-                                    .frame(width: 8, height: 8)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .help("停止生成 (⌘.)")
-                        .keyboardShortcut(".", modifiers: [.command])
-                    } else {
-                        Button(action: submit) {
-                            ZStack {
-                                Circle()
-                                    .fill(canSend ? Palette.accent : Palette.cardHover)
-                                    .frame(width: 28, height: 28)
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(canSend ? Color.white : Color.secondary.opacity(0.6))
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!canSend)
-                        .keyboardShortcut(.return, modifiers: [.command])
-                        .help("发送消息 (⌘Return)")
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-                .padding(.top, 4)
+        cardStack
+            .onAppear {
+                draft = model.draftPrompt
+                isFocused = true
             }
-            .liquidGlassCard(cornerRadius: 16, isFocused: isFocused, enabled: model.useLiquidGlass)
-            .frame(maxWidth: 780)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+            .onChange(of: draft) { model.draftPrompt = draft }
+    }
+
+    private var cardStack: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                Text(draft.isEmpty ? " " : draft)
+                    .font(.system(size: 13.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background {
+                        GeometryReader { geo in
+                            Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
+                        }
+                    }
+
+                if draft.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
+
+                TextEditor(text: $draft)
+                    .font(.system(size: 13.5))
+                    .scrollContentBackground(.hidden)
+                    .scrollIndicators(editorHeight >= editorMaxHeight ? .automatic : .hidden)
+                    .frame(height: editorHeight)
+                    .focused($isFocused)
+                    .onKeyPress(keys: [.return]) { press in
+                        guard press.phase == .down, press.modifiers.isEmpty, !Self.hasMarkedText else {
+                            return .ignored
+                        }
+                        submit()
+                        return .handled
+                    }
+            }
+            .onPreferenceChange(ComposerHeightKey.self) { measuredHeight = $0 }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            controlRow
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
         }
-        .onAppear { isFocused = true }
+        .liquidGlassCard(cornerRadius: Chrome.cardRadius, veil: 0.68)
+        .contentShape(RoundedRectangle(cornerRadius: Chrome.cardRadius, style: .continuous))
+    }
+
+    private var controlRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Menu {
+                if let available = currentSession?.availableCommands, !available.isEmpty {
+                    Section("可用指令 (Slash Commands)") {
+                        ForEach(available) { command in
+                            Button("/\(command.name) - \(command.description ?? "")") {
+                                draft = "/\(command.name) "
+                                isFocused = true
+                            }
+                        }
+                    }
+                    Divider()
+                }
+                Section("快捷指令") {
+                    Button("/help - 帮助说明") { draft = "/help "; isFocused = true }
+                    Button("/clear - 清空上下文") { draft = "/clear "; isFocused = true }
+                }
+                Divider()
+                Button("添加工作区...") { model.addWorkspace() }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .liquidGlassCapsule()
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+
+            Button {
+                model.autoApprove.toggle()
+            } label: {
+                Text(model.autoApprove ? "帮我批准" : "需我确认")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .liquidGlassCapsule(tint: model.autoApprove ? Palette.moss : nil)
+            }
+            .buttonStyle(.plain)
+            .help("开启后，Agent 读写文件或执行命令时不再弹出确认，由客户端代为批准。关闭则每次工具调用都需你确认。")
+
+            Spacer(minLength: 8)
+
+            harnessChip
+            sessionModelChip
+            sessionModeChip
+
+            if isStreaming {
+                Button {
+                    model.cancel()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.red.opacity(0.85), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("停止生成 (⌘.)")
+                .keyboardShortcut(".", modifiers: [.command])
+            } else {
+                Button(action: submit) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(canSend ? Color(nsColor: .windowBackgroundColor) : Color.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            canSend ? Color.primary : Color.primary.opacity(0.08),
+                            in: Circle()
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .keyboardShortcut(.return, modifiers: [.command])
+                .help(canSend ? "发送消息 (⌘Return)" : "输入内容后可发送")
+            }
+        }
     }
 
     private var canSend: Bool {
@@ -204,7 +213,7 @@ struct ComposerCard: View {
         if let session = currentSession {
             switch session.phase {
             case .connecting: return false
-            case .ready, .failed: return true
+            case .ready, .failed, .idle: return true
             }
         }
         return true
@@ -215,13 +224,135 @@ struct ComposerCard: View {
             switch s.phase {
             case .connecting:
                 return "正在启动 \(s.agent.title)..."
+            case .idle:
+                return "发送以恢复 \(s.agent.title) 会话..."
             case .failed:
                 return "启动失败，发送以重试 \(s.agent.title)..."
             case .ready:
                 return "向 \(s.agent.title) 发送消息..."
             }
         }
-        return "输入需求或问题 (例如: 修复代码、生成功能、执行命令)..."
+        return "向 \(model.selectedAgent.title) 发送消息..."
+    }
+
+    private var displayedAgent: AgentProfile {
+        currentSession?.agent ?? model.selectedAgent
+    }
+
+    @ViewBuilder
+    private var harnessChip: some View {
+        let agent = displayedAgent
+        let available = model.availability[agent.id] == true
+        let chip = HStack(spacing: 5) {
+            Circle()
+                .fill(available ? Palette.moss : Color.secondary.opacity(0.4))
+                .frame(width: 6, height: 6)
+            Text(agent.title)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.primary)
+            if currentSession == nil {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .liquidGlassCapsule(interactive: currentSession == nil)
+
+        if currentSession == nil {
+            Menu {
+                ForEach(model.agents) { item in
+                    Button {
+                        model.selectedAgentId = item.id
+                    } label: {
+                        HStack {
+                            Text(item.title)
+                            if model.availability[item.id] == true {
+                                Text("(可用)")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                chip
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("新对话将使用此 harness，并记为下次默认。已打开的会话不会跟着变。")
+        } else {
+            chip.help("本会话已绑定 \(agent.title)，不能中途更换。新对话请先点 ⌘N。")
+        }
+    }
+
+    @ViewBuilder
+    private var sessionModelChip: some View {
+        if let session = currentSession,
+           session.phase.isReady,
+           let option = session.modelOption,
+           !option.options.isEmpty {
+            sessionSelectChip(
+                title: option.options.first(where: { $0.id == option.value?.stringValue })?.name ?? option.name,
+                help: "本会话模型，由当前 harness 经 ACP 声明",
+                choices: option.options,
+                selectedId: option.value?.stringValue
+            ) { id in
+                model.setSessionConfig(session, configId: option.id, value: .string(id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sessionModeChip: some View {
+        if let session = currentSession, session.phase.isReady, !session.modeChoices.isEmpty {
+            sessionSelectChip(
+                title: session.modeChoices.first(where: { $0.id == session.currentModeId })?.name ?? "模式",
+                help: "本会话模式，由当前 harness 经 ACP 声明",
+                choices: session.modeChoices,
+                selectedId: session.currentModeId
+            ) { id in
+                model.setSessionMode(session, modeId: id)
+            }
+        }
+    }
+
+    private func sessionSelectChip(
+        title: String,
+        help: String,
+        choices: [SessionMode],
+        selectedId: String?,
+        onPick: @escaping (String) -> Void
+    ) -> some View {
+        Menu {
+            ForEach(choices) { choice in
+                Button {
+                    onPick(choice.id)
+                } label: {
+                    HStack {
+                        Text(choice.name)
+                        if selectedId == choice.id {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11.5, weight: .medium))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .liquidGlassCapsule()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(help)
     }
 
     private func submit() {
@@ -230,103 +361,17 @@ struct ComposerCard: View {
         draft = ""
         model.sendFromComposer(text: text)
     }
-}
 
-struct PermissionSheet: View {
-    let prompt: PermissionPrompt
-    let onDecide: (PermissionDecision) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "exclamationmark.shield.fill")
-                    .font(.title2)
-                    .foregroundStyle(Palette.gold)
-                Text("需要权限确认")
-                    .font(.title3.weight(.semibold))
+    /// IME 组词确认也走 Return；此时放行给文本视图，避免把拼音串直接提交。
+    private static var hasMarkedText: Bool {
+        guard let window = NSApp.keyWindow else { return false }
+        var responder: NSResponder? = window.firstResponder
+        while let current = responder {
+            if let textView = current as? NSTextView, textView.hasMarkedText() {
+                return true
             }
-
-            Text(prompt.title)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            if let input = prompt.toolCall?.rawInput {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("调用参数：")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                    Text(stringify(input))
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.panel, in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
-
-            HStack {
-                Button("取消") { onDecide(.cancelled) }
-                Spacer()
-                ForEach(prompt.options) { option in
-                    Button(option.name) {
-                        onDecide(.selected(option.optionId))
-                    }
-                    .keyboardShortcut(option.isAllow ? .defaultAction : .cancelAction)
-                    .tint(option.isAllow ? Palette.moss : .red)
-                }
-            }
+            responder = current.nextResponder
         }
-        .padding(22)
-        .frame(minWidth: 440)
-    }
-
-    private func stringify(_ json: JSONValue) -> String {
-        (try? String(data: json.encode(), encoding: .utf8)) ?? ""
+        return false
     }
 }
-
-struct SettingsView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-        Form {
-            Section("外观与特效 (Appearance)") {
-                Picker("主题模式", selection: $model.appearance) {
-                    Text("系统默认 (跟随 macOS)").tag("system")
-                    Text("浅色模式 (Light)").tag("light")
-                    Text("深色模式 (Dark)").tag("dark")
-                }
-                .pickerStyle(.inline)
-
-                Toggle("毛玻璃 / 流光玻璃特效 (Liquid Glass)", isOn: $model.useLiquidGlass)
-                Text("开启后将启用 macOS 原生超薄毛玻璃材质（ultraThinMaterial）与高光反射边缘。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("工作区设置") {
-                LabeledContent("当前路径", value: model.workspacePath)
-                Button("选择新工作区...", action: model.pickWorkspace)
-            }
-
-            Section("安全与自动化") {
-                Toggle("自动批准工具权限 (Auto-approve)", isOn: $model.autoApprove)
-                Text("开启后，Aureways 将自动选择首个允许选项。Grok 会话将额外传递 --always-approve。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("关于 Aureways") {
-                Text("Aureways 是面向 Agent Client Protocol (ACP v1) 的原生 macOS 客户端。")
-                Text("版本: 0.1.0 · 协议: ACP v1")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-}
-
-

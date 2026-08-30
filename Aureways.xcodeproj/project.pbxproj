@@ -11,7 +11,6 @@
 		B10100000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* AppModel.swift */; };
 		B10100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
 		B10100000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000004 /* Models.swift */; };
-		B10100000000000000000005 /* Catalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000005 /* Catalog.swift */; };
 		B10100000000000000000006 /* ClientOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000006 /* ClientOps.swift */; };
 		B10100000000000000000007 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000007 /* Connection.swift */; };
 		B10100000000000000000008 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000008 /* RootView.swift */; };
@@ -19,12 +18,53 @@
 		B1010000000000000000000A /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000A /* Transcript.swift */; };
 		B1010000000000000000000B /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000B /* Composer.swift */; };
 		B1010000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000C /* Assets.xcassets */; };
+		B1010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
+		B1010000000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000F /* SettingsView.swift */; };
+		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
 		B20100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
 		B20100000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000004 /* Models.swift */; };
-		B20100000000000000000005 /* Catalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000005 /* Catalog.swift */; };
 		B20100000000000000000006 /* ClientOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000006 /* ClientOps.swift */; };
 		B20100000000000000000007 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000007 /* Connection.swift */; };
+		B2010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
+		B10100000000000000000012 /* ChatSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000012 /* ChatSession.swift */; };
+		B10100000000000000000013 /* EmptyWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000013 /* EmptyWorkspace.swift */; };
+		B10100000000000000000014 /* TranscriptBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000014 /* TranscriptBlocks.swift */; };
+		B10100000000000000000015 /* ToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000015 /* ToolViews.swift */; };
+		B10100000000000000000016 /* InspectorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000016 /* InspectorViews.swift */; };
+		B10100000000000000000017 /* WorkspaceTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000017 /* WorkspaceTree.swift */; };
+		B10100000000000000000018 /* AgentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000018 /* AgentSheets.swift */; };
+		B10100000000000000000019 /* AppModel+Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000019 /* AppModel+Workspace.swift */; };
+		B1010000000000000000001A /* AppModel+Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001A /* AppModel+Sessions.swift */; };
+		B1010000000000000000001B /* AppModel+Runtime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001B /* AppModel+Runtime.swift */; };
+		B1010000000000000000001C /* SessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001C /* SessionModels.swift */; };
+		B1010000000000000000001D /* UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001D /* UpdateModels.swift */; };
+		B1010000000000000000001E /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001E /* Palette.swift */; };
+		B1010000000000000000002A /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002A /* Chrome.swift */; };
+		B1010000000000000000001F /* PermissionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001F /* PermissionSheet.swift */; };
+		B2010000000000000000001C /* SessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001C /* SessionModels.swift */; };
+		B2010000000000000000001D /* UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001D /* UpdateModels.swift */; };
+		B10100000000000000000020 /* Harness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000020 /* Harness.swift */; };
+		B20100000000000000000020 /* Harness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000020 /* Harness.swift */; };
+		B10100000000000000000021 /* HarnessRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000021 /* HarnessRuntime.swift */; };
+		B20100000000000000000021 /* HarnessRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000021 /* HarnessRuntime.swift */; };
+		B10100000000000000000022 /* GrokBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000022 /* GrokBuild.swift */; };
+		B20100000000000000000022 /* GrokBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000022 /* GrokBuild.swift */; };
+		B10100000000000000000023 /* Codex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000023 /* Codex.swift */; };
+		B20100000000000000000023 /* Codex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000023 /* Codex.swift */; };
+		B10100000000000000000024 /* ClaudeCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000024 /* ClaudeCode.swift */; };
+		B20100000000000000000024 /* ClaudeCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000024 /* ClaudeCode.swift */; };
+		B10100000000000000000025 /* Antigravity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000025 /* Antigravity.swift */; };
+		B20100000000000000000025 /* Antigravity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000025 /* Antigravity.swift */; };
+		B10100000000000000000026 /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000026 /* Copilot.swift */; };
+		B20100000000000000000026 /* Copilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000026 /* Copilot.swift */; };
+		B10100000000000000000027 /* Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000027 /* Cursor.swift */; };
+		B20100000000000000000027 /* Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000027 /* Cursor.swift */; };
+		B10100000000000000000028 /* OpenCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000028 /* OpenCode.swift */; };
+		B20100000000000000000028 /* OpenCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000028 /* OpenCode.swift */; };
+		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
+		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
+		BF10100000000000000000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,7 +84,6 @@
 		F10100000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		F10100000000000000000003 /* JSONRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONRPC.swift; sourceTree = "<group>"; };
 		F10100000000000000000004 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
-		F10100000000000000000005 /* Catalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
 		F10100000000000000000006 /* ClientOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOps.swift; sourceTree = "<group>"; };
 		F10100000000000000000007 /* Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connection.swift; sourceTree = "<group>"; };
 		F10100000000000000000008 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -52,7 +91,35 @@
 		F1010000000000000000000A /* Transcript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcript.swift; sourceTree = "<group>"; };
 		F1010000000000000000000B /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
 		F1010000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1010000000000000000000D /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		F1010000000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+		F10100000000000000000012 /* ChatSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSession.swift; sourceTree = "<group>"; };
+		F10100000000000000000013 /* EmptyWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyWorkspace.swift; sourceTree = "<group>"; };
+		F10100000000000000000014 /* TranscriptBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBlocks.swift; sourceTree = "<group>"; };
+		F10100000000000000000015 /* ToolViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolViews.swift; sourceTree = "<group>"; };
+		F10100000000000000000016 /* InspectorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorViews.swift; sourceTree = "<group>"; };
+		F10100000000000000000017 /* WorkspaceTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTree.swift; sourceTree = "<group>"; };
+		F10100000000000000000018 /* AgentSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSheets.swift; sourceTree = "<group>"; };
+		F10100000000000000000019 /* AppModel+Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Workspace.swift"; sourceTree = "<group>"; };
+		F1010000000000000000001A /* AppModel+Sessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Sessions.swift"; sourceTree = "<group>"; };
+		F1010000000000000000001B /* AppModel+Runtime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Runtime.swift"; sourceTree = "<group>"; };
+		F1010000000000000000001C /* SessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionModels.swift; sourceTree = "<group>"; };
+		F1010000000000000000001D /* UpdateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateModels.swift; sourceTree = "<group>"; };
+		F1010000000000000000001E /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
+		F1010000000000000000002A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
+		F1010000000000000000001F /* PermissionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSheet.swift; sourceTree = "<group>"; };
+		F10100000000000000000020 /* Harness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Harness.swift; sourceTree = "<group>"; };
+		F10100000000000000000021 /* HarnessRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessRuntime.swift; sourceTree = "<group>"; };
+		F10100000000000000000022 /* GrokBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokBuild.swift; sourceTree = "<group>"; };
+		F10100000000000000000023 /* Codex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Codex.swift; sourceTree = "<group>"; };
+		F10100000000000000000024 /* ClaudeCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCode.swift; sourceTree = "<group>"; };
+		F10100000000000000000025 /* Antigravity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Antigravity.swift; sourceTree = "<group>"; };
+		F10100000000000000000026 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
+		F10100000000000000000027 /* Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cursor.swift; sourceTree = "<group>"; };
+		F10100000000000000000028 /* OpenCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCode.swift; sourceTree = "<group>"; };
+		F10100000000000000000029 /* CustomHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomHarness.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +127,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF10100000000000000000001 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -87,6 +155,12 @@
 			children = (
 				F10100000000000000000001 /* AurewaysApp.swift */,
 				F10100000000000000000002 /* AppModel.swift */,
+				F10100000000000000000019 /* AppModel+Workspace.swift */,
+				F1010000000000000000001A /* AppModel+Sessions.swift */,
+				F1010000000000000000001B /* AppModel+Runtime.swift */,
+				F10100000000000000000012 /* ChatSession.swift */,
+				F1010000000000000000000D /* SessionStore.swift */,
+				G10100000000000000000004 /* Harness */,
 				G10100000000000000000002 /* ACP */,
 				G10100000000000000000003 /* Views */,
 				F1010000000000000000000C /* Assets.xcassets */,
@@ -99,7 +173,8 @@
 			children = (
 				F10100000000000000000003 /* JSONRPC.swift */,
 				F10100000000000000000004 /* Models.swift */,
-				F10100000000000000000005 /* Catalog.swift */,
+				F1010000000000000000001C /* SessionModels.swift */,
+				F1010000000000000000001D /* UpdateModels.swift */,
 				F10100000000000000000006 /* ClientOps.swift */,
 				F10100000000000000000007 /* Connection.swift */,
 			);
@@ -113,6 +188,17 @@
 				F10100000000000000000009 /* Sidebar.swift */,
 				F1010000000000000000000A /* Transcript.swift */,
 				F1010000000000000000000B /* Composer.swift */,
+				F1010000000000000000000F /* SettingsView.swift */,
+				F10100000000000000000010 /* MarkdownBody.swift */,
+				F10100000000000000000013 /* EmptyWorkspace.swift */,
+				F10100000000000000000014 /* TranscriptBlocks.swift */,
+				F10100000000000000000015 /* ToolViews.swift */,
+				F10100000000000000000016 /* InspectorViews.swift */,
+				F10100000000000000000017 /* WorkspaceTree.swift */,
+				F10100000000000000000018 /* AgentSheets.swift */,
+				F1010000000000000000001E /* Palette.swift */,
+				F1010000000000000000002A /* Chrome.swift */,
+				F1010000000000000000001F /* PermissionSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -134,6 +220,23 @@
 			path = AurewaysTests;
 			sourceTree = "<group>";
 		};
+		G10100000000000000000004 /* Harness */ = {
+			isa = PBXGroup;
+			children = (
+				F10100000000000000000020 /* Harness.swift */,
+				F10100000000000000000021 /* HarnessRuntime.swift */,
+				F10100000000000000000022 /* GrokBuild.swift */,
+				F10100000000000000000023 /* Codex.swift */,
+				F10100000000000000000024 /* ClaudeCode.swift */,
+				F10100000000000000000025 /* Antigravity.swift */,
+				F10100000000000000000026 /* Copilot.swift */,
+				F10100000000000000000027 /* Cursor.swift */,
+				F10100000000000000000028 /* OpenCode.swift */,
+				F10100000000000000000029 /* CustomHarness.swift */,
+			);
+			path = Harness;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -150,6 +253,9 @@
 			dependencies = (
 			);
 			name = Aureways;
+			packageProductDependencies = (
+				PD10100000000000000000001 /* MarkdownUI */,
+			);
 			productName = Aureways;
 			productReference = F00000000000000000000001 /* Aureways.app */;
 			productType = "com.apple.product-type.application";
@@ -198,6 +304,9 @@
 				Base,
 			);
 			mainGroup = G10100000000000000000000;
+			packageReferences = (
+				PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			productRefGroup = G10100000000000000000009 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -228,13 +337,40 @@
 				B10100000000000000000002 /* AppModel.swift in Sources */,
 				B10100000000000000000003 /* JSONRPC.swift in Sources */,
 				B10100000000000000000004 /* Models.swift in Sources */,
-				B10100000000000000000005 /* Catalog.swift in Sources */,
 				B10100000000000000000006 /* ClientOps.swift in Sources */,
 				B10100000000000000000007 /* Connection.swift in Sources */,
 				B10100000000000000000008 /* RootView.swift in Sources */,
 				B10100000000000000000009 /* Sidebar.swift in Sources */,
 				B1010000000000000000000A /* Transcript.swift in Sources */,
 				B1010000000000000000000B /* Composer.swift in Sources */,
+				B1010000000000000000000D /* SessionStore.swift in Sources */,
+				B1010000000000000000000F /* SettingsView.swift in Sources */,
+				B10100000000000000000010 /* MarkdownBody.swift in Sources */,
+				B10100000000000000000012 /* ChatSession.swift in Sources */,
+				B10100000000000000000013 /* EmptyWorkspace.swift in Sources */,
+				B10100000000000000000014 /* TranscriptBlocks.swift in Sources */,
+				B10100000000000000000015 /* ToolViews.swift in Sources */,
+				B10100000000000000000016 /* InspectorViews.swift in Sources */,
+				B10100000000000000000017 /* WorkspaceTree.swift in Sources */,
+				B10100000000000000000018 /* AgentSheets.swift in Sources */,
+				B10100000000000000000019 /* AppModel+Workspace.swift in Sources */,
+				B1010000000000000000001A /* AppModel+Sessions.swift in Sources */,
+				B1010000000000000000001B /* AppModel+Runtime.swift in Sources */,
+				B1010000000000000000001C /* SessionModels.swift in Sources */,
+				B1010000000000000000001D /* UpdateModels.swift in Sources */,
+				B1010000000000000000001E /* Palette.swift in Sources */,
+				B1010000000000000000002A /* Chrome.swift in Sources */,
+				B1010000000000000000001F /* PermissionSheet.swift in Sources */,
+				B10100000000000000000020 /* Harness.swift in Sources */,
+				B10100000000000000000021 /* HarnessRuntime.swift in Sources */,
+				B10100000000000000000022 /* GrokBuild.swift in Sources */,
+				B10100000000000000000023 /* Codex.swift in Sources */,
+				B10100000000000000000024 /* ClaudeCode.swift in Sources */,
+				B10100000000000000000025 /* Antigravity.swift in Sources */,
+				B10100000000000000000026 /* Copilot.swift in Sources */,
+				B10100000000000000000027 /* Cursor.swift in Sources */,
+				B10100000000000000000028 /* OpenCode.swift in Sources */,
+				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,9 +381,21 @@
 				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
 				B20100000000000000000003 /* JSONRPC.swift in Sources */,
 				B20100000000000000000004 /* Models.swift in Sources */,
-				B20100000000000000000005 /* Catalog.swift in Sources */,
 				B20100000000000000000006 /* ClientOps.swift in Sources */,
 				B20100000000000000000007 /* Connection.swift in Sources */,
+				B2010000000000000000000D /* SessionStore.swift in Sources */,
+				B2010000000000000000001C /* SessionModels.swift in Sources */,
+				B2010000000000000000001D /* UpdateModels.swift in Sources */,
+				B20100000000000000000020 /* Harness.swift in Sources */,
+				B20100000000000000000021 /* HarnessRuntime.swift in Sources */,
+				B20100000000000000000022 /* GrokBuild.swift in Sources */,
+				B20100000000000000000023 /* Codex.swift in Sources */,
+				B20100000000000000000024 /* ClaudeCode.swift in Sources */,
+				B20100000000000000000025 /* Antigravity.swift in Sources */,
+				B20100000000000000000026 /* Copilot.swift in Sources */,
+				B20100000000000000000027 /* Cursor.swift in Sources */,
+				B20100000000000000000028 /* OpenCode.swift in Sources */,
+				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,7 +419,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_TESTABILITY = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -288,7 +436,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_VERSION = 6.0;
@@ -316,7 +464,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -344,7 +492,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -360,7 +508,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -375,7 +523,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -414,6 +562,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PD10100000000000000000001 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = P10100000000000000000001 /* Project object */;
 }

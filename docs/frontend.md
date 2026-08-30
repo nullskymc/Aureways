@@ -1,6 +1,6 @@
 # 前端架构与 UI 设计
 
-技术栈：SwiftUI，macOS 14.4+，基于原生 macOS 统一工具栏（`.windowToolbarStyle(.unified)`）与自适应色彩系统（`NSColor(dynamicProvider:)`）。
+技术栈：SwiftUI，macOS 26+，基于原生 macOS 统一工具栏（`.windowToolbarStyle(.unified)`）与自适应色彩系统（`NSColor(dynamicProvider:)`）。
 
 ## 1. 窗口布局架构
 
@@ -8,7 +8,7 @@
 
 ```
 ┌──────────────┬──────────────────────────────────────────┬──────────────────┐
-│ Sidebar      │ 统一工具栏：📁 工作区切换 · Auto-approve   │ Inspector (⌘B)   │
+│ Sidebar      │ 统一工具栏：📁 工作区 · 会话状态 · 搜索     │ Inspector (⌘B)   │
 │              ├──────────────────────────────────────────┤ 选项卡：         │
 │ • 新对话 (⌘N)│ 主对话画布 (流式阅读流，maxWidth: 780pt)  │ • 审查 (Review)  │
 │ • Agent 中心 │ ──────────────────────────────────────── │ • 终端 (Terminal)│
@@ -27,21 +27,20 @@
 ## 2. 界面核心模块
 
 ### 2.1 侧边栏 (SidebarView)
-- **品牌与工作区菜单**：集成工作区快速切换、Finder 打开、Agent 管理入口。
-- **实用快捷操作**：
-  - 📝 **新对话 (`⌘N`)**：一键重置当前选中的会话进入空白就绪态。
-  - 🧩 **Agent 与插件**：实时显示当前系统中可用的本地 ACP Harness 数量，点击呼出管理面板。
-  - 📁 **工作区目录**：显示当前工作区与 Git 分支，点击直接在 Finder 中定位。
-- **项目与会话分组**：按工作区归类历史会话，显示活动状态指示灯与快捷键角标（`⌘1` ~ `⌘9` 一键切换）。
-- **底栏用户面板 (`UserProfileFooter`)**：显示用户名、状态，右侧齿轮菜单可直达 **偏好设置（`⌘,`）** 与 Agent 配置。
+- **品牌菜单**：添加工作区、在 Finder 打开、偏好设置。
+- **新对话 (`⌘N`)**：进入空白画布。
+- **工作区树**：工作区与其下会话合为一棵树。点文件夹设为当前 `cwd`（新对话用），箭头展开/收起会话；`+` 添加工作区。行内标明会话绑定的 Agent。状态灯：绿=已连接，灰=已断开，金=连接中，红=失败。快捷键 `⌘1` ~ `⌘9`。
+- **Agent 与插件**：只在 **偏好设置（`⌘,`）** 里管理，不在侧栏重复入口。
+- **底栏**：用户名 + 齿轮直达偏好设置。
 
 ### 2.2 主对话流与空白态 (TranscriptView & EmptyWorkspaceLanding)
 - **居中黄金排版**：对话流与空白页均约束在 **`maxWidth: 780pt` 居中文本容器** 内，消除宽屏状态下横向撑满的空旷感。
 - **消息卡片轻量化**：
   - **用户消息**：右侧对齐的现代连续曲率气泡（`cornerRadius: 16`），自适应包裹文字。
-  - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧自然流淌 Markdown 排版，行高调整为舒适阅读行距（`lineSpacing: 4`）。
-  - **思考过程 (Thinking)**：折叠微光引用块（`brain.head.profile`），展开时带左侧强调细线。
-  - **工具与步骤卡片**：紧凑状态胶囊，支持展开查看输入 JSON 参数与执行输出。
+  - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧由 [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 渲染标题、列表、围栏代码和表格。
+  - **思考过程**：默认折叠成一行「思考」。
+  - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起，点开才是短文件名列表，再点一行才看参数/输出。不再每条一张 COMPLETED 大卡片。
+  - **计划**：一行摘要 + 可展开步骤。
 - **空白落地页 (`EmptyWorkspaceLanding`)**：云朵与终端 Logo 搭配可自适应环境光的液态漫射光斑（Ambient Glow），居中引导用户快速输入。
 
 ### 2.3 悬浮输入卡片 (ComposerCard)
@@ -71,11 +70,14 @@
 - **外观模式设置**：可在偏好设置（`⌘,`）中自由切换 **系统默认 / 浅色模式 / 深色模式**。
 
 ### 3.2 Liquid Glass 质感系统
-- **超薄材质基底**：`.ultraThinMaterial` 实时模糊底层内容。
-- **斜向高光漫反射**：叠加 Specular Diagonal Sheen 反射渐变。
-- **光源折射边缘描边**：左上到右下的光感渐变细边框。
-- **双层景深阴影**：微接触投影 + 远端漫反射阴影。
-- **macOS 原生菜单规范**：所有自定义 `Menu` 均应用 `.menuIndicator(.hidden)`，杜绝 macOS 系统自动追加的多余下拉箭头。
+- **窗口基底**：保持原生 macOS 实体不透明窗口（`isOpaque = true`，主区域基于 `Palette.ink`，侧栏/检查器基于 `Palette.panel`），避免全透明导致的桌面穿透与可读性问题。
+- **浮层与 Chrome 卡片**：
+  - **超薄磨砂材质基底**：`.ultraThinMaterial` 实时模糊底层内容。
+  - **自适应透光层**：叠加浅色/深色模式自适应半透明光层。
+  - **斜向高光漫反射**：叠加 Specular Diagonal Sheen 反射渐变。
+  - **光源折射边缘描边**：左上到右下的光感渐变细边框与深度阴影。
+- **对话正文**：助手 Markdown 属于内容层，保持高对比度与清晰度。
+- **所有效果层**：配置 `allowsHitTesting(false)`，不拦截用户点击与滚动。
 
 ---
 
@@ -84,7 +86,8 @@
 | 文件 | 核心职责 |
 | --- | --- |
 | `Aureways/Views/RootView.swift` | 根容器 `NavigationSplitView`、统一工具栏、`Palette` 色彩系统、`liquidGlassCard` 视图修饰器 |
-| `Aureways/Views/Sidebar.swift` | 侧边栏导航行、项目与会话分组、会话状态指示灯、设置菜单底栏、Agent 插件管理面板 |
+| `Aureways/Views/Sidebar.swift` | 新对话、工作区树、会话状态、底栏偏好设置 |
 | `Aureways/Views/Transcript.swift` | 空白工作区落地页、居中对话流容器、轻量化消息气泡、思考折叠块、5 选项卡检查器面板 |
-| `Aureways/Views/Composer.swift` | 居中悬浮输入框、上下文胶囊、`+` 指令菜单、权限切换开关、Agent 切换器、偏好设置视图 |
-| `Aureways/AppModel.swift` | 状态中心（会话生命周期、外观主题持久化、Git 分支解析、快捷键路由、Agent 调度） |
+| `Aureways/Views/Composer.swift` | 居中悬浮输入框、上下文胶囊、会话模型/模式透传、权限切换 |
+| `Aureways/Views/SettingsView.swift` | 设置中心：通用 / Agent / 工作区 / 权限 |
+| `Aureways/AppModel.swift` | 状态中心（会话生命周期、工作区目录、外观主题持久化、Git 分支解析、快捷键路由、Agent 调度） |

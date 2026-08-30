@@ -14,85 +14,82 @@ struct AgentProfile: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// Shared ACP stdio launch recipe. Each vendor subclasses this file's type
+/// so command line, env, availability, and session `_meta` stay in one place.
+class Harness {
+    let profile: AgentProfile
+
+    var id: String { profile.id }
+
+    init(profile: AgentProfile) {
+        self.profile = profile
+    }
+
+    func launchCommand() -> String {
+        profile.command
+    }
+
+    func launchArguments(autoApprove: Bool) -> [String] {
+        _ = autoApprove
+        return profile.arguments
+    }
+
+    func environment(_ base: [String: String]) -> [String: String] {
+        base
+    }
+
+    func sessionMeta(autoApprove: Bool) -> [String: JSONValue]? {
+        _ = autoApprove
+        return nil
+    }
+
+    func isAvailable() -> Bool {
+        HostEnvironment.resolveExecutable(launchCommand()) != nil
+    }
+
+    @MainActor
+    func makeRuntime() -> HarnessRuntime {
+        HarnessRuntime(harness: self)
+    }
+}
+
+enum HarnessRegistry {
+    static var builtIn: [Harness] {
+        [
+            GrokBuildHarness(),
+            CodexHarness(),
+            ClaudeCodeHarness(),
+            AntigravityHarness(),
+            CopilotHarness(),
+            CursorHarness(),
+            OpenCodeHarness(),
+        ]
+    }
+
+    static func resolve(_ profile: AgentProfile) -> Harness {
+        if let match = builtIn.first(where: { $0.id == profile.id }) {
+            return match
+        }
+        return CustomHarness(profile: profile)
+    }
+
+    static func migrateAgentId(_ id: String) -> String {
+        switch id {
+        case "gemini":
+            return AntigravityHarness.id
+        default:
+            return id
+        }
+    }
+}
+
 enum AgentCatalog {
-    static let builtIn: [AgentProfile] = [
-        AgentProfile(
-            id: "grok-build",
-            title: "Grok Build",
-            subtitle: "xAI Grok agent over ACP stdio",
-            command: "grok",
-            arguments: ["agent", "stdio"],
-            builtIn: true,
-            notes: "Requires an installed grok CLI and a completed login."
-        ),
-        AgentProfile(
-            id: "codex",
-            title: "Codex",
-            subtitle: "OpenAI Codex via @agentclientprotocol/codex-acp",
-            command: "npx",
-            arguments: ["-y", "@agentclientprotocol/codex-acp"],
-            builtIn: true,
-            notes: "Needs Node.js. Uses the Codex CLI authentication already on this Mac."
-        ),
-        AgentProfile(
-            id: "claude",
-            title: "Claude Code",
-            subtitle: "Claude Agent SDK via claude-agent-acp",
-            command: "npx",
-            arguments: ["-y", "@agentclientprotocol/claude-agent-acp"],
-            builtIn: true,
-            notes: "Needs Node.js and a working claude CLI login."
-        ),
-        AgentProfile(
-            id: "gemini",
-            title: "Gemini CLI",
-            subtitle: "gemini --acp",
-            command: "gemini",
-            arguments: ["--acp"],
-            builtIn: true,
-            notes: "Install Google Gemini CLI and authenticate first."
-        ),
-        AgentProfile(
-            id: "copilot",
-            title: "GitHub Copilot",
-            subtitle: "copilot --acp --stdio",
-            command: "copilot",
-            arguments: ["--acp", "--stdio"],
-            builtIn: true,
-            notes: "Copilot CLI public preview ACP mode."
-        ),
-        AgentProfile(
-            id: "cursor",
-            title: "Cursor Agent",
-            subtitle: "cursor-agent acp",
-            command: "cursor-agent",
-            arguments: ["acp"],
-            builtIn: true,
-            notes: "Uses the Cursor CLI ACP server."
-        ),
-        AgentProfile(
-            id: "opencode",
-            title: "OpenCode",
-            subtitle: "opencode acp",
-            command: "opencode",
-            arguments: ["acp"],
-            builtIn: true,
-            notes: "OpenCode ACP server, if installed."
-        ),
-    ]
+    static var builtIn: [AgentProfile] {
+        HarnessRegistry.builtIn.map(\.profile)
+    }
 
     static func custom(title: String, commandLine: String) -> AgentProfile? {
-        let parts = splitCommandLine(commandLine)
-        guard let command = parts.first, !command.isEmpty else { return nil }
-        return AgentProfile(
-            id: "custom-\(UUID().uuidString.lowercased())",
-            title: title.isEmpty ? command : title,
-            subtitle: commandLine,
-            command: command,
-            arguments: Array(parts.dropFirst()),
-            builtIn: false,
-            notes: "User-defined ACP agent."
-        )
+        CustomHarness.profile(title: title, commandLine: commandLine)
     }
 
     static func splitCommandLine(_ line: String) -> [String] {
@@ -165,6 +162,6 @@ enum HostEnvironment {
     }
 
     static func isAvailable(_ profile: AgentProfile) -> Bool {
-        resolveExecutable(profile.command) != nil
+        HarnessRegistry.resolve(profile).isAvailable()
     }
 }

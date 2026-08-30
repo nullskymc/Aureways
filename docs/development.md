@@ -15,17 +15,24 @@
 
 ## 工具链
 
-本仓库用 **Xcode 27** 开发，但 `Makefile` 不钉死 beta 路径，默认走 `xcode-select -p`。需要指定某个 Xcode 时覆盖：
+本仓库用 **Xcode 27** 开发。`make` 默认走 `xcode-select -p`。若该路径仍是 **Command Line Tools**（`/Library/Developer/CommandLineTools`），`xcodebuild` 会报：
+
+```
+xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer directory '/Library/Developer/CommandLineTools' is a command line tools instance
+```
+
+这不代表没装 Xcode。CLT 和完整 Xcode.app 是两套工具链；只装过 `xcode-select --install` 或装完 Xcode 没切过去，就会这样。本机若有 `/Applications/Xcode.app` 或 `Xcode-beta.app`，`Makefile` 会自动改用那个。也可一次切到系统默认：
+
+```bash
+sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
+sudo xcodebuild -license accept   # 若尚未同意许可
+```
+
+需要指定某个 Xcode 时覆盖：
 
 ```bash
 make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 make open DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-```
-
-系统许可未同意时：
-
-```bash
-sudo xcodebuild -license
 ```
 
 ## 用 Makefile
@@ -68,6 +75,10 @@ open Aureways.xcodeproj
 
 签名是 “Sign to Run Locally”，仅本机调试。
 
+## Swift 包
+
+Markdown 渲染用 [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 2.4.1（SPM）。Xcode 会解析到 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。命令行第一次编译会拉 `swift-markdown-ui`、`cmark-gfm`、`NetworkImage`。
+
 ## 使用应用
 
 1. 工具栏选 workspace（agent 的 `cwd`）
@@ -79,10 +90,11 @@ Harness 要自己安装并登录，例如：
 
 - Grok Build：`grok` 在 PATH 且已 auth
 - Codex / Claude：Node.js + `npx`，以及各自 CLI 登录
+- Antigravity：`agy`（或 `npx`，走 `agy-acp`）。Gemini CLI 已停维，不再作为内置项
 
 ## 测试
 
-测试 target **不**把 `.app` 当 TEST_HOST（SwiftUI 宿主会挂起）。它单独编译 ACP 源文件 + `ProtocolTests.swift`。
+测试 target **不**把 `.app` 当 TEST_HOST（SwiftUI 宿主会挂起）。它单独编译 ACP / Harness 源文件 + `ProtocolTests.swift`。
 
 ```bash
 make test
@@ -90,7 +102,7 @@ make test
 
 ## 调试连接失败
 
-1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`
+1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy --acp`
 2. GUI PATH 不含 nvm：把 `node`/`npx` 链到 `/opt/homebrew/bin`，或自定义 agent 填绝对路径
 3. 打开 Inspector 看 agent stderr
 4. `initialize` 卡死：确认对方 stdout 只有 NDJSON，没有横幅日志
@@ -102,4 +114,4 @@ make test
 | Marketing version | 0.1.0 |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
-| 最低系统 | macOS 14.4 |
+| 最低系统 | macOS 26 |
