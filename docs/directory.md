@@ -6,7 +6,9 @@
 Aureways/                          # 仓库根
 ├── README.md
 ├── LICENSE                        # MIT
-├── Makefile                       # build / test / open / clean
+├── Makefile                       # build / release / test / open / clean
+├── .github/workflows/
+│   └── release.yml                # tag 触发的构建发版工作流
 ├── docs/                          # 本目录：项目文档
 │   ├── README.md
 │   ├── directory.md
@@ -20,11 +22,12 @@ Aureways/                          # 仓库根
 │   └── xcshareddata/xcschemes/
 │       └── Aureways.xcscheme
 ├── Aureways/                      # 应用源码（bundle id: ai.aureways.client）
-│   ├── AurewaysApp.swift          # @main，WindowGroup + Settings
+│   ├── AurewaysApp.swift          # @main，WindowGroup + Settings + 退出清理
 │   ├── AppModel.swift             # 应用状态
 │   ├── AppModel+Workspace.swift   # 工作区目录
 │   ├── AppModel+Sessions.swift    # 会话列表 / 发送 / 关闭 / 删除
 │   ├── AppModel+Runtime.swift     # ACP 进程、prompt、权限桥
+│   ├── AppModel+Inspector.swift   # 面板标签状态与操作、编辑保存/冲突
 │   ├── ChatSession.swift          # 单会话 transcript 状态
 │   ├── SessionStore.swift         # sqlite 会话列表缓存
 │   ├── Assets.xcassets/           # AccentColor、空 AppIcon
@@ -47,7 +50,8 @@ Aureways/                          # 仓库根
 │   │   ├── Connection.swift       # 子进程 + 双向 RPC
 │   │   └── ClientOps.swift        # fs/*、terminal/*
 │   └── Views/                     # 前端
-│       ├── Palette.swift          # 色彩与 Liquid Glass
+│       ├── Palette.swift          # 色彩
+│       ├── Chrome.swift           # Liquid Glass 修饰器
 │       ├── RootView.swift         # NavigationSplitView
 │       ├── Sidebar.swift          # 新对话、底栏
 │       ├── WorkspaceTree.swift    # 工作区树
@@ -57,7 +61,11 @@ Aureways/                          # 仓库根
 │       ├── MarkdownBody.swift     # MarkdownUI 渲染
 │       ├── Composer.swift         # 输入框
 │       ├── PermissionSheet.swift  # 权限确认
-│       ├── InspectorViews.swift   # 右栏检查器
+│       ├── InspectorViews.swift   # 右栏面板容器与信息标签
+│       ├── PaneTabBar.swift       # 面板统一标签条
+│       ├── FileBrowserTab.swift   # 工作区目录树
+│       ├── FileEditorTab.swift    # 文本编辑器
+│       ├── TerminalTab.swift      # SwiftTerm 交互终端
 │       ├── EmptyWorkspace.swift   # 空白画布
 │       ├── AgentSheets.swift      # 自定义 Agent
 │       └── SettingsView.swift     # 设置中心

@@ -41,7 +41,8 @@ make open DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 cd /path/to/Aureways          # 仓库根
 
 make open                     # 编译 Debug 并打开 .app
-make build                    # 只编译
+make build                    # 只编译（Debug）
+make release                  # Release 构建（CI 发版用）
 make test                     # 跑 AurewaysTests
 make clean                    # 删除 .derived
 ```
@@ -49,7 +50,8 @@ make clean                    # 删除 .derived
 产物：
 
 ```
-.derived/Build/Products/Debug/Aureways.app
+.derived/Build/Products/Debug/Aureways.app     # make open
+.derived/Build/Products/Release/Aureways.app   # make release
 ```
 
 只打开已编译包：
@@ -77,14 +79,28 @@ open Aureways.xcodeproj
 
 ## Swift 包
 
-Markdown 渲染用 [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 2.4.1（SPM）。Xcode 会解析到 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。命令行第一次编译会拉 `swift-markdown-ui`、`cmark-gfm`、`NetworkImage`。
+| 包 | 用途 |
+| --- | --- |
+| [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 2.4.1 | Agent 正文 Markdown 渲染 |
+| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) | 右侧面板交互终端（真实 PTY + 终端模拟） |
+
+版本锁在 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。命令行第一次编译会拉 `swift-markdown-ui`、`cmark-gfm`、`NetworkImage`、`SwiftTerm` 及其传递依赖。
+
+两个命令行构建的坑（Makefile 已处理第一个）：
+
+- **SwiftTerm 带 build tool 插件**（生成构建信息），`xcodebuild` 默认要交互式确认。Makefile 统一加了 `-skipPackagePluginValidation`；在 Xcode IDE 里首次构建按提示允许即可。
+- **SwiftTerm 的 Metal 渲染着色器**需要 Metal Toolchain。Xcode beta 默认不带，首次报 `cannot execute tool 'metal' due to missing Metal Toolchain` 时执行一次：
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
 
 ## 使用应用
 
 1. 工具栏选 workspace（agent 的 `cwd`）
 2. 侧栏绿点 harness 可点；灰点 = 启动器不在 PATH
 3. 等状态条变为就绪再输入
-4. 失败时看状态条原文，点 Retry；或打开右侧日志看 stderr
+4. 失败时看状态条原文，点 Retry；stderr 仍在会话 `logs` 里记录，但暂不提供面板展示
 
 Harness 要自己安装并登录，例如：
 
@@ -104,8 +120,26 @@ make test
 
 1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy --acp`
 2. GUI PATH 不含 nvm：把 `node`/`npx` 链到 `/opt/homebrew/bin`，或自定义 agent 填绝对路径
-3. 打开 Inspector 看 agent stderr
+3. 右侧面板开一个交互终端，直接复现命令看输出
 4. `initialize` 卡死：确认对方 stdout 只有 NDJSON，没有横幅日志
+
+## CI 与发版
+
+工作流：`.github/workflows/release.yml`。**约定只有打 tag 才构建**——分支 push 与 PR 不触发。
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Runner（`macos-26`）上自动选取最新 Xcode，然后：
+
+1. `make test`（失败即中止发版）
+2. `make release`（Release 构建）
+3. `ditto` 打包 `Aureways-<tag>.zip`
+4. 创建 GitHub Release 附产物，并保留 Actions artifact
+
+产物为 ad-hoc 签名（`CODE_SIGN_IDENTITY = "-"`），未经 Apple 公证；他人下载后首次打开可能需要 `xattr -dr com.apple.quarantine`。
 
 ## 版本与标识
 

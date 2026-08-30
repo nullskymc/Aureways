@@ -62,7 +62,9 @@ Agent 回调实现：
 | `terminal/wait_for_exit` | 等到退出码 |
 | `terminal/kill` / `release` | SIGTERM 并可选丢弃 |
 
-终端不是完整 PTY，是 `Process` + Pipe。`fs/*` 限制在已添加的工作区目录之下（当前 `cwd` 以及工作区目录列表里的路径）；终端命令仍按 harness 传入的 `cwd`/`env` 执行。应用未开 App Sandbox。
+Agent 侧终端不是完整 PTY，是 `Process` + Pipe（stdin 为 `/dev/null`，输出进环形缓冲）；`fs/*` 限制在已添加的工作区目录之下（当前 `cwd` 以及工作区目录列表里的路径）；终端命令仍按 harness 传入的 `cwd`/`env` 执行。应用未开 App Sandbox。
+
+右侧面板的**用户交互终端**是另一套：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 的真实 PTY（`LocalProcessTerminalView`），由 `AppModel.openTerminalTab()` 创建、以登录 shell 和 `HostEnvironment.augmented()` 的完整环境启动，与 ACP 的 `terminal/*` 无关。关闭标签即终止进程，应用退出时经 `AppDelegate` 统一清理。
 
 ## 发给 Agent 的方法
 

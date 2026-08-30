@@ -1,10 +1,22 @@
 # Aureways
 
+[![Release](https://github.com/nullskymc/aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/aureways/actions/workflows/release.yml)
+
 面向 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) 的原生 macOS 客户端。它作为 **ACP Client** 启动本机 harness（Grok Build、Codex、Claude Code 等），用 JSON-RPC stdio 交换消息，并把会话流画到 SwiftUI 界面上。
 
 本仓库是单进程桌面应用：**前端是 SwiftUI，后端是同进程内的 ACP 连接层**，没有单独的 HTTP 服务。
 
 完整说明见 [`docs/`](docs/README.md)。
+
+## 特性
+
+- **多 Harness 会话**：内置 7 家 ACP harness 配方，支持自定义任意 stdio 命令；会话经 SQLite 持久化，可跨启动恢复
+- **流式对话**：Markdown 渲染、思考折叠、工具调用分组、计划卡片、权限确认弹窗
+- **右侧工作台面板**（`⌘B`）：统一标签条承载
+  - 文件浏览器：工作区递归目录树
+  - 文本编辑器：行号、脏标记、`⌘S` 保存、与 Agent 写文件的冲突处理
+  - 交互终端：SwiftTerm 真实 PTY，每个终端一个标签
+- **Liquid Glass**：跟随系统原生玻璃材质，深浅色全自适应
 
 ## 文档
 
@@ -53,6 +65,23 @@ open Aureways.xcodeproj
 
 ```bash
 make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+```
+
+## 发版与 CI
+
+约定：**只有打 tag 才触发构建**，分支与 PR 不跑 CI。工作流见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.zip` → 自动创建 GitHub Release 并附带产物。
+
+下载解压后首次打开若被 Gatekeeper 拦截（产物是 ad-hoc 签名，未公证）：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Aureways.app
 ```
 
 ## License

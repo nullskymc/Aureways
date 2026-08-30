@@ -17,7 +17,7 @@ ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif
 
-.PHONY: build test open clean
+.PHONY: build release test open clean
 
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
 # command-line builds do not stall on approval.
@@ -25,6 +25,9 @@ XCBUILD_FLAGS := -skipPackagePluginValidation
 
 build:
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
+
+release:
+	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Release -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
 test:
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test

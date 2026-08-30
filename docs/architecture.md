@@ -43,7 +43,7 @@ Aureways 是 **ACP Client**，不是 Agent。Agent 是本机已安装的 harness
 
 ## 传输
 
-ACP stdio：每条 JSON-RPC 消息一行 UTF-8，禁止嵌入换行。stdout 是协议，stderr 当日志进 Inspector。
+ACP stdio：每条 JSON-RPC 消息一行 UTF-8，禁止嵌入换行。stdout 是协议，stderr 当日志记录进会话 `logs`（面板暂不展示）。
 
 JSON-RPC `id` 必须按数字解析。`NSNumber` 在 Swift 里可能桥成 `Bool`，`JSONValue` 对 `NSNumber` 先区分 CFBoolean 再当数字，否则 `initialize` 对不上 pending 请求。
 

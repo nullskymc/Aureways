@@ -1,0 +1,58 @@
+# 发版构建：只有打 tag（v*）才触发，PR 与分支 push 不构建。
+# 打 tag 即发版：
+#   git tag v0.2.0 && git push origin v0.2.0
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and publish (macOS)
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE_APP" ]; then
+            echo "No Xcode found on runner" >&2
+            exit 1
+          fi
+          echo "Using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          sudo xcodebuild -license accept || true
+          xcodebuild -version
+
+      - name: Run tests
+        run: make test
+
+      - name: Build Release
+        run: make release
+
+      - name: Package app
+        run: |
+          cd .derived/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent Aureways.app "Aureways-${{ github.ref_name }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .derived/Build/Products/Release/Aureways-${{ github.ref_name }}.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aureways-${{ github.ref_name }}
+          path: .derived/Build/Products/Release/Aureways-${{ github.ref_name }}.zip
+          if-no-files-found: error
