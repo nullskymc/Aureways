@@ -123,7 +123,7 @@ private struct ErrorNotice: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -232,7 +232,7 @@ private struct ActivityCard: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var summary: String {

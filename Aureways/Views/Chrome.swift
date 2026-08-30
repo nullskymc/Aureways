@@ -50,10 +50,19 @@ private struct ChromeCardModifier: ViewModifier {
     var cornerRadius: CGFloat
     var veil: Double
 
+    private var shape: ConcentricRectangle {
+        // macOS 27 SDK：concentric(minimum:) 收 Edge.Corner.Style?，
+        // 数值圆角要包一层 .fixed(CGFloat)。
+        ConcentricRectangle(
+            corners: .concentric(minimum: .fixed(cornerRadius)),
+            isUniform: true
+        )
+    }
+
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content.background {
             // 一层 ink 薄纱垫在玻璃后面，防止亮色壁纸把卡片洗白。
+            // 同心圆角：贴近窗口圆角的卡片自动跟随系统曲率，远离处退到 minimum。
             ZStack {
                 shape.fill(Palette.ink.opacity(veil))
                 Color.clear

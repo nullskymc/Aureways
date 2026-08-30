@@ -17,12 +17,14 @@ struct SidebarView: View {
 
             Spacer(minLength: 0)
 
-            Divider()
-
-            // 3. User Profile Footer
+            // 3. User Profile Footer — floating glass card
             UserProfileFooter()
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity)
+                .liquidGlassCard(cornerRadius: 12)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
         }
     }
 }

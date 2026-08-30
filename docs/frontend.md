@@ -71,12 +71,10 @@
 
 ### 3.2 Liquid Glass 质感系统
 - **窗口基底**：完全交由系统原生渲染——标题栏、工具栏、侧栏材质均使用 macOS 26 系统默认的 Liquid Glass 表现；应用只把用户的深浅色偏好写到 `NSWindow.appearance`，保证 AppKit 材质与 SwiftUI 内容不出现深浅混色。窗口不再手动设置 `isOpaque`/`backgroundColor`/`titlebarAppearsTransparent`。
-- **浮层与 Chrome 卡片**：
-  - **超薄磨砂材质基底**：`.ultraThinMaterial` 实时模糊底层内容。
-  - **自适应透光层**：叠加浅色/深色模式自适应半透明光层。
-  - **斜向高光漫反射**：叠加 Specular Diagonal Sheen 反射渐变。
-  - **光源折射边缘描边**：左上到右下的光感渐变细边框与深度阴影。
-- **对话正文**：助手 Markdown 属于内容层，保持高对比度与清晰度。
+- **Chrome 卡片**（`Chrome.swift`）：ink 薄纱 + `.glassEffect(.regular)`（`allowsHitTesting(false)`），形状用 `ConcentricRectangle`（minimum = 14），贴近窗口圆角处自动跟随系统曲率。输入卡 veil 0.65，可读性另由 Transcript 底部 `.scrollEdgeEffectStyle(.hard, for: .bottom)` 滚动边缘效果兜底。
+- **控件**：Composer chips / 按钮用官方 `.buttonStyle(.glass)` / `.glass(.regular.tint(...))`（不放 `GlassEffectContainer`——container 只服务 `glassEffect` 视图，包住 glass 按钮会吞 bezel）；检查器 tab 用系统 segmented `Picker`。仅静态展示 chip（会话内 harness 标签）保留 `liquidGlassCapsule`。
+- **对话正文**：消息块 / 代码块属于内容层，用 `.regularMaterial` 背景，不再叠加玻璃。
+- **侧栏行高亮**：工作区树 / 会话行仍为自绘 `glassRowHighlight` 纯色高亮（非玻璃材质）。
 - **所有效果层**：配置 `allowsHitTesting(false)`，不拦截用户点击与滚动。
 
 ---

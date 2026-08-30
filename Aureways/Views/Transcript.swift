@@ -46,6 +46,7 @@ struct TranscriptView: View {
             }
             .scrollContentBackground(.hidden)
             .scrollEdgeEffectStyle(.soft, for: .top)
+            .scrollEdgeEffectStyle(.hard, for: .bottom)
             .coordinateSpace(name: "transcriptScroll")
             .onGeometryChange(for: CGFloat.self) { geo in
                 geo.size.height

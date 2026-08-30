@@ -9,28 +9,16 @@ struct InspectorPaneView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(InspectorTab.allCases) { tab in
-                    Button {
-                        model.selectedInspectorTab = tab
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 11))
-                            Text(tab.rawValue)
-                                .font(.system(size: 11.5, weight: model.selectedInspectorTab == tab ? .semibold : .regular))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .foregroundStyle(model.selectedInspectorTab == tab ? .primary : .secondary)
-                        .glassRowHighlight(
-                            isSelected: model.selectedInspectorTab == tab,
-                            isHovered: false,
-                            cornerRadius: 6
-                        )
+                Picker("", selection: $model.selectedInspectorTab) {
+                    ForEach(InspectorTab.allCases) { tab in
+                        Label(tab.rawValue, systemImage: tab.icon)
+                            .tag(tab)
                     }
-                    .buttonStyle(.plain)
-                    .help(tab.rawValue)
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+
                 Spacer()
             }
             .padding(8)

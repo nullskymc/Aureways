@@ -103,7 +103,7 @@ struct MarkdownBody: View {
                         }
                         .padding(10)
                 }
-                .liquidGlassCard(cornerRadius: 8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .markdownMargin(top: 0, bottom: 10)
             }
             .listItem { configuration in

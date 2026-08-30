@@ -100,6 +100,9 @@ struct ComposerCard: View {
 
                 TextEditor(text: $draft)
                     .font(.system(size: 13.5))
+                    // 抵消 NSTextView 自带的 ~5pt lineFragmentPadding，
+                    // 让光标/输入文字与占位符在同一左边缘对齐。
+                    .padding(.leading, -5)
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(editorHeight >= editorMaxHeight ? .automatic : .hidden)
                     .frame(height: editorHeight)
@@ -121,11 +124,13 @@ struct ComposerCard: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
         }
-        .liquidGlassCard(cornerRadius: Chrome.cardRadius, veil: 0.68)
+        .liquidGlassCard(cornerRadius: Chrome.cardRadius, veil: 0.65)
         .contentShape(RoundedRectangle(cornerRadius: Chrome.cardRadius, style: .continuous))
     }
 
     private var controlRow: some View {
+        // Glass 按钮不放 GlassEffectContainer：container 只服务 glassEffect 视图，
+        // 包住 buttonStyle(.glass) 控件会吞掉 bezel（实测截图验证）。
         HStack(alignment: .center, spacing: 8) {
             Menu {
                 if let available = currentSession?.availableCommands, !available.isEmpty {
@@ -149,25 +154,13 @@ struct ComposerCard: View {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .liquidGlassCapsule()
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .buttonStyle(.glass)
 
-            Button {
-                model.autoApprove.toggle()
-            } label: {
-                Text(model.autoApprove ? "帮我批准" : "需我确认")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .liquidGlassCapsule(tint: model.autoApprove ? Palette.moss : nil)
-            }
-            .buttonStyle(.plain)
-            .help("开启后，Agent 读写文件或执行命令时不再弹出确认，由客户端代为批准。关闭则每次工具调用都需你确认。")
+            autoApproveButton
 
             Spacer(minLength: 8)
 
@@ -204,6 +197,24 @@ struct ComposerCard: View {
                 .keyboardShortcut(.return, modifiers: [.command])
                 .help(canSend ? "发送消息 (⌘Return)" : "输入内容后可发送")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var autoApproveButton: some View {
+        let base = Button {
+            model.autoApprove.toggle()
+        } label: {
+            Text(model.autoApprove ? "帮我批准" : "需我确认")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.primary)
+        }
+        .help("开启后，Agent 读写文件或执行命令时不再弹出确认，由客户端代为批准。关闭则每次工具调用都需你确认。")
+
+        if model.autoApprove {
+            base.buttonStyle(.glass(.regular.tint(Palette.moss)))
+        } else {
+            base.buttonStyle(.glass)
         }
     }
 
@@ -256,9 +267,6 @@ struct ComposerCard: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .liquidGlassCapsule(interactive: currentSession == nil)
 
         if currentSession == nil {
             Menu {
@@ -280,9 +288,14 @@ struct ComposerCard: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            .buttonStyle(.glass)
             .help("新对话将使用此 harness，并记为下次默认。已打开的会话不会跟着变。")
         } else {
-            chip.help("本会话已绑定 \(agent.title)，不能中途更换。新对话请先点 ⌘N。")
+            chip
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .liquidGlassCapsule(interactive: false)
+                .help("本会话已绑定 \(agent.title)，不能中途更换。新对话请先点 ⌘N。")
         }
     }
 
@@ -345,13 +358,11 @@ struct ComposerCard: View {
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .liquidGlassCapsule()
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        .buttonStyle(.glass)
         .help(help)
     }
 
