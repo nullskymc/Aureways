@@ -12,6 +12,8 @@ struct WorkspaceSessionTree: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            NewConversationButton()
+
             HStack(spacing: 6) {
                 Text("工作区")
                     .font(.system(size: 11, weight: .semibold))
@@ -36,6 +38,41 @@ struct WorkspaceSessionTree: View {
                 )
             }
         }
+    }
+}
+
+// MARK: - New Conversation Button
+
+struct NewConversationButton: View {
+    @Environment(AppModel.self) private var model
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            model.startNewSession()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Palette.accent)
+                Text("新建对话")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .liquidGlassCard(cornerRadius: 10)
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isHovered ? Palette.cardHover.opacity(0.45) : .clear)
+                .allowsHitTesting(false)
+        }
+        .onHover { isHovered = $0 }
+        .help("新建对话 (⌘N)")
     }
 }
 
@@ -92,6 +129,19 @@ struct WorkspaceGroupView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                if isHovered {
+                    Button {
+                        model.startNewSession(inWorkspace: workspace.path)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .help("在此工作区新建对话")
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -99,6 +149,9 @@ struct WorkspaceGroupView: View {
             .onHover { isHovered = $0 }
             .help(workspace.path)
             .contextMenu {
+                Button("新建对话") {
+                    model.startNewSession(inWorkspace: workspace.path)
+                }
                 Button("设为当前工作区") {
                     model.selectWorkspace(workspace.path)
                 }

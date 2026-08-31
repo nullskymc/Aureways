@@ -20,6 +20,12 @@ extension AppModel {
         selectedSessionID = nil
     }
 
+    /// 在指定工作区开启新对话：切换当前工作区后回到新建对话落地页。
+    func startNewSession(inWorkspace path: String) {
+        selectWorkspace(path)
+        startNewSession()
+    }
+
     func sendFromComposer(text: String, agent: AgentProfile? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -228,10 +234,5 @@ extension AppModel {
                 session.log("Failed to set config \(configId): \(error.localizedDescription)")
             }
         }
-    }
-
-    func resolvePermission(_ decision: PermissionDecision) {
-        let session = sessions.first(where: { $0.pendingPermission != nil || $0.permissionContinuation != nil })
-        session?.resumePermission(decision)
     }
 }

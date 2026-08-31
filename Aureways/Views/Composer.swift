@@ -4,19 +4,45 @@ import SwiftUI
 /// Floating input card only — not a system bottom bar.
 /// Overlay is only as wide as the card so it does not steal scroll/clicks.
 struct ComposerDock: View {
+    @Environment(AppModel.self) private var model
     let session: ChatSession?
 
     var body: some View {
-        ComposerCard(session: session)
-            .frame(maxWidth: Chrome.composerMaxWidth)
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 10)
-            .background {
-                GeometryReader { geo in
-                    Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
-                }
+        VStack(spacing: 8) {
+            if let pending = pendingPermission {
+                // 不加插入动画：过渡期间 dock 高度逐帧变化，会连续触发
+                // 转录区底部留白重算与 scrollTo，LazyVStack 会渲染崩坏。
+                PermissionCard(
+                    session: pending.session,
+                    prompt: pending.prompt,
+                    showsSessionBadge: pending.session.id != session?.id
+                )
             }
+            ComposerCard(session: session)
+        }
+        .frame(maxWidth: Chrome.composerMaxWidth)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
+            }
+        }
+    }
+
+    /// 待批准的权限请求：优先当前会话，其次其余会话——
+    /// 新建对话落地页上也能批准后台会话的请求，替代原来的模态弹窗。
+    private var pendingPermission: (session: ChatSession, prompt: PermissionPrompt)? {
+        if let session, let prompt = session.pendingPermission {
+            return (session, prompt)
+        }
+        for candidate in model.sessions {
+            if let prompt = candidate.pendingPermission {
+                return (candidate, prompt)
+            }
+        }
+        return nil
     }
 }
 

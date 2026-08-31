@@ -120,16 +120,6 @@ struct MainWorkspaceView: View {
                 InspectorPaneView()
                     .inspectorColumnWidth(min: 320, ideal: 440, max: 600)
             }
-        .sheet(isPresented: Binding(
-            get: { model.sessions.contains { $0.pendingPermission != nil } },
-            set: { if !$0 { model.resolvePermission(.cancelled) } }
-        )) {
-            if let prompt = model.sessions.first(where: { $0.pendingPermission != nil })?.pendingPermission {
-                PermissionSheet(prompt: prompt) { decision in
-                    model.resolvePermission(decision)
-                }
-            }
-        }
     }
 
     @ViewBuilder

@@ -12,6 +12,12 @@ struct FileOpRecord: Identifiable, Sendable, Equatable {
     }
 }
 
+/// 一次活动组（思考 + 工具 + 计划）的起止时间，用于摘要行的时长展示。
+struct ActivityRun: Sendable, Equatable {
+    var startedAt: Date
+    var endedAt: Date?
+}
+
 enum SessionTitle {
     static let placeholder = "新对话"
     static let maxLength = 42
@@ -97,6 +103,13 @@ final class ChatSession: Identifiable {
     var isReplaying = false
     var configOptions: [SessionConfigOption] = []
     var modes: SessionModeState?
+    var activityRuns: [UUID: ActivityRun] = [:]
+    private var currentRunID: UUID?
+
+    /// 各 harness 表示终态的写法不一，统一在这里收敛；新增终态词时同步更新。
+    static let terminalToolStatuses: Set<String> = [
+        "completed", "success", "failed", "error", "cancelled", "denied", "rejected"
+    ]
 
     var modeChoices: [SessionMode] {
         if let option = configOptions.first(where: \.isMode), !option.options.isEmpty {
@@ -143,7 +156,7 @@ final class ChatSession: Identifiable {
         case .userMessageChunk(let content):
             coalesceUser(content.text ?? "")
         case .toolCall(let call):
-            items.append(.tool(UUID(), call))
+            appendTool(call)
         case .toolCallUpdate(let call):
             if let index = items.lastIndex(where: {
                 if case .tool(_, let existing) = $0 { return existing.toolCallId == call.toolCallId }
@@ -154,7 +167,7 @@ final class ChatSession: Identifiable {
                     items[index] = .tool(id, existing)
                 }
             } else {
-                items.append(.tool(UUID(), call))
+                appendTool(call)
             }
         case .plan(let entries):
             if let index = items.lastIndex(where: { if case .plan = $0 { return true }; return false }) {
@@ -162,7 +175,9 @@ final class ChatSession: Identifiable {
                     items[index] = .plan(id, entries)
                 }
             } else {
-                items.append(.plan(UUID(), entries))
+                let id = UUID()
+                beginRun(id)
+                items.append(.plan(id, entries))
             }
         case .availableCommands(let commands):
             availableCommands = commands
@@ -197,10 +212,70 @@ final class ChatSession: Identifiable {
     }
 
     func resumePermission(_ decision: PermissionDecision) {
+        if isDenial(decision), let toolCallId = pendingPermission?.toolCall?.toolCallId {
+            markToolCallCancelled(toolCallId)
+        }
         pendingPermission = nil
         let waiter = permissionContinuation
         permissionContinuation = nil
         waiter?.resume(returning: decision)
+    }
+
+    private func isDenial(_ decision: PermissionDecision) -> Bool {
+        switch decision {
+        case .cancelled:
+            return true
+        case .selected(let optionId):
+            guard let option = pendingPermission?.options.first(where: { $0.optionId == optionId }) else { return false }
+            return !option.isAllow
+        }
+    }
+
+    private func markToolCallCancelled(_ toolCallId: String) {
+        guard let index = items.lastIndex(where: {
+            if case .tool(_, let call) = $0 { return call.toolCallId == toolCallId }
+            return false
+        }), case .tool(let id, var call) = items[index] else { return }
+        guard !Self.terminalToolStatuses.contains(call.status.lowercased()) else { return }
+        call.status = "cancelled"
+        items[index] = .tool(id, call)
+        transcriptRevision += 1
+    }
+
+    func appendTool(_ call: ToolCallView) {
+        let id = UUID()
+        beginRun(id)
+        items.append(.tool(id, call))
+        transcriptRevision += 1
+    }
+
+    private func beginRun(_ id: UUID) {
+        guard currentRunID == nil else { return }
+        currentRunID = id
+        activityRuns[id] = ActivityRun(startedAt: Date())
+    }
+
+    func endCurrentRun() {
+        guard let id = currentRunID else { return }
+        if activityRuns[id]?.endedAt == nil {
+            activityRuns[id]?.endedAt = Date()
+        }
+        currentRunID = nil
+    }
+
+    /// prompt 回合结束后兜底：harness 可能不再补发工具终态，
+    /// 未收尾的调用按给定状态关闭，避免摘要行永久转圈。
+    func finalizeOpenToolCalls(_ status: String) {
+        endCurrentRun()
+        var changed = false
+        for index in items.indices {
+            guard case .tool(let id, var call) = items[index] else { continue }
+            guard !Self.terminalToolStatuses.contains(call.status.lowercased()) else { continue }
+            call.status = status
+            items[index] = .tool(id, call)
+            changed = true
+        }
+        if changed { transcriptRevision += 1 }
     }
 
     func applySetup(sessionId: String, modes: SessionModeState?, configOptions: [SessionConfigOption]) {
@@ -220,6 +295,8 @@ final class ChatSession: Identifiable {
         logs = []
         fileOps = []
         availableCommands = []
+        activityRuns = [:]
+        currentRunID = nil
         transcriptRevision += 1
     }
 
@@ -229,9 +306,12 @@ final class ChatSession: Identifiable {
             if case .thought(let id, let existing) = items.last {
                 items[items.count - 1] = .thought(id, existing + text)
             } else {
-                items.append(.thought(UUID(), text))
+                let id = UUID()
+                beginRun(id)
+                items.append(.thought(id, text))
             }
         } else {
+            endCurrentRun()
             if case .agent(let id, let existing) = items.last {
                 items[items.count - 1] = .agent(id, existing + text)
             } else {
@@ -242,6 +322,7 @@ final class ChatSession: Identifiable {
 
     private func coalesceUser(_ text: String) {
         guard !text.isEmpty else { return }
+        endCurrentRun()
         if case .user(let id, let existing) = items.last {
             if text == existing || existing.hasPrefix(text) {
                 return

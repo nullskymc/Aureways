@@ -128,13 +128,16 @@ extension AppModel {
         defer { session.isStreaming = false }
         do {
             let response = try await connection.prompt(sessionId: acpId, text: text)
+            session.finalizeOpenToolCalls("completed")
             if let reason = response.stopReason {
                 session.items.append(.status(UUID(), "Stop: \(reason)"))
             }
             persistIfNeeded(session)
         } catch is CancellationError {
+            session.finalizeOpenToolCalls("cancelled")
             session.items.append(.status(UUID(), "Stop: cancelled"))
         } catch {
+            session.finalizeOpenToolCalls("cancelled")
             session.items.append(.status(UUID(), error.localizedDescription))
             session.transcriptRevision += 1
         }
@@ -172,6 +175,7 @@ extension AppModel {
     }
 
     func fail(_ session: ChatSession, _ error: Error) {
+        session.endCurrentRun()
         session.phase = .failed(error.localizedDescription)
         errorMessage = error.localizedDescription
     }
@@ -231,7 +235,7 @@ extension AppModel {
             onPermission: { prompt in
                 await MainActor.run {
                     if let tool = prompt.toolCall {
-                        bridge.model?.session(agentId: agentId, acpSessionId: prompt.sessionId)?.items.append(.tool(UUID(), tool))
+                        bridge.model?.session(agentId: agentId, acpSessionId: prompt.sessionId)?.appendTool(tool)
                     }
                 }
                 if await MainActor.run(body: { bridge.model?.autoApprove ?? false }) {

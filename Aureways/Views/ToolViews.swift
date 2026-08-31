@@ -52,7 +52,7 @@ struct ToolCompactRow: View {
     private static let backtickRegex = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
 
     private var shortTitle: String {
-        var title = call.title
+        var title = call.displayTitle
         let nsTitle = title as NSString
         let matches = Self.backtickRegex.matches(in: title, range: NSRange(location: 0, length: nsTitle.length))
         for match in matches.reversed() where match.numberOfRanges > 1 {
@@ -79,6 +79,7 @@ struct ToolCompactRow: View {
         case "completed", "success": return Palette.moss
         case "failed", "error": return .red
         case "in_progress", "running": return Palette.sky
+        case "cancelled", "denied", "rejected": return Color.secondary
         default: return Palette.gold
         }
     }

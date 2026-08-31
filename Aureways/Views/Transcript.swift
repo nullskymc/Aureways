@@ -15,7 +15,12 @@ struct TranscriptView: View {
     }
 
     var body: some View {
-        let blocks = TranscriptBlock.group(session.items)
+        let blocks = TranscriptBlock.group(session.items, runs: session.activityRuns)
+        // 流式期间尾随的可能是中间消息（正文块），活动组的运行态绑定到最后一个活动组。
+        let liveBlockIndex = blocks.lastIndex { block in
+            if case .activity = block { return true }
+            return false
+        } ?? blocks.count - 1
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .center, spacing: 0) {
@@ -23,7 +28,7 @@ struct TranscriptView: View {
                         ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
                             TranscriptBlockView(
                                 block: block,
-                                isStreaming: session.isStreaming && index == blocks.count - 1
+                                isStreaming: session.isStreaming && index == liveBlockIndex
                             )
                             .id(block.id)
                         }
@@ -53,6 +58,9 @@ struct TranscriptView: View {
             } action: { viewportHeight = $0 }
             .composerBar(session: session)
             .onPreferenceChange(ComposerHeightKey.self) { composerHeight = $0 }
+            .onChange(of: composerHeight) {
+                autoscroll(proxy, blocks: blocks)
+            }
             .onChange(of: session.transcriptRevision) {
                 autoscroll(proxy, blocks: blocks)
             }

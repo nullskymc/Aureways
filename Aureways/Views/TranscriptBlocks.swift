@@ -6,10 +6,12 @@ enum ActivityStep: Identifiable {
     case thought(UUID, String)
     case tools(UUID, [ToolCallView])
     case plan(UUID, [PlanEntry])
+    /// 夹在工作流中间、经正文通道发来的 agent 消息——不是最终回答。
+    case message(UUID, String)
 
     var id: UUID {
         switch self {
-        case .thought(let id, _), .tools(let id, _), .plan(let id, _):
+        case .thought(let id, _), .tools(let id, _), .plan(let id, _), .message(let id, _):
             return id
         }
     }
@@ -18,23 +20,26 @@ enum ActivityStep: Identifiable {
 enum TranscriptBlock: Identifiable {
     case user(UUID, String)
     case agent(UUID, String)
-    case activity(UUID, [ActivityStep])
+    case activity(UUID, [ActivityStep], ActivityRun?)
     case status(UUID, String)
 
     var id: UUID {
         switch self {
-        case .user(let id, _), .agent(let id, _), .activity(let id, _), .status(let id, _):
+        case .user(let id, _), .agent(let id, _), .activity(let id, _, _), .status(let id, _):
             return id
         }
     }
 
     /// Collapse thought + tool + plan runs into one card per assistant turn.
-    static func group(_ items: [TranscriptItem]) -> [TranscriptBlock] {
+    /// 部分 harness 用正文通道发中间消息（"我接下来要…"），先缓冲再定性：
+    /// 后面跟了活动就吸收为组内消息步骤，只有回合尾部的文本才算正文。
+    static func group(_ items: [TranscriptItem], runs: [UUID: ActivityRun] = [:]) -> [TranscriptBlock] {
         var blocks: [TranscriptBlock] = []
         var steps: [ActivityStep] = []
         var activityID: UUID?
         var tools: [ToolCallView] = []
         var toolsID: UUID?
+        var pendingAgents: [(UUID, String)] = []
 
         func flushTools() {
             guard !tools.isEmpty else { return }
@@ -46,40 +51,75 @@ enum TranscriptBlock: Identifiable {
         func flushActivity() {
             flushTools()
             guard !steps.isEmpty else { return }
-            blocks.append(.activity(activityID ?? steps[0].id, steps))
+            let id = activityID ?? steps[0].id
+            blocks.append(.activity(id, steps, combinedRun(for: steps, in: runs)))
             steps = []
             activityID = nil
+        }
+
+        func absorbPendingAgents() {
+            for (id, text) in pendingAgents {
+                flushTools()
+                if activityID == nil { activityID = id }
+                steps.append(.message(id, text))
+            }
+            pendingAgents = []
+        }
+
+        func emitPendingAgentsAsBody() {
+            guard !pendingAgents.isEmpty else { return }
+            flushActivity()
+            for (id, text) in pendingAgents {
+                blocks.append(.agent(id, text))
+            }
+            pendingAgents = []
         }
 
         for item in items {
             switch item {
             case .user(let id, let text):
+                emitPendingAgentsAsBody()
                 flushActivity()
                 blocks.append(.user(id, text))
             case .agent(let id, let text):
-                flushActivity()
-                blocks.append(.agent(id, text))
+                pendingAgents.append((id, text))
             case .thought(let id, let text):
+                absorbPendingAgents()
                 flushTools()
                 if activityID == nil { activityID = id }
                 steps.append(.thought(id, text))
             case .tool(let id, let call):
+                absorbPendingAgents()
                 if activityID == nil { activityID = id }
                 if tools.isEmpty { toolsID = id }
                 tools.append(call)
             case .plan(let id, let entries):
+                absorbPendingAgents()
                 flushTools()
                 if activityID == nil { activityID = id }
                 steps.append(.plan(id, entries))
             case .status(_, let text) where isNoiseStatus(text):
                 continue
             case .status(let id, let text):
+                emitPendingAgentsAsBody()
                 flushActivity()
                 blocks.append(.status(id, text))
             }
         }
+        emitPendingAgentsAsBody()
         flushActivity()
         return blocks
+    }
+
+    /// 活动组可能被中间消息切成多个 run，合并成一段时长。
+    private static func combinedRun(for steps: [ActivityStep], in runs: [UUID: ActivityRun]) -> ActivityRun? {
+        let collected = steps.compactMap { runs[$0.id] }
+        guard let first = collected.first else { return nil }
+        let startedAt = collected.map(\.startedAt).min() ?? first.startedAt
+        guard collected.allSatisfy({ $0.endedAt != nil }) else {
+            return ActivityRun(startedAt: startedAt, endedAt: nil)
+        }
+        return ActivityRun(startedAt: startedAt, endedAt: collected.compactMap(\.endedAt).max())
     }
 
     private static func isNoiseStatus(_ text: String) -> Bool {
@@ -98,8 +138,8 @@ struct TranscriptBlockView: View {
             UserBubble(text: text)
         case .agent(_, let text):
             AgentMessage(markdown: text)
-        case .activity(_, let steps):
-            ActivityCard(steps: steps, isLive: isStreaming)
+        case .activity(_, let steps, let run):
+            ActivityCard(steps: steps, isLive: isStreaming, run: run)
         case .status(_, let text):
             ErrorNotice(text: text)
         }
@@ -156,12 +196,50 @@ private struct AgentMessage: View {
     }
 }
 
+/// 思考步骤：默认两行预览，点击展开全文——过程信息不抢正文的视觉主体。
+/// 用点击手势而非 Button，保住 textSelection 的复制能力。
+private struct ThoughtStep: View {
+    let text: String
+    @State private var isExpanded = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+                .padding(.top, 2)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineSpacing(3)
+                .lineLimit(isExpanded ? nil : 2)
+                .textSelection(.enabled)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .padding(.top, 4)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+        }
+        .help(isExpanded ? "收起思考" : "展开完整思考")
+    }
+}
+
 private struct ActivityCard: View {
     let steps: [ActivityStep]
     var isLive: Bool
+    var run: ActivityRun?
     @State private var userExpanded: Bool?
     @State private var openCallID: String?
 
+    // 运行中默认展开，让人看到工作流进展（思考全文与工具详情仍各自收起）；
+    // 完成后自动收纳成摘要行，与正文做层次隔离。用户手动切换优先于默认。
     private var isExpanded: Bool {
         userExpanded ?? isLive
     }
@@ -175,8 +253,7 @@ private struct ActivityCard: View {
 
     private var isBusy: Bool {
         isLive || toolCalls.contains { call in
-            let value = call.status.lowercased()
-            return value != "completed" && value != "success" && value != "failed" && value != "error"
+            !ChatSession.terminalToolStatuses.contains(call.status.lowercased())
         }
     }
 
@@ -233,6 +310,15 @@ private struct ActivityCard: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onChange(of: isLive) {
+            // 回合结束统一收纳：运行中手动展开过的也一并收起。
+            if !isLive {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    userExpanded = nil
+                    openCallID = nil
+                }
+            }
+        }
     }
 
     private var summary: String {
@@ -242,23 +328,29 @@ private struct ActivityCard: View {
             return "正在思考"
         }
         var parts: [String] = []
-        if thoughtCount > 0 { parts.append("思考") }
-        if tools == 1 { parts.append("1 个工具") }
-        else if tools > 1 { parts.append("\(tools) 个工具") }
+        if thoughtCount > 0 { parts.append("已思考") }
+        if tools > 0 { parts.append("执行工具 \(tools) 次") }
         if failedCount > 0 { parts.append("\(failedCount) 失败") }
+        if let duration = durationText { parts.append(duration) }
         if parts.isEmpty { return "工作记录" }
         return parts.joined(separator: " · ")
+    }
+
+    private var durationText: String? {
+        guard let run else { return nil }
+        let seconds = Int((run.endedAt ?? Date()).timeIntervalSince(run.startedAt))
+        guard seconds >= 1 else { return nil }
+        if seconds < 60 { return "\(seconds)s" }
+        return "\(seconds / 60)m\(seconds % 60)s"
     }
 
     @ViewBuilder
     private func stepView(_ step: ActivityStep) -> some View {
         switch step {
         case .thought(_, let text):
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineSpacing(3)
-                .textSelection(.enabled)
+            ThoughtStep(text: text)
+        case .message(_, let text):
+            MarkdownBody(source: text)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .tools(_, let calls):
             VStack(alignment: .leading, spacing: 2) {

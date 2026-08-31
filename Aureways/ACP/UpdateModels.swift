@@ -128,6 +128,52 @@ struct ToolCallView: Sendable, Equatable {
         if other.rawOutput != nil { rawOutput = other.rawOutput }
         if !other.contentText.isEmpty { contentText = other.contentText }
     }
+
+    /// 展示标题：harness 标题有效就直接用；缺失或太泛（不少 harness 只发
+    /// "Tool" 或 kind 本身）时，按输入参数推导「动作 · 内容简介」。
+    var displayTitle: String {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty, trimmed != "Tool", trimmed.lowercased() != kind.lowercased() {
+            return trimmed
+        }
+        guard let brief = derivedBrief else { return kindLabel }
+        return "\(kindLabel) · \(brief)"
+    }
+
+    var kindLabel: String {
+        switch kind {
+        case "read": return "读取文件"
+        case "edit": return "编辑文件"
+        case "delete": return "删除文件"
+        case "move": return "移动文件"
+        case "execute": return "执行命令"
+        case "search": return "搜索"
+        case "fetch": return "抓取网页"
+        default: return "工具"
+        }
+    }
+
+    private var derivedBrief: String? {
+        guard let input = rawInput else { return nil }
+        let orderedKeys: [String]
+        switch kind {
+        case "execute":
+            orderedKeys = ["command", "cmd", "description"]
+        default:
+            orderedKeys = ["file_path", "path", "filePath", "notebook_path", "pattern", "query", "url", "description"]
+        }
+        for key in orderedKeys {
+            guard let raw = input[key]?.stringValue else { continue }
+            let firstLine = raw.split(whereSeparator: \.isNewline).first.map(String.init)?
+                .trimmingCharacters(in: .whitespaces) ?? ""
+            guard !firstLine.isEmpty else { continue }
+            if firstLine.hasPrefix("/") || firstLine.hasPrefix("~"), !firstLine.contains(" ") {
+                return URL(fileURLWithPath: firstLine).lastPathComponent
+            }
+            return firstLine
+        }
+        return nil
+    }
 }
 
 struct PlanEntry: Sendable, Equatable {
@@ -183,7 +229,7 @@ struct PermissionPrompt: Sendable, Equatable {
         guard let sessionId = json["sessionId"]?.stringValue else { return nil }
         self.sessionId = sessionId
         self.toolCall = json["toolCall"].map(ToolCallView.init)
-        self.title = toolCall?.title ?? "Permission required"
+        self.title = toolCall?.displayTitle ?? "Permission required"
         self.options = json["options"]?.arrayValue?.compactMap(PermissionOption.init) ?? []
     }
 }

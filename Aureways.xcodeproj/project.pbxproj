@@ -41,7 +41,7 @@
 		B1010000000000000000001D /* UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001D /* UpdateModels.swift */; };
 		B1010000000000000000001E /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001E /* Palette.swift */; };
 		B1010000000000000000002A /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002A /* Chrome.swift */; };
-		B1010000000000000000001F /* PermissionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001F /* PermissionSheet.swift */; };
+		B1010000000000000000001F /* PermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001F /* PermissionCard.swift */; };
 		B2010000000000000000001C /* SessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001C /* SessionModels.swift */; };
 		B2010000000000000000001D /* UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001D /* UpdateModels.swift */; };
 		B10100000000000000000020 /* Harness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000020 /* Harness.swift */; };
@@ -115,7 +115,7 @@
 		F1010000000000000000001D /* UpdateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateModels.swift; sourceTree = "<group>"; };
 		F1010000000000000000001E /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		F1010000000000000000002A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
-		F1010000000000000000001F /* PermissionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSheet.swift; sourceTree = "<group>"; };
+		F1010000000000000000001F /* PermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCard.swift; sourceTree = "<group>"; };
 		F10100000000000000000020 /* Harness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Harness.swift; sourceTree = "<group>"; };
 		F10100000000000000000021 /* HarnessRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessRuntime.swift; sourceTree = "<group>"; };
 		F10100000000000000000022 /* GrokBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokBuild.swift; sourceTree = "<group>"; };
@@ -215,7 +215,7 @@
 				F10100000000000000000018 /* AgentSheets.swift */,
 				F1010000000000000000001E /* Palette.swift */,
 				F1010000000000000000002A /* Chrome.swift */,
-				F1010000000000000000001F /* PermissionSheet.swift */,
+				F1010000000000000000001F /* PermissionCard.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -384,7 +384,7 @@
 				B1010000000000000000001D /* UpdateModels.swift in Sources */,
 				B1010000000000000000001E /* Palette.swift in Sources */,
 				B1010000000000000000002A /* Chrome.swift in Sources */,
-				B1010000000000000000001F /* PermissionSheet.swift in Sources */,
+				B1010000000000000000001F /* PermissionCard.swift in Sources */,
 				B10100000000000000000020 /* Harness.swift in Sources */,
 				B10100000000000000000021 /* HarnessRuntime.swift in Sources */,
 				B10100000000000000000022 /* GrokBuild.swift in Sources */,

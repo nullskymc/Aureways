@@ -3,15 +3,11 @@ import SwiftUI
 struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
-            SidebarHeader()
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-
             ScrollView {
                 WorkspaceSessionTree()
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
             }
             .scrollContentBackground(.hidden)
 
@@ -28,53 +24,6 @@ struct SidebarView: View {
         }
     }
 }
-
-// MARK: - Sidebar Header
-
-struct SidebarHeader: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
-
-    var body: some View {
-        HStack {
-            Menu {
-                Text("Aureways v\(AppInfo.version) (ACP v1)")
-                Divider()
-                Button("添加工作区...") { model.addWorkspace() }
-                Button("在 Finder 中打开当前工作区") { model.openWorkspaceInFinder() }
-                Divider()
-                Button("偏好设置...") {
-                    openSettings()
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Text("会话")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-
-            Spacer()
-
-            Button {
-                model.startNewSession()
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("新对话 (⌘N)")
-        }
-    }
-}
-
 
 // MARK: - User Profile Footer
 
