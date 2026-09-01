@@ -17,6 +17,41 @@ enum Chrome {
     static let composerMaxWidth: CGFloat = 780
 }
 
+/// 主操作玻璃按钮：整行卡片、金色加号、悬停反馈（侧栏新建对话、设置页添加入口）。
+struct GlassPrimaryButton: View {
+    let title: String
+    var systemImage: String = "plus"
+    var help: String?
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Palette.accent)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .liquidGlassCard(cornerRadius: 10)
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isHovered ? Palette.cardHover.opacity(0.45) : .clear)
+                .allowsHitTesting(false)
+        }
+        .onHover { isHovered = $0 }
+        .help(help ?? title)
+    }
+}
+
 extension View {
     /// `veil` 抬高玻璃后的 ink 纱：浮在滚动内容上的卡片（输入框）需要更厚
     /// 的一层，否则正文透过玻璃和前景文字叠在一起没法读。

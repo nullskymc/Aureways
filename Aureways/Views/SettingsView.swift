@@ -38,7 +38,7 @@ struct GeneralSettingsPage: View {
 
             Section("新对话默认") {
                 Picker("Harness", selection: $model.selectedAgentId) {
-                    ForEach(model.agents) { agent in
+                    ForEach(model.selectableAgents) { agent in
                         Text(agent.title).tag(agent.id)
                     }
                 }
@@ -61,79 +61,151 @@ struct AgentSettingsPage: View {
     @Environment(AppModel.self) private var model
     @State private var isShowingCustomSheet = false
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("登录、API Key 和 CLI 全局配置由各 harness 自己维护。这里只登记本机如何启动它们。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private var builtinAgents: [AgentProfile] {
+        sortDefaultFirst(model.agents.filter(\.builtIn))
+    }
 
-            List {
-                ForEach(model.agents) { agent in
-                    HStack(alignment: .top, spacing: 10) {
-                        Circle()
-                            .fill(model.availability[agent.id] == true ? Palette.moss : Color.secondary.opacity(0.35))
-                            .frame(width: 8, height: 8)
-                            .padding(.top, 6)
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text(agent.title)
-                                    .font(.system(size: 13, weight: .medium))
-                                if agent.builtIn {
-                                    Text("内置")
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .foregroundStyle(Palette.accent)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(Palette.badgeBg, in: Capsule())
-                                }
-                                if model.selectedAgentId == agent.id {
-                                    Text("默认")
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Text(agent.launchLine)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                            Text(agent.notes)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Button("设为默认") {
-                                model.selectedAgentId = agent.id
-                            }
-                            .controlSize(.small)
-                            .disabled(model.selectedAgentId == agent.id)
-                            if !agent.builtIn {
-                                Button("移除", role: .destructive) {
-                                    model.removeAgent(agent)
-                                }
-                                .controlSize(.small)
-                            }
-                        }
+    private var customAgents: [AgentProfile] {
+        sortDefaultFirst(model.agents.filter { !$0.builtIn })
+    }
+
+    private func sortDefaultFirst(_ list: [AgentProfile]) -> [AgentProfile] {
+        list.enumerated()
+            .sorted { lhs, rhs in
+                let lhsDefault = lhs.element.id == model.selectedAgentId
+                let rhsDefault = rhs.element.id == model.selectedAgentId
+                if lhsDefault != rhsDefault { return lhsDefault }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(builtinAgents) { agent in
+                    AgentRow(agent: agent)
+                }
+            } header: {
+                Text("内置")
+            } footer: {
+                Text("登录、API Key 和 CLI 全局配置由各 harness 自己维护。点击行设为默认，开关控制是否出现在新建对话；已打开的会话不受影响。")
+            }
+
+            if !customAgents.isEmpty {
+                Section("自定义") {
+                    ForEach(customAgents) { agent in
+                        AgentRow(agent: agent)
                     }
-                    .padding(.vertical, 4)
                 }
             }
-            .listStyle(.inset)
 
-            HStack {
+            Section {
                 Button {
                     isShowingCustomSheet = true
                 } label: {
                     Label("添加自定义 Agent", systemImage: "plus")
                 }
-                Spacer()
-                Button("刷新可用性", action: model.refreshAvailability)
             }
         }
-        .padding(16)
+        .formStyle(.grouped)
+        .onAppear { model.refreshAvailability() }
         .sheet(isPresented: $isShowingCustomSheet) {
             CustomAgentSheet()
                 .environment(model)
+        }
+    }
+}
+
+private struct AgentRow: View {
+    @Environment(AppModel.self) private var model
+    let agent: AgentProfile
+
+    private var isDefault: Bool { model.selectedAgentId == agent.id }
+    private var isEnabled: Bool { model.isAgentEnabled(agent) }
+    private var isAvailable: Bool { model.availability[agent.id] == true }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            monogram
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(agent.title)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(agent.builtIn ? "内置" : "自定义")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Palette.badgeBg, in: Capsule())
+                }
+                Text(agent.launchLine)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+                    .help(agent.notes)
+            }
+
+            Spacer()
+
+            if isDefault {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Palette.moss)
+                    .help("新建对话默认使用此 harness")
+            }
+
+            Toggle("", isOn: Binding(
+                get: { model.isAgentEnabled(agent) },
+                set: { model.setAgentEnabled(agent, enabled: $0) }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
+            .help(isEnabled ? "停用后不会出现在新建对话的 harness 选择里" : "点击重新启用该 harness")
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .opacity(isEnabled ? 1 : 0.55)
+        .onTapGesture {
+            model.selectedAgentId = agent.id
+        }
+        .contextMenu { contextMenu }
+    }
+
+    private var monogram: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Circle()
+                .fill(Palette.badgeBg)
+                .frame(width: 26, height: 26)
+                .overlay {
+                    Text(String(agent.title.prefix(1)).uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.accent)
+                }
+            Circle()
+                .fill(isAvailable ? Palette.moss : Color.secondary.opacity(0.4))
+                .frame(width: 8, height: 8)
+                .overlay(Circle().strokeBorder(.background, lineWidth: 1.5))
+        }
+        .help(isAvailable ? "CLI 可用" : "未检测到 CLI；重开设置页或点通用页的可用性会自动重测")
+    }
+
+    @ViewBuilder
+    private var contextMenu: some View {
+        Button("设为默认") {
+            model.selectedAgentId = agent.id
+        }
+        Button("复制启动命令") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(agent.launchLine, forType: .string)
+        }
+        if !agent.builtIn {
+            Divider()
+            Button("移除", role: .destructive) {
+                model.removeAgent(agent)
+            }
         }
     }
 }

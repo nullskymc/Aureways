@@ -12,7 +12,9 @@ struct WorkspaceSessionTree: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            NewConversationButton()
+            GlassPrimaryButton(title: "新建对话", help: "新建对话 (⌘N)") {
+                model.startNewSession()
+            }
 
             HStack(spacing: 6) {
                 Text("工作区")
@@ -38,41 +40,6 @@ struct WorkspaceSessionTree: View {
                 )
             }
         }
-    }
-}
-
-// MARK: - New Conversation Button
-
-struct NewConversationButton: View {
-    @Environment(AppModel.self) private var model
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            model.startNewSession()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Palette.accent)
-                Text("新建对话")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .liquidGlassCard(cornerRadius: 10)
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isHovered ? Palette.cardHover.opacity(0.45) : .clear)
-                .allowsHitTesting(false)
-        }
-        .onHover { isHovered = $0 }
-        .help("新建对话 (⌘N)")
     }
 }
 
