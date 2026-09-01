@@ -18,14 +18,14 @@ enum ActivityStep: Identifiable {
 }
 
 enum TranscriptBlock: Identifiable {
-    case user(UUID, String)
+    case user(UUID, String, [TranscriptAttachment])
     case agent(UUID, String)
     case activity(UUID, [ActivityStep], ActivityRun?)
     case status(UUID, String)
 
     var id: UUID {
         switch self {
-        case .user(let id, _), .agent(let id, _), .activity(let id, _, _), .status(let id, _):
+        case .user(let id, _, _), .agent(let id, _), .activity(let id, _, _), .status(let id, _):
             return id
         }
     }
@@ -77,10 +77,10 @@ enum TranscriptBlock: Identifiable {
 
         for item in items {
             switch item {
-            case .user(let id, let text):
+            case .user(let id, let text, let attachments):
                 emitPendingAgentsAsBody()
                 flushActivity()
-                blocks.append(.user(id, text))
+                blocks.append(.user(id, text, attachments))
             case .agent(let id, let text):
                 pendingAgents.append((id, text))
             case .thought(let id, let text):
@@ -134,8 +134,8 @@ struct TranscriptBlockView: View {
 
     var body: some View {
         switch block {
-        case .user(_, let text):
-            UserBubble(text: text)
+        case .user(_, let text, let attachments):
+            UserBubble(text: text, attachments: attachments)
         case .agent(_, let text):
             AgentMessage(markdown: text)
         case .activity(_, let steps, let run):
@@ -169,20 +169,106 @@ private struct ErrorNotice: View {
 
 private struct UserBubble: View {
     let text: String
+    var attachments: [TranscriptAttachment] = []
 
     var body: some View {
         HStack(alignment: .top) {
             Spacer(minLength: 48)
-            Text(text)
-                .font(.system(size: 13.5))
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(
-                    Palette.cardHover,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            VStack(alignment: .trailing, spacing: 6) {
+                if !attachments.isEmpty {
+                    attachmentRows
+                }
+                if !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(
+                            Palette.cardHover,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                }
+            }
+        }
+    }
+
+    private var attachmentRows: some View {
+        let images = attachments.filter { $0.kind == "image" }
+        let files = attachments.filter { $0.kind != "image" }
+        return VStack(alignment: .trailing, spacing: 6) {
+            if !images.isEmpty {
+                HStack(alignment: .bottom, spacing: 6) {
+                    ForEach(images) { UserAttachmentView(attachment: $0) }
+                }
+            }
+            if !files.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(files) { UserAttachmentView(attachment: $0) }
+                }
+            }
+        }
+    }
+}
+
+private struct UserAttachmentView: View {
+    let attachment: TranscriptAttachment
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if attachment.kind == "image" {
+                imageView
+            } else {
+                fileChip
+            }
+        }
+        .onAppear(perform: loadImage)
+    }
+
+    @ViewBuilder
+    private var imageView: some View {
+        if let image {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: 240, maxHeight: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08))
                 )
+        } else {
+            Image(systemName: "photo")
+                .font(.system(size: 18))
+                .foregroundStyle(.secondary)
+                .padding(8)
+                .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
+    private var fileChip: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(attachment.name)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func loadImage() {
+        guard image == nil else { return }
+        if let base64 = attachment.imageBase64, let data = Data(base64Encoded: base64) {
+            image = NSImage(data: data)
+        } else if let path = attachment.path {
+            image = NSImage(contentsOfFile: path)
         }
     }
 }

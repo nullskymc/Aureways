@@ -52,7 +52,7 @@ enum SessionTitle {
 }
 
 enum TranscriptItem: Identifiable, Equatable {
-    case user(UUID, String)
+    case user(UUID, String, [TranscriptAttachment])
     case agent(UUID, String)
     case thought(UUID, String)
     case tool(UUID, ToolCallView)
@@ -61,7 +61,7 @@ enum TranscriptItem: Identifiable, Equatable {
 
     var id: UUID {
         switch self {
-        case .user(let id, _), .agent(let id, _), .thought(let id, _), .tool(let id, _), .plan(let id, _), .status(let id, _):
+        case .user(let id, _, _), .agent(let id, _), .thought(let id, _), .tool(let id, _), .plan(let id, _), .status(let id, _):
             return id
         }
     }
@@ -139,10 +139,11 @@ final class ChatSession: Identifiable {
         self.phase = phase
     }
 
-    func appendUser(_ text: String) {
-        items.append(.user(UUID(), text))
+    func appendUser(_ text: String, attachments: [TranscriptAttachment] = []) {
+        items.append(.user(UUID(), text, attachments))
         if !isReplaying, SessionTitle.isPlaceholder(title) {
-            title = SessionTitle.derived(from: text)
+            let source = text.isEmpty ? (attachments.first?.name ?? text) : text
+            title = SessionTitle.derived(from: source)
         }
         transcriptRevision += 1
     }
@@ -323,17 +324,17 @@ final class ChatSession: Identifiable {
     private func coalesceUser(_ text: String) {
         guard !text.isEmpty else { return }
         endCurrentRun()
-        if case .user(let id, let existing) = items.last {
+        if case .user(let id, let existing, let attachments) = items.last {
             if text == existing || existing.hasPrefix(text) {
                 return
             }
             if text.hasPrefix(existing) {
-                items[items.count - 1] = .user(id, text)
+                items[items.count - 1] = .user(id, text, attachments)
             } else {
-                items[items.count - 1] = .user(id, existing + text)
+                items[items.count - 1] = .user(id, existing + text, attachments)
             }
         } else {
-            items.append(.user(UUID(), text))
+            items.append(.user(UUID(), text, []))
         }
     }
 

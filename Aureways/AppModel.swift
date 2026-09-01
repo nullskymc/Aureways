@@ -9,6 +9,11 @@ final class AppModel {
 
     var agents: [AgentProfile]
     var availability: [String: Bool] = [:]
+    var disabledAgentIds: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(disabledAgentIds), forKey: "disabledAgentIds")
+        }
+    }
     var sessions: [ChatSession] = []
     var selectedSessionID: UUID?
     var selectedAgentId: String {
@@ -40,6 +45,7 @@ final class AppModel {
     var terminalTitles: [UUID: String] = [:]
     var searchQuery = ""
     var draftPrompt = ""
+    var fileIndex = WorkspaceFileIndex()
     var errorMessage: String?
     var customTitle = ""
     var customCommand = ""
@@ -63,6 +69,26 @@ final class AppModel {
         agents.first(where: { $0.id == selectedAgentId }) ?? agents.first!
     }
 
+    /// 新建对话可选的 harness：停用的不出现。
+    var selectableAgents: [AgentProfile] {
+        agents.filter { !disabledAgentIds.contains($0.id) }
+    }
+
+    func isAgentEnabled(_ agent: AgentProfile) -> Bool {
+        !disabledAgentIds.contains(agent.id)
+    }
+
+    func setAgentEnabled(_ agent: AgentProfile, enabled: Bool) {
+        if enabled {
+            disabledAgentIds.remove(agent.id)
+        } else {
+            disabledAgentIds.insert(agent.id)
+            if selectedAgentId == agent.id, let fallback = selectableAgents.first {
+                selectedAgentId = fallback.id
+            }
+        }
+    }
+
     var currentWorkspaceName: String {
         URL(fileURLWithPath: workspacePath).lastPathComponent
     }
@@ -76,6 +102,7 @@ final class AppModel {
         let initialWorkspace = stored ?? FileManager.default.homeDirectoryForCurrentUser.path
         workspacePath = initialWorkspace
         appearance = UserDefaults.standard.string(forKey: "appAppearance") ?? "system"
+        disabledAgentIds = Set(UserDefaults.standard.stringArray(forKey: "disabledAgentIds") ?? [])
 
         let custom = (UserDefaults.standard.array(forKey: "customAgents") as? [Data] ?? [])
             .compactMap { try? JSONDecoder().decode(AgentProfile.self, from: $0) }

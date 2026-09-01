@@ -22,12 +22,19 @@
 		B1010000000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000F /* SettingsView.swift */; };
 		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
+		B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000002 /* ComposerTextViewTests.swift */; };
 		B20100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
+		B20100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
+		B20100000000000000000031 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000031 /* ComposerTextView.swift */; };
 		B20100000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000004 /* Models.swift */; };
 		B20100000000000000000006 /* ClientOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000006 /* ClientOps.swift */; };
 		B20100000000000000000007 /* Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000007 /* Connection.swift */; };
 		B2010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
 		B10100000000000000000012 /* ChatSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000012 /* ChatSession.swift */; };
+		B10100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
+		B10100000000000000000031 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000031 /* ComposerTextView.swift */; };
+		B10100000000000000000032 /* WorkspaceIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000032 /* WorkspaceIndex.swift */; };
+		B10100000000000000000033 /* CompletionPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000033 /* CompletionPopup.swift */; };
 		B10100000000000000000013 /* EmptyWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000013 /* EmptyWorkspace.swift */; };
 		B10100000000000000000014 /* TranscriptBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000014 /* TranscriptBlocks.swift */; };
 		B10100000000000000000015 /* ToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000015 /* ToolViews.swift */; };
@@ -101,7 +108,12 @@
 		F1010000000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+		F20100000000000000000002 /* ComposerTextViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextViewTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000012 /* ChatSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSession.swift; sourceTree = "<group>"; };
+		F10100000000000000000030 /* ComposerAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachment.swift; sourceTree = "<group>"; };
+		F10100000000000000000031 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
+		F10100000000000000000032 /* WorkspaceIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceIndex.swift; sourceTree = "<group>"; };
+		F10100000000000000000033 /* CompletionPopup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionPopup.swift; sourceTree = "<group>"; };
 		F10100000000000000000013 /* EmptyWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyWorkspace.swift; sourceTree = "<group>"; };
 		F10100000000000000000014 /* TranscriptBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBlocks.swift; sourceTree = "<group>"; };
 		F10100000000000000000015 /* ToolViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolViews.swift; sourceTree = "<group>"; };
@@ -172,6 +184,8 @@
 				F1010000000000000000001B /* AppModel+Runtime.swift */,
 				F1010000000000000000002B /* AppModel+Inspector.swift */,
 				F10100000000000000000012 /* ChatSession.swift */,
+				F10100000000000000000030 /* ComposerAttachment.swift */,
+				F10100000000000000000032 /* WorkspaceIndex.swift */,
 				F1010000000000000000000D /* SessionStore.swift */,
 				G10100000000000000000004 /* Harness */,
 				G10100000000000000000002 /* ACP */,
@@ -201,6 +215,8 @@
 				F10100000000000000000009 /* Sidebar.swift */,
 				F1010000000000000000000A /* Transcript.swift */,
 				F1010000000000000000000B /* Composer.swift */,
+				F10100000000000000000031 /* ComposerTextView.swift */,
+				F10100000000000000000033 /* CompletionPopup.swift */,
 				F1010000000000000000000F /* SettingsView.swift */,
 				F10100000000000000000010 /* MarkdownBody.swift */,
 				F10100000000000000000013 /* EmptyWorkspace.swift */,
@@ -233,6 +249,7 @@
 			isa = PBXGroup;
 			children = (
 				F20100000000000000000001 /* ProtocolTests.swift */,
+				F20100000000000000000002 /* ComposerTextViewTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -366,6 +383,10 @@
 				B1010000000000000000000F /* SettingsView.swift in Sources */,
 				B10100000000000000000010 /* MarkdownBody.swift in Sources */,
 				B10100000000000000000012 /* ChatSession.swift in Sources */,
+				B10100000000000000000030 /* ComposerAttachment.swift in Sources */,
+				B10100000000000000000031 /* ComposerTextView.swift in Sources */,
+				B10100000000000000000032 /* WorkspaceIndex.swift in Sources */,
+				B10100000000000000000033 /* CompletionPopup.swift in Sources */,
 				B10100000000000000000013 /* EmptyWorkspace.swift in Sources */,
 				B10100000000000000000014 /* TranscriptBlocks.swift in Sources */,
 				B10100000000000000000015 /* ToolViews.swift in Sources */,
@@ -403,6 +424,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
+				B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */,
+				B20100000000000000000030 /* ComposerAttachment.swift in Sources */,
+				B20100000000000000000031 /* ComposerTextView.swift in Sources */,
 				B20100000000000000000003 /* JSONRPC.swift in Sources */,
 				B20100000000000000000004 /* Models.swift in Sources */,
 				B20100000000000000000006 /* ClientOps.swift in Sources */,

@@ -30,6 +30,65 @@ final class ProtocolTests: XCTestCase {
         }
     }
 
+    func testContentBlockImageAndResourceLinkCodable() throws {
+        func encoded(_ block: ContentBlock) throws -> JSONValue {
+            let data = try JSONEncoder().encode([block])
+            return try JSONValue.decode(from: data).arrayValue?.first ?? .null
+        }
+        func decode(_ json: String) throws -> ContentBlock {
+            let value = try JSONValue.decode(from: json)
+            return try JSONDecoder.acp.decode(ContentBlock.self, from: try value.encode())
+        }
+
+        let image = try encoded(.image(data: "QUJD", mimeType: "image/png", uri: nil))
+        XCTAssertEqual(image["type"]?.stringValue, "image")
+        XCTAssertEqual(image["data"]?.stringValue, "QUJD")
+        XCTAssertEqual(image["mimeType"]?.stringValue, "image/png")
+        XCTAssertNil(image["uri"])
+
+        let imageWithURI = try encoded(.image(data: "QQ", mimeType: "image/jpeg", uri: "file:///tmp/a.png"))
+        XCTAssertEqual(imageWithURI["uri"]?.stringValue, "file:///tmp/a.png")
+
+        let link = try encoded(.resourceLink(uri: "file:///tmp/notes.md", name: "notes.md"))
+        XCTAssertEqual(link["type"]?.stringValue, "resource_link")
+        XCTAssertEqual(link["uri"]?.stringValue, "file:///tmp/notes.md")
+        XCTAssertEqual(link["name"]?.stringValue, "notes.md")
+
+        if case .image(let data, let mimeType, let uri) = try decode("""
+        {"type":"image","data":"QUJD","mimeType":"image/png"}
+        """) {
+            XCTAssertEqual(data, "QUJD")
+            XCTAssertEqual(mimeType, "image/png")
+            XCTAssertNil(uri)
+        } else {
+            XCTFail("expected image block")
+        }
+
+        if case .resourceLink(let uri, let name) = try decode("""
+        {"type":"resource_link","uri":"file:///tmp/notes.md","name":"notes.md"}
+        """) {
+            XCTAssertEqual(uri, "file:///tmp/notes.md")
+            XCTAssertEqual(name, "notes.md")
+        } else {
+            XCTFail("expected resource_link block")
+        }
+
+        // 缺字段的 image 与未知类型一律落 .other，不炸解码
+        if case .other = try decode("""
+        {"type":"image","mimeType":"image/png"}
+        """) {
+        } else {
+            XCTFail("expected fallback .other for malformed image")
+        }
+        if case .other(let json) = try decode("""
+        {"type":"audio","data":"QUJD","mimeType":"audio/wav"}
+        """) {
+            XCTAssertEqual(json["type"]?.stringValue, "audio")
+        } else {
+            XCTFail("expected fallback .other for audio")
+        }
+    }
+
     func testPermissionEncoding() throws {
         let selected = PermissionDecision.selected("allow-once").json
         XCTAssertEqual(selected["outcome"]?["outcome"]?.stringValue, "selected")
@@ -153,7 +212,7 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(handshake.agentInfo?.name, "mock")
         let session = try await connection.newSession(cwd: directory.path, meta: nil)
         XCTAssertEqual(session.sessionId, "sess_mock_1")
-        let response = try await connection.prompt(sessionId: session.sessionId, text: "hello")
+        let response = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("hello")])
         XCTAssertEqual(response.stopReason, "end_turn")
         let joined = await chunks.joined()
         XCTAssertEqual(joined, "hello from mock")
@@ -190,7 +249,7 @@ final class ProtocolTests: XCTestCase {
         )
         _ = try await connection.initialize()
         let session = try await connection.newSession(cwd: directory.path, meta: nil)
-        let response = try await connection.prompt(sessionId: session.sessionId, text: "read")
+        let response = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("read")])
         XCTAssertEqual(response.stopReason, "end_turn")
         let output = await seen.joined()
         XCTAssertTrue(output.contains("beta"), output)
@@ -396,7 +455,7 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(handshake.agentCapabilities?.canDelete, true)
 
         let created = try await connection.newSession(cwd: directory.path, meta: nil)
-        _ = try await connection.prompt(sessionId: created.sessionId, text: "hello")
+        _ = try await connection.prompt(sessionId: created.sessionId, prompt: [.text("hello")])
         let listed = try await connection.listSessions()
         XCTAssertEqual(listed.map(\.sessionId), [created.sessionId])
         XCTAssertEqual(listed.first?.title, "hello")

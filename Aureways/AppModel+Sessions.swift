@@ -26,21 +26,25 @@ extension AppModel {
         startNewSession()
     }
 
-    func sendFromComposer(text: String, agent: AgentProfile? = nil) {
+    func sendFromComposer(text: String, attachments: [ComposerAttachment] = [], agent: AgentProfile? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let message = OutgoingMessage(
+            text: trimmed,
+            attachments: attachments.map(\.transcriptAttachment)
+        )
+        guard !message.isEmpty else { return }
 
         if let session = selectedSession {
             switch session.phase {
             case .connecting:
                 return
             case .ready:
-                session.appendUser(trimmed)
+                session.appendUser(message.text, attachments: message.attachments)
                 persistIfNeeded(session)
-                enqueuePrompt(session, text: trimmed)
+                enqueuePrompt(session, message: message)
                 return
             case .idle, .failed:
-                enqueuePrompt(session, text: trimmed, reconnect: true)
+                enqueuePrompt(session, message: message, reconnect: true)
                 return
             }
         }
@@ -50,12 +54,8 @@ extension AppModel {
         let session = ChatSession(agent: targetAgent, cwd: workspacePath, phase: .connecting)
         sessions.insert(session, at: 0)
         selectedSessionID = session.id
-        session.appendUser(trimmed)
-        enqueuePrompt(session, text: trimmed, reconnect: true)
-    }
-
-    func send(_ text: String) {
-        sendFromComposer(text: text)
+        session.appendUser(message.text, attachments: message.attachments)
+        enqueuePrompt(session, message: message, reconnect: true)
     }
 
     func retry(_ session: ChatSession) {

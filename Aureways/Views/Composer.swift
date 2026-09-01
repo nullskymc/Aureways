@@ -1,5 +1,13 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// 输入补全状态机：slash 仅在第一行行首生效；mention 匹配光标前最近的 "@查询" 段。
+enum CompletionMode: Equatable {
+    case none
+    case slash(query: String)
+    case mention(query: String)
+}
 
 /// Floating input card only — not a system bottom bar.
 /// Overlay is only as wide as the card so it does not steal scroll/clicks.
@@ -77,6 +85,10 @@ struct ComposerCard: View {
     let session: ChatSession?
     @State private var draft = ""
     @State private var measuredHeight: CGFloat = 20
+    @State private var attachments: [ComposerAttachment] = []
+    @State private var editor = ComposerEditorBridge()
+    @State private var completionMode: CompletionMode = .none
+    @State private var completionIndex = 0
     @FocusState private var isFocused: Bool
 
     private let editorMinHeight: CGFloat = 20
@@ -100,7 +112,27 @@ struct ComposerCard: View {
                 draft = model.draftPrompt
                 isFocused = true
             }
-            .onChange(of: draft) { model.draftPrompt = draft }
+            .onChange(of: draft) {
+                model.draftPrompt = draft
+                updateCompletionMode()
+            }
+            .overlay(alignment: .topLeading) {
+                if !completionItems.isEmpty {
+                    CompletionPopup(
+                        items: completionItems,
+                        selectedIndex: completionIndex,
+                        onSelect: { item in
+                            if let index = completionItems.firstIndex(where: { $0.id == item.id }) {
+                                completionIndex = index
+                            }
+                            confirmCompletion(item)
+                        }
+                    )
+                    // 弹层在 overlay 里不参与布局：开合不影响 dock 高度与 transcript。
+                    // 顶部对齐后上移（自身高度 + 8pt 间隙），出现在卡片上方。
+                    .offset(x: 12, y: -(CompletionPopup.height(itemCount: completionItems.count) + 8))
+                }
+            }
     }
 
     private var cardStack: some View {
@@ -124,27 +156,21 @@ struct ComposerCard: View {
                         .allowsHitTesting(false)
                 }
 
-                TextEditor(text: $draft)
-                    .font(.system(size: 13.5))
-                    // 抵消 NSTextView 自带的 ~5pt lineFragmentPadding，
-                    // 让光标/输入文字与占位符在同一左边缘对齐。
-                    .padding(.leading, -5)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(editorHeight >= editorMaxHeight ? .automatic : .hidden)
-                    .frame(height: editorHeight)
-                    .focused($isFocused)
-                    .onKeyPress(keys: [.return]) { press in
-                        guard press.phase == .down, press.modifiers.isEmpty, !Self.hasMarkedText else {
-                            return .ignored
-                        }
-                        submit()
-                        return .handled
-                    }
+                ComposerTextRepresentable(
+                    draft: $draft,
+                    isFocused: Binding(get: { isFocused }, set: { isFocused = $0 }),
+                    onAttachments: { attachments.append(contentsOf: $0) },
+                    onCommand: handleCommand,
+                    coordinatorSink: { editor.coordinator = $0 }
+                )
+                .frame(height: editorHeight)
             }
             .onPreferenceChange(ComposerHeightKey.self) { measuredHeight = $0 }
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)
+
+            attachmentsRow
 
             controlRow
                 .padding(.horizontal, 8)
@@ -159,22 +185,6 @@ struct ComposerCard: View {
         // 包住 buttonStyle(.glass) 控件会吞掉 bezel（实测截图验证）。
         HStack(alignment: .center, spacing: 8) {
             Menu {
-                if let available = currentSession?.availableCommands, !available.isEmpty {
-                    Section("可用指令 (Slash Commands)") {
-                        ForEach(available) { command in
-                            Button("/\(command.name) - \(command.description ?? "")") {
-                                draft = "/\(command.name) "
-                                isFocused = true
-                            }
-                        }
-                    }
-                    Divider()
-                }
-                Section("快捷指令") {
-                    Button("/help - 帮助说明") { draft = "/help "; isFocused = true }
-                    Button("/clear - 清空上下文") { draft = "/clear "; isFocused = true }
-                }
-                Divider()
                 Button("添加工作区...") { model.addWorkspace() }
             } label: {
                 Image(systemName: "plus")
@@ -244,9 +254,42 @@ struct ComposerCard: View {
         }
     }
 
+    /// 附件行：静态出现/消失，不做动画——dock 高度动画会抖动 transcript（既往实测约束）。
+    @ViewBuilder
+    private var attachmentsRow: some View {
+        if !attachments.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(attachments) { attachment in
+                        ComposerAttachmentChip(
+                            attachment: attachment,
+                            unsupported: attachment.kind == .image && imageSupport == false,
+                            onRemove: { attachments.removeAll { $0.id == attachment.id } }
+                        )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+            }
+        }
+    }
+
+    /// nil = 未知（无 session 或尚未握手），照发；false = 明确不支持，图片禁发。
+    private var imageSupport: Bool? {
+        let agent = displayedAgent
+        if currentSession?.phase.isReady != true, currentSession != nil {
+            return nil
+        }
+        return model.runtimes[agent.id]?.capabilities.promptCapabilities?.image
+    }
+
     private var canSend: Bool {
         let hasText = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard hasText, !isStreaming else { return false }
+        guard (hasText || !attachments.isEmpty), !isStreaming else { return false }
+        if attachments.contains(where: { $0.kind == .image }), imageSupport == false {
+            return false
+        }
         if let session = currentSession {
             switch session.phase {
             case .connecting: return false
@@ -296,7 +339,7 @@ struct ComposerCard: View {
 
         if currentSession == nil {
             Menu {
-                ForEach(model.agents) { item in
+                ForEach(model.selectableAgents) { item in
                     Button {
                         model.selectedAgentId = item.id
                     } label: {
@@ -395,20 +438,205 @@ struct ComposerCard: View {
     private func submit() {
         guard canSend else { return }
         let text = draft
+        let pendingAttachments = attachments
         draft = ""
-        model.sendFromComposer(text: text)
+        attachments = []
+        model.sendFromComposer(text: text, attachments: pendingAttachments)
     }
 
-    /// IME 组词确认也走 Return；此时放行给文本视图，避免把拼音串直接提交。
-    private static var hasMarkedText: Bool {
-        guard let window = NSApp.keyWindow else { return false }
-        var responder: NSResponder? = window.firstResponder
-        while let current = responder {
-            if let textView = current as? NSTextView, textView.hasMarkedText() {
+    private func handleCommand(_ command: ComposerCommand) -> Bool {
+        switch command {
+        case .confirm:
+            if let item = completionItems[safe: completionIndex] {
+                confirmCompletion(item)
                 return true
             }
-            responder = current.nextResponder
+            submit()
+            return true
+        case .tab:
+            if let item = completionItems[safe: completionIndex] {
+                confirmCompletion(item)
+                return true
+            }
+            return false
+        case .moveUp:
+            guard !completionItems.isEmpty else { return false }
+            completionIndex = max(0, completionIndex - 1)
+            return true
+        case .moveDown:
+            guard !completionItems.isEmpty else { return false }
+            completionIndex = min(completionItems.count - 1, completionIndex + 1)
+            return true
+        case .cancel:
+            if completionMode != .none {
+                completionMode = .none
+                return true
+            }
+            return false
         }
-        return false
+    }
+
+    private var completionItems: [CompletionItem] {
+        switch completionMode {
+        case .none:
+            return []
+        case .slash(let query):
+            var entries: [(name: String, description: String?)] =
+                (currentSession?.availableCommands ?? []).map { ($0.name, $0.description) }
+            if !entries.contains(where: { $0.name == "help" }) { entries.append(("help", "帮助说明")) }
+            if !entries.contains(where: { $0.name == "clear" }) { entries.append(("clear", "清空上下文")) }
+            return entries
+                .filter { query.isEmpty || $0.name.lowercased().hasPrefix(query.lowercased()) }
+                .map {
+                    CompletionItem(id: "slash-\($0.name)", kind: .slash, title: "/\($0.name)", subtitle: $0.description, file: nil)
+                }
+        case .mention(let query):
+            return model.fileIndex.search(query).map { file in
+                CompletionItem(id: "file-\(file.relativePath)", kind: .file, title: file.relativePath, subtitle: nil, file: file)
+            }
+        }
+    }
+
+    private func updateCompletionMode() {
+        guard let textView = editor.coordinator?.textView, !textView.hasMarkedText() else {
+            completionMode = .none
+            return
+        }
+        let cursor = textView.selectedRange().location
+        let before = (draft as NSString).substring(to: min(cursor, (draft as NSString).length))
+
+        if before.hasPrefix("/"), !before.contains("\n") {
+            let query = String(before.dropFirst())
+            // 命令参数阶段不再补全
+            completionMode = query.contains(" ") ? .none : .slash(query: query)
+            completionIndex = 0
+            return
+        }
+
+        let segment = before
+            .split(omittingEmptySubsequences: false, whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
+            .last ?? Substring()
+        if segment.hasPrefix("@") {
+            model.fileIndex.ensureScanned(root: model.workspacePath)
+            completionMode = .mention(query: String(segment.dropFirst()))
+        } else {
+            completionMode = .none
+        }
+        completionIndex = 0
+    }
+
+    private func confirmCompletion(_ item: CompletionItem) {
+        switch item.kind {
+        case .slash:
+            editor.coordinator?.setDraft("\(item.title) ")
+            completionMode = .none
+            completionIndex = 0
+            isFocused = true
+        case .file:
+            guard let file = item.file, let textView = editor.coordinator?.textView else { return }
+            let cursor = textView.selectedRange().location
+            let nsDraft = draft as NSString
+            let before = nsDraft.substring(to: min(cursor, nsDraft.length))
+            let segment = before
+                .split(omittingEmptySubsequences: false, whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
+                .last ?? Substring()
+            guard segment.hasPrefix("@") else {
+                completionMode = .none
+                return
+            }
+            editor.coordinator?.insert("\(file.relativePath) ", replacing: NSRange(location: cursor - segment.count, length: segment.count))
+            let absolutePath = URL(fileURLWithPath: model.workspacePath).appendingPathComponent(file.relativePath).path
+            attachments.append(ComposerAttachment(
+                kind: .file,
+                name: (file.relativePath as NSString).lastPathComponent,
+                url: URL(fileURLWithPath: absolutePath),
+                mimeType: UTType(filenameExtension: (file.relativePath as NSString).pathExtension)?.preferredMIMEType
+                    ?? "application/octet-stream",
+                imageData: nil,
+                thumbnail: nil
+            ))
+            completionMode = .none
+            completionIndex = 0
+            isFocused = true
+        }
+    }
+}
+
+private struct ComposerAttachmentChip: View {
+    let attachment: ComposerAttachment
+    let unsupported: Bool
+    let onRemove: () -> Void
+
+    var body: some View {
+        Group {
+            switch attachment.kind {
+            case .image:
+                imageThumb
+            case .file:
+                fileChip
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 15, height: 15)
+                    .background(Color.black.opacity(0.55), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help("移除附件")
+            .offset(x: 5, y: -5)
+        }
+    }
+
+    private var imageThumb: some View {
+        Group {
+            if let thumbnail = attachment.thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 56, height: 56)
+            } else {
+                Image(systemName: "photo")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, height: 56)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(.white.opacity(0.1))
+        )
+        .overlay(alignment: .bottomLeading) {
+            if unsupported {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Palette.gold)
+                    .padding(3)
+                    .background(Color.black.opacity(0.55), in: Circle())
+                    .help("当前 Agent 不支持图片输入，请移除后发送")
+                    .offset(x: 4, y: 4)
+            }
+        }
+    }
+
+    private var fileChip: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(attachment.name)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(maxWidth: 160, alignment: .leading)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(height: 28)
+        .help(attachment.name)
     }
 }

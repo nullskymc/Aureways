@@ -93,7 +93,7 @@ extension AppModel {
         }
     }
 
-    func enqueuePrompt(_ session: ChatSession, text: String, reconnect: Bool = false) {
+    func enqueuePrompt(_ session: ChatSession, message: OutgoingMessage, reconnect: Bool = false) {
         session.promptTask?.cancel()
         session.promptTask = Task {
             if reconnect {
@@ -102,21 +102,21 @@ extension AppModel {
                     guard !Task.isCancelled, !session.isClosed else { return }
                     guard session.phase.isReady else {
                         // 连接失败也要把用户这条消息留在界面上，避免静默丢失。
-                        session.appendUser(text)
+                        session.appendUser(message.text, attachments: message.attachments)
                         return
                     }
-                    session.appendUser(text)
+                    session.appendUser(message.text, attachments: message.attachments)
                     persistIfNeeded(session)
                 } else {
                     await connectNew(session)
                 }
             }
             guard !Task.isCancelled, !session.isClosed, session.phase.isReady else { return }
-            await prompt(session, text: text)
+            await prompt(session, message: message)
         }
     }
 
-    func prompt(_ session: ChatSession, text: String) async {
+    func prompt(_ session: ChatSession, message: OutgoingMessage) async {
         guard let acpId = session.acpSessionId, session.phase.isReady else { return }
         guard let connection = await liveConnection(for: session.agent) else {
             fail(session, ACPError.transportClosed("连接已断开"))
@@ -127,7 +127,7 @@ extension AppModel {
         session.isStreaming = true
         defer { session.isStreaming = false }
         do {
-            let response = try await connection.prompt(sessionId: acpId, text: text)
+            let response = try await connection.prompt(sessionId: acpId, prompt: message.contentBlocks())
             session.finalizeOpenToolCalls("completed")
             if let reason = response.stopReason {
                 session.items.append(.status(UUID(), "Stop: \(reason)"))

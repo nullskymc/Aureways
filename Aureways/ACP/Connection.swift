@@ -125,8 +125,8 @@ actor ACPConnection {
         _ = try await request("session/delete", params: encodeJSON(DeleteSessionRequest(sessionId: sessionId)))
     }
 
-    func prompt(sessionId: String, text: String) async throws -> PromptResponse {
-        let body = PromptRequest(sessionId: sessionId, prompt: [.text(text)])
+    func prompt(sessionId: String, prompt: [ContentBlock]) async throws -> PromptResponse {
+        let body = PromptRequest(sessionId: sessionId, prompt: prompt)
         let result = try await request("session/prompt", params: encodeJSON(body))
         let data = try result.encode()
         return try JSONDecoder.acp.decode(PromptResponse.self, from: data)

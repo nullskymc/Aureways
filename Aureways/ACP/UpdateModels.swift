@@ -2,6 +2,8 @@ import Foundation
 
 enum ContentBlock: Codable, Sendable, Equatable {
     case text(String)
+    case image(data: String, mimeType: String, uri: String?)
+    case resourceLink(uri: String, name: String)
     case other(JSONValue)
 
     var text: String? {
@@ -12,11 +14,26 @@ enum ContentBlock: Codable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let json = try JSONValue(from: decoder)
-        if json["type"]?.stringValue == "text", let text = json["text"]?.stringValue {
-            self = .text(text)
-        } else {
-            self = .other(json)
+        switch json["type"]?.stringValue {
+        case "text":
+            if let text = json["text"]?.stringValue {
+                self = .text(text)
+                return
+            }
+        case "image":
+            if let data = json["data"]?.stringValue, let mimeType = json["mimeType"]?.stringValue {
+                self = .image(data: data, mimeType: mimeType, uri: json["uri"]?.stringValue)
+                return
+            }
+        case "resource_link":
+            if let uri = json["uri"]?.stringValue {
+                self = .resourceLink(uri: uri, name: json["name"]?.stringValue ?? uri)
+                return
+            }
+        default:
+            break
         }
+        self = .other(json)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -25,6 +42,20 @@ enum ContentBlock: Codable, Sendable, Equatable {
             try JSONValue.object([
                 "type": .string("text"),
                 "text": .string(text),
+            ]).encode(to: encoder)
+        case .image(let data, let mimeType, let uri):
+            var object: [String: JSONValue] = [
+                "type": .string("image"),
+                "data": .string(data),
+                "mimeType": .string(mimeType),
+            ]
+            if let uri { object["uri"] = .string(uri) }
+            try JSONValue.object(object).encode(to: encoder)
+        case .resourceLink(let uri, let name):
+            try JSONValue.object([
+                "type": .string("resource_link"),
+                "uri": .string(uri),
+                "name": .string(name),
             ]).encode(to: encoder)
         case .other(let json):
             try json.encode(to: encoder)
