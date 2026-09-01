@@ -76,9 +76,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.zip` → 自动创建 GitHub Release 并附带产物。
+流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 自动创建 GitHub Release 并附带产物。
 
-下载解压后首次打开若被 Gatekeeper 拦截（产物是 ad-hoc 签名，未公证）：
+打开 dmg，把 `Aureways.app` 拖进 `Applications`。首次启动若被 Gatekeeper 拦截（产物是 ad-hoc 签名，未公证）：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app

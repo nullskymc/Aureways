@@ -37,15 +37,24 @@ jobs:
       - name: Build Release
         run: make release
 
-      - name: Package app
+      - name: Package DMG
         run: |
-          cd .derived/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent Aureways.app "Aureways-${{ github.ref_name }}.zip"
+          DMG="Aureways-${{ github.ref_name }}.dmg"
+          STAGING="$(mktemp -d)"
+          cp -R .derived/Build/Products/Release/Aureways.app "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          diskutil image create from --format UDZO --volumeName Aureways "$STAGING" "$DMG"
+          MOUNT="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$DMG" >/dev/null
+          test -x "$MOUNT/Aureways.app/Contents/MacOS/Aureways"
+          test -L "$MOUNT/Applications"
+          hdiutil detach "$MOUNT" >/dev/null
+          ls -lh "$DMG"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: .derived/Build/Products/Release/Aureways-${{ github.ref_name }}.zip
+          files: Aureways-${{ github.ref_name }}.dmg
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -54,5 +63,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Aureways-${{ github.ref_name }}
-          path: .derived/Build/Products/Release/Aureways-${{ github.ref_name }}.zip
+          path: Aureways-${{ github.ref_name }}.dmg
           if-no-files-found: error

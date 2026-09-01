@@ -136,7 +136,7 @@ Runner（`macos-26`）上自动选取最新 Xcode，然后：
 
 1. `make test`（失败即中止发版）
 2. `make release`（Release 构建）
-3. `ditto` 打包 `Aureways-<tag>.zip`
+3. `diskutil image create from` 生成 `Aureways-<tag>.dmg`（含 `/Applications` 快捷方式，挂载自检 app 可执行文件与快捷方式，产物异常即中止发版）
 4. 创建 GitHub Release 附产物，并保留 Actions artifact
 
 产物为 ad-hoc 签名（`CODE_SIGN_IDENTITY = "-"`），未经 Apple 公证；他人下载后首次打开可能需要 `xattr -dr com.apple.quarantine`。
