@@ -105,6 +105,7 @@ final class ChatSession: Identifiable {
     var modes: SessionModeState?
     var activityRuns: [UUID: ActivityRun] = [:]
     private var currentRunID: UUID?
+    private var currentUserMessageId: String?
 
     /// 各 harness 表示终态的写法不一，统一在这里收敛；新增终态词时同步更新。
     static let terminalToolStatuses: Set<String> = [
@@ -140,6 +141,7 @@ final class ChatSession: Identifiable {
     }
 
     func appendUser(_ text: String, attachments: [TranscriptAttachment] = []) {
+        currentUserMessageId = nil
         items.append(.user(UUID(), text, attachments))
         if !isReplaying, SessionTitle.isPlaceholder(title) {
             let source = text.isEmpty ? (attachments.first?.name ?? text) : text
@@ -151,14 +153,27 @@ final class ChatSession: Identifiable {
     func apply(_ notification: SessionNotification) {
         switch notification.update {
         case .agentMessageChunk(let content):
-            appendText(content.text ?? "", asThought: false)
+            currentUserMessageId = nil
+            if case .image(let data, let mimeType, let uri) = content {
+                if let uri, !uri.isEmpty {
+                    appendText("\n\n![\(URL(string: uri)?.lastPathComponent ?? "image")](\(uri))\n\n", asThought: false)
+                } else if !data.isEmpty {
+                    appendText("\n\n![image](data:\(mimeType);base64,\(data))\n\n", asThought: false)
+                }
+            } else if case .resourceLink(let uri, let name) = content {
+                appendText("[\(name)](\(uri))", asThought: false)
+            } else {
+                appendText(content.text ?? "", asThought: false)
+            }
         case .agentThoughtChunk(let content):
             appendText(content.text ?? "", asThought: true)
         case .userMessageChunk(let content):
-            coalesceUser(content.text ?? "")
+            applyUserChunk(content, messageId: notification.messageId)
         case .toolCall(let call):
+            currentUserMessageId = nil
             appendTool(call)
         case .toolCallUpdate(let call):
+            currentUserMessageId = nil
             if let index = items.lastIndex(where: {
                 if case .tool(_, let existing) = $0 { return existing.toolCallId == call.toolCallId }
                 return false
@@ -171,6 +186,7 @@ final class ChatSession: Identifiable {
                 appendTool(call)
             }
         case .plan(let entries):
+            currentUserMessageId = nil
             if let index = items.lastIndex(where: { if case .plan = $0 { return true }; return false }) {
                 if case .plan(let id, _) = items[index] {
                     items[index] = .plan(id, entries)
@@ -298,6 +314,7 @@ final class ChatSession: Identifiable {
         availableCommands = []
         activityRuns = [:]
         currentRunID = nil
+        currentUserMessageId = nil
         transcriptRevision += 1
     }
 
@@ -321,21 +338,75 @@ final class ChatSession: Identifiable {
         }
     }
 
-    private func coalesceUser(_ text: String) {
-        guard !text.isEmpty else { return }
+    private func applyUserChunk(_ content: ContentBlock, messageId: String? = nil) {
         endCurrentRun()
-        if case .user(let id, let existing, let attachments) = items.last {
-            if text == existing || existing.hasPrefix(text) {
-                return
+
+        let attachment = TranscriptAttachment(contentBlock: content)
+        let text = content.text ?? ""
+
+        guard !text.isEmpty || attachment != nil else { return }
+
+        func isDuplicateAttachment(_ a: TranscriptAttachment, in existing: [TranscriptAttachment]) -> Bool {
+            existing.contains { b in
+                if let a64 = a.imageBase64, let b64 = b.imageBase64, !a64.isEmpty, !b64.isEmpty {
+                    return a64 == b64
+                }
+                if let ap = a.path, let bp = b.path, !ap.isEmpty, !bp.isEmpty {
+                    return ap == bp
+                }
+                return a.name == b.name && a.kind == b.kind
             }
-            if text.hasPrefix(existing) {
-                items[items.count - 1] = .user(id, text, attachments)
-            } else {
-                items[items.count - 1] = .user(id, existing + text, attachments)
-            }
-        } else {
-            items.append(.user(UUID(), text, []))
         }
+
+        let isSameMessage: Bool
+        if let messageId, let lastId = currentUserMessageId {
+            isSameMessage = (messageId == lastId)
+        } else {
+            if case .user = items.last {
+                isSameMessage = true
+            } else {
+                isSameMessage = false
+            }
+        }
+
+        if isSameMessage, case .user(let id, let existingText, var existingAttachments) = items.last {
+            if let messageId {
+                currentUserMessageId = messageId
+            }
+            var updatedText = existingText
+            if !text.isEmpty {
+                if text == existingText || existingText.hasPrefix(text) {
+                    // Already contains or prefix, no-op
+                } else if text.hasPrefix(existingText) {
+                    updatedText = text
+                } else if existingText.isEmpty {
+                    updatedText = text
+                } else {
+                    updatedText = existingText + text
+                }
+            }
+            if let attachment, !isDuplicateAttachment(attachment, in: existingAttachments) {
+                existingAttachments.append(attachment)
+            }
+            items[items.count - 1] = .user(id, updatedText, existingAttachments)
+        } else {
+            if let messageId {
+                currentUserMessageId = messageId
+            }
+            let attachments = attachment.map { [$0] } ?? []
+            items.append(.user(UUID(), text, attachments))
+        }
+
+        if !isReplaying, SessionTitle.isPlaceholder(title) {
+            let source = text.isEmpty ? (attachment?.name ?? text) : text
+            if !source.isEmpty {
+                title = SessionTitle.derived(from: source)
+            }
+        }
+    }
+
+    private func coalesceUser(_ text: String) {
+        applyUserChunk(.text(text))
     }
 
     func log(_ line: String) {

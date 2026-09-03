@@ -12,17 +12,48 @@ enum ContentBlock: Codable, Sendable, Equatable {
         return nil
     }
 
-    init(from decoder: Decoder) throws {
-        let json = try JSONValue(from: decoder)
-        switch json["type"]?.stringValue {
+    init(json: JSONValue) {
+        if let str = json.stringValue {
+            self = .text(str)
+            return
+        }
+        let type = json["type"]?.stringValue
+        switch type {
         case "text":
             if let text = json["text"]?.stringValue {
                 self = .text(text)
                 return
             }
         case "image":
-            if let data = json["data"]?.stringValue, let mimeType = json["mimeType"]?.stringValue {
-                self = .image(data: data, mimeType: mimeType, uri: json["uri"]?.stringValue)
+            let data = json["data"]?.stringValue
+                ?? json["source"]?["data"]?.stringValue
+            let uri = json["uri"]?.stringValue
+                ?? json["url"]?.stringValue
+                ?? json["path"]?.stringValue
+            let mimeType = json["mimeType"]?.stringValue
+                ?? json["mediaType"]?.stringValue
+                ?? json["source"]?["media_type"]?.stringValue
+                ?? "image/png"
+            if let data, !data.isEmpty {
+                self = .image(data: data, mimeType: mimeType, uri: uri)
+                return
+            } else if let uri, !uri.isEmpty {
+                self = .image(data: "", mimeType: mimeType, uri: uri)
+                return
+            }
+        case "image_url":
+            let url = json["image_url"]?["url"]?.stringValue
+                ?? json["image_url"]?.stringValue
+                ?? json["url"]?.stringValue
+            if let url, !url.isEmpty {
+                if url.hasPrefix("data:") {
+                    let parts = url.dropFirst(5).components(separatedBy: ";base64,")
+                    if parts.count == 2 {
+                        self = .image(data: parts[1], mimeType: parts[0], uri: nil)
+                        return
+                    }
+                }
+                self = .image(data: "", mimeType: "image/png", uri: url)
                 return
             }
         case "resource_link":
@@ -30,10 +61,31 @@ enum ContentBlock: Codable, Sendable, Equatable {
                 self = .resourceLink(uri: uri, name: json["name"]?.stringValue ?? uri)
                 return
             }
+        case "resource":
+            let resource = json["resource"]
+            let uri = resource?["uri"]?.stringValue ?? json["uri"]?.stringValue
+            let mimeType = resource?["mimeType"]?.stringValue ?? json["mimeType"]?.stringValue
+            let blob = resource?["blob"]?.stringValue
+            if let blob, !blob.isEmpty {
+                self = .image(data: blob, mimeType: mimeType ?? "image/png", uri: uri)
+                return
+            }
+            if let uri, !uri.isEmpty {
+                self = .resourceLink(uri: uri, name: json["name"]?.stringValue ?? uri)
+                return
+            }
         default:
-            break
+            if let text = json["text"]?.stringValue {
+                self = .text(text)
+                return
+            }
         }
         self = .other(json)
+    }
+
+    init(from decoder: Decoder) throws {
+        let json = try JSONValue(from: decoder)
+        self.init(json: json)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -110,20 +162,28 @@ enum SessionUpdate: Sendable, Equatable {
 
     private static func decodeContent(_ json: JSONValue?) -> ContentBlock {
         guard let json else { return .text("") }
-        if json["type"]?.stringValue == "text" {
-            return .text(json["text"]?.stringValue ?? "")
+        if let array = json.arrayValue, let first = array.first {
+            return ContentBlock(json: first)
         }
-        return .other(json)
+        return ContentBlock(json: json)
     }
 }
 
 struct SessionNotification: Sendable, Equatable {
     var sessionId: String
+    var messageId: String?
     var update: SessionUpdate
+
+    init(sessionId: String, update: SessionUpdate, messageId: String? = nil) {
+        self.sessionId = sessionId
+        self.update = update
+        self.messageId = messageId
+    }
 
     init?(json: JSONValue) {
         guard let sessionId = json["sessionId"]?.stringValue else { return nil }
         self.sessionId = sessionId
+        self.messageId = json["update"]?["messageId"]?.stringValue ?? json["messageId"]?.stringValue
         self.update = SessionUpdate(json: json["update"] ?? .null)
     }
 }

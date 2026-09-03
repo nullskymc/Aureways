@@ -25,6 +25,79 @@ struct TranscriptAttachment: Codable, Equatable, Sendable, Identifiable {
     var imageBase64: String?
 }
 
+extension TranscriptAttachment {
+    init?(contentBlock: ContentBlock) {
+        switch contentBlock {
+        case .image(let data, let mimeType, let uri):
+            let path = uri.flatMap { (u: String) -> String? in
+                if u.hasPrefix("file://"), let url = URL(string: u) {
+                    return url.path
+                } else if u.hasPrefix("/") {
+                    return u
+                }
+                return nil
+            }
+            let name = path.map { URL(fileURLWithPath: $0).lastPathComponent }
+                ?? uri.flatMap { URL(string: $0)?.lastPathComponent }
+                ?? "图片"
+            var base64: String? = data.isEmpty ? nil : data
+            if base64 == nil, let path, let fileData = try? Data(contentsOf: URL(fileURLWithPath: path)), fileData.count <= maxInlineImageBytes {
+                base64 = fileData.base64EncodedString()
+            }
+            self.init(
+                id: UUID(),
+                kind: "image",
+                name: name,
+                path: path,
+                mimeType: mimeType.isEmpty ? "image/png" : mimeType,
+                imageBase64: base64
+            )
+        case .resourceLink(let uri, let name):
+            let path = uri.hasPrefix("file://") ? URL(string: uri)?.path : (uri.hasPrefix("/") ? uri : nil)
+            let ext = URL(fileURLWithPath: path ?? uri).pathExtension.lowercased()
+            let isImg = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "heic"].contains(ext)
+            var base64: String? = nil
+            if isImg, let path, let fileData = try? Data(contentsOf: URL(fileURLWithPath: path)), fileData.count <= maxInlineImageBytes {
+                base64 = fileData.base64EncodedString()
+            }
+            self.init(
+                id: UUID(),
+                kind: isImg ? "image" : "file",
+                name: name.isEmpty ? (path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "附件") : name,
+                path: path,
+                mimeType: isImg ? (UTType(filenameExtension: ext)?.preferredMIMEType ?? "image/png") : nil,
+                imageBase64: base64
+            )
+        case .other(let json):
+            if json["type"]?.stringValue == "image" || json["mimeType"]?.stringValue?.hasPrefix("image/") == true {
+                let data = json["data"]?.stringValue ?? json["source"]?["data"]?.stringValue
+                let uri = json["uri"]?.stringValue ?? json["url"]?.stringValue
+                let path = uri.flatMap { (u: String) -> String? in
+                    if u.hasPrefix("file://"), let url = URL(string: u) {
+                        return url.path
+                    } else if u.hasPrefix("/") {
+                        return u
+                    }
+                    return nil
+                }
+                let name = path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "图片"
+                self.init(
+                    id: UUID(),
+                    kind: "image",
+                    name: name,
+                    path: path,
+                    mimeType: json["mimeType"]?.stringValue ?? "image/png",
+                    imageBase64: data
+                )
+            } else {
+                return nil
+            }
+        case .text:
+            return nil
+        }
+    }
+}
+
 struct OutgoingMessage: Equatable, Sendable {
     var text: String
     var attachments: [TranscriptAttachment] = []

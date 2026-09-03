@@ -265,10 +265,17 @@ private struct UserAttachmentView: View {
 
     private func loadImage() {
         guard image == nil else { return }
-        if let base64 = attachment.imageBase64, let data = Data(base64Encoded: base64) {
-            image = NSImage(data: data)
-        } else if let path = attachment.path {
-            image = NSImage(contentsOfFile: path)
+        if let base64 = attachment.imageBase64 {
+            let clean = base64.contains(";base64,") ? String(base64.split(separator: ";base64,").last ?? "") : base64
+            let stripped = clean.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let data = Data(base64Encoded: stripped, options: .ignoreUnknownCharacters) {
+                image = NSImage(data: data)
+                return
+            }
+        }
+        if let path = attachment.path {
+            let filePath = path.hasPrefix("file://") ? (URL(string: path)?.path ?? path) : path
+            image = NSImage(contentsOfFile: filePath)
         }
     }
 }

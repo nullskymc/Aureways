@@ -502,6 +502,112 @@ final class ProtocolTests: XCTestCase {
         }
         await connection.shutdown()
     }
+
+    func testSessionUpdateDecodingWithImageAndMessageId() throws {
+        let json = try JSONValue.decode(from: """
+        {"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","messageId":"msg_123","content":{"type":"image","data":"QUJD","mimeType":"image/png"}}}
+        """)
+        let note = SessionNotification(json: json)
+        XCTAssertEqual(note?.sessionId, "s1")
+        XCTAssertEqual(note?.messageId, "msg_123")
+        if case .userMessageChunk(let content) = note?.update {
+            if case .image(let data, let mime, let uri) = content {
+                XCTAssertEqual(data, "QUJD")
+                XCTAssertEqual(mime, "image/png")
+                XCTAssertNil(uri)
+            } else {
+                XCTFail("expected image content block")
+            }
+        } else {
+            XCTFail("expected user message chunk")
+        }
+    }
+
+    func testTranscriptAttachmentFromContentBlock() {
+        let block1 = ContentBlock.image(data: "QUJD", mimeType: "image/png", uri: "file:///tmp/screen.png")
+        let att1 = TranscriptAttachment(contentBlock: block1)
+        XCTAssertNotNil(att1)
+        XCTAssertEqual(att1?.kind, "image")
+        XCTAssertEqual(att1?.name, "screen.png")
+        XCTAssertEqual(att1?.path, "/tmp/screen.png")
+        XCTAssertEqual(att1?.imageBase64, "QUJD")
+
+        let block2 = ContentBlock.resourceLink(uri: "file:///tmp/photo.jpeg", name: "")
+        let att2 = TranscriptAttachment(contentBlock: block2)
+        XCTAssertNotNil(att2)
+        XCTAssertEqual(att2?.kind, "image")
+        XCTAssertEqual(att2?.name, "photo.jpeg")
+
+        let block3 = ContentBlock.text("hello")
+        XCTAssertNil(TranscriptAttachment(contentBlock: block3))
+    }
+
+    @MainActor
+    func testChatSessionRestoresUserImageAttachment() {
+        let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+
+        // Simulate historical replay: text chunk first, then image chunk
+        let textNote = SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.text("Look at this screenshot")),
+            messageId: "msg_user_1"
+        )
+        session.apply(textNote)
+
+        let imgNote = SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.image(data: "iVBORw0KGgo=", mimeType: "image/png", uri: nil)),
+            messageId: "msg_user_1"
+        )
+        session.apply(imgNote)
+
+        XCTAssertEqual(session.items.count, 1)
+        if case .user(_, let text, let attachments) = session.items.first {
+            XCTAssertEqual(text, "Look at this screenshot")
+            XCTAssertEqual(attachments.count, 1)
+            XCTAssertEqual(attachments.first?.kind, "image")
+            XCTAssertEqual(attachments.first?.imageBase64, "iVBORw0KGgo=")
+            XCTAssertEqual(attachments.first?.mimeType, "image/png")
+        } else {
+            XCTFail("expected user item with text and attachment")
+        }
+
+        // Simulate duplicate live echo: applying the same image chunk again shouldn't duplicate attachment
+        session.apply(imgNote)
+        if case .user(_, _, let attachments) = session.items.first {
+            XCTAssertEqual(attachments.count, 1)
+        }
+
+        // Simulate agent response
+        let agentNote = SessionNotification(
+            sessionId: "s1",
+            update: .agentMessageChunk(.text("I see the image.")),
+            messageId: "msg_agent_1"
+        )
+        session.apply(agentNote)
+        XCTAssertEqual(session.items.count, 2)
+
+        // Simulate next turn with image-only user message
+        let imgOnlyNote = SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.image(data: "AQIDBA==", mimeType: "image/jpeg", uri: "file:///tmp/cat.jpg")),
+            messageId: "msg_user_2"
+        )
+        session.apply(imgOnlyNote)
+
+        XCTAssertEqual(session.items.count, 3)
+        if case .user(_, let text, let attachments) = session.items.last {
+            XCTAssertEqual(text, "")
+            XCTAssertEqual(attachments.count, 1)
+            XCTAssertEqual(attachments.first?.kind, "image")
+            XCTAssertEqual(attachments.first?.name, "cat.jpg")
+            XCTAssertEqual(attachments.first?.imageBase64, "AQIDBA==")
+            XCTAssertEqual(attachments.first?.path, "/tmp/cat.jpg")
+        } else {
+            XCTFail("expected image-only user item")
+        }
+    }
 }
 
 private actor TextBox {
