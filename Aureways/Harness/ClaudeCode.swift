@@ -8,11 +8,11 @@ final class ClaudeCodeHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "Claude Code",
-                subtitle: "Claude Agent SDK via claude-agent-acp",
+                subtitle: "Anthropic",
                 command: "npx",
                 arguments: ["-y", "@agentclientprotocol/claude-agent-acp"],
                 builtIn: true,
-                notes: "Needs Node.js and a working claude CLI login."
+                notes: "需要 Node.js，以及可用的 claude 命令行登录。")
             )
         )
     }

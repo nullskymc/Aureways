@@ -9,16 +9,16 @@ struct CustomAgentSheet: View {
     var body: some View {
         @Bindable var model = model
         VStack(alignment: .leading, spacing: 14) {
-            Text("添加自定义 ACP Agent")
+            Text("添加自定义 Agent")
                 .font(.title3.weight(.semibold))
-            Text("支持任意遵循 stdio ACP 协议的 CLI 工具。例如：grok agent stdio")
+            Text("用命令行启动任意 Agent。名称可选，命令与参数以空格分隔。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            TextField("名称 (如: My Custom Agent)", text: $model.customTitle)
+            TextField("名称", text: $model.customTitle)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("启动命令 (如: /opt/homebrew/bin/opencode acp)", text: $model.customCommand)
+            TextField("启动命令", text: $model.customCommand)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
 

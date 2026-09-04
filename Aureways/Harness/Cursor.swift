@@ -8,11 +8,11 @@ final class CursorHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "Cursor Agent",
-                subtitle: "cursor-agent acp",
+                subtitle: "Cursor",
                 command: "cursor-agent",
                 arguments: ["acp"],
                 builtIn: true,
-                notes: "Uses the Cursor CLI ACP server."
+                notes: "需要已安装 Cursor 命令行工具。")
             )
         )
     }

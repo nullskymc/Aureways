@@ -8,11 +8,11 @@ final class OpenCodeHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "OpenCode",
-                subtitle: "opencode acp",
+                subtitle: "OpenCode",
                 command: "opencode",
                 arguments: ["acp"],
                 builtIn: true,
-                notes: "OpenCode ACP server, if installed."
+                notes: "需要本机已安装 OpenCode。")
             )
         )
     }

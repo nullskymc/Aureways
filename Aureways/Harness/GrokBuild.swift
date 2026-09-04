@@ -8,11 +8,11 @@ final class GrokBuildHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "Grok Build",
-                subtitle: "xAI Grok agent over ACP stdio",
+                subtitle: "xAI",
                 command: "grok",
                 arguments: ["agent", "stdio"],
                 builtIn: true,
-                notes: "Requires an installed grok CLI and a completed login."
+                notes: "需要已安装 grok 命令行工具并完成登录。")
             )
         )
     }

@@ -53,7 +53,7 @@ struct UserProfileFooter: View {
                 Text(model.userName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.primary)
-                Text("ACP 客户端已就绪")
+                Text("准备就绪")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }

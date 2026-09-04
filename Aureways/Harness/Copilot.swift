@@ -8,11 +8,11 @@ final class CopilotHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "GitHub Copilot",
-                subtitle: "copilot --acp --stdio",
+                subtitle: "GitHub",
                 command: "copilot",
                 arguments: ["--acp", "--stdio"],
                 builtIn: true,
-                notes: "Copilot CLI public preview ACP mode."
+                notes: "需要已安装 Copilot 命令行工具。")
             )
         )
     }

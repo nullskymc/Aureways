@@ -31,25 +31,22 @@ struct GeneralSettingsPage: View {
                     Text("浅色").tag("light")
                     Text("深色").tag("dark")
                 }
-                Text("窗口与控件材质跟随系统的 Liquid Glass 外观。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Section("新对话默认") {
-                Picker("Harness", selection: $model.selectedAgentId) {
+                Picker("Agent", selection: $model.selectedAgentId) {
                     ForEach(model.selectableAgents) { agent in
                         Text(agent.title).tag(agent.id)
                     }
                 }
-                Text("只作用于空白画布上的下一条新对话，不会改已打开会话绑定的 Agent。")
+                Text("只影响下一条新对话，已打开的会话不会跟着变。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section("关于") {
                 LabeledContent("客户端", value: "Aureways \(AppInfo.version)")
-                LabeledContent("协议", value: "ACP v1 · stdio JSON-RPC")
+                LabeledContent("协议", value: "Agent Client Protocol")
             }
         }
         .formStyle(.grouped)
@@ -89,7 +86,7 @@ struct AgentSettingsPage: View {
             } header: {
                 Text("内置")
             } footer: {
-                Text("登录、API Key 和 CLI 全局配置由各 harness 自己维护。点击行设为默认，开关控制是否出现在新建对话；已打开的会话不受影响。")
+                Text("登录和密钥由各 Agent 自己的命令行工具管理。点一行设为默认；开关控制是否出现在新建对话。已打开的会话不受影响。")
             }
 
             if !customAgents.isEmpty {
@@ -153,7 +150,7 @@ private struct AgentRow: View {
             if isDefault {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Palette.moss)
-                    .help("新建对话默认使用此 harness")
+                    .help("新建对话默认使用此 Agent")
             }
 
             Toggle("", isOn: Binding(
@@ -163,7 +160,7 @@ private struct AgentRow: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
-            .help(isEnabled ? "停用后不会出现在新建对话的 harness 选择里" : "点击重新启用该 harness")
+            .help(isEnabled ? "停用后不会出现在新建对话的 Agent 选择里" : "重新启用此 Agent")
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
@@ -189,7 +186,7 @@ private struct AgentRow: View {
                 .frame(width: 8, height: 8)
                 .overlay(Circle().strokeBorder(.background, lineWidth: 1.5))
         }
-        .help(isAvailable ? "CLI 可用" : "未检测到 CLI；重开设置页或点通用页的可用性会自动重测")
+        .help(isAvailable ? "已找到对应的命令行工具" : "未找到对应的命令行工具")
     }
 
     @ViewBuilder
@@ -245,7 +242,7 @@ struct WorkspaceSettingsPage: View {
             } header: {
                 Text("已添加的工作区")
             } footer: {
-                Text("工作区列表由 Aureways 维护，只包含你添加的项目目录，不含用户主目录。已打开会话的 cwd 不会因为改默认路径而更换。")
+                Text("只显示你添加的项目。更改默认路径不会影响已打开的会话。")
             }
         }
         .formStyle(.grouped)
@@ -259,14 +256,9 @@ struct PermissionSettingsPage: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("Client 权限策略") {
+            Section("工具权限") {
                 Toggle("自动批准工具权限", isOn: $model.autoApprove)
-                Text("这是 Aureways 如何回答 `session/request_permission`：开启后选第一个允许项。不是 Grok/Codex 自己的配置文件。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section("透传到 harness") {
-                Text("各 harness 自己决定如何把自动批准透传过去。Grok Build 会加 `--always-approve` 和 `_meta.yoloMode`；其它家若用 ACP `configOptions` 暴露审批/沙箱，在已打开的会话里改。")
+                Text("开启后，Agent 读写文件或执行命令时不再弹窗确认。部分 Agent 会把这项带到自己的会话里；其它选项可在会话信息中调整。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

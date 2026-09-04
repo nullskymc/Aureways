@@ -9,11 +9,11 @@ final class AntigravityHarness: Harness {
             profile: AgentProfile(
                 id: Self.id,
                 title: "Antigravity",
-                subtitle: "Google Antigravity CLI (agy) over ACP",
+                subtitle: "Google",
                 command: "agy",
                 arguments: ["--acp"],
                 builtIn: true,
-                notes: "Install Antigravity CLI (`agy`) and authenticate. Native `agy --acp` is preferred; if that binary is missing, launch falls back to `npx -y agy-acp`."
+                notes: "需要已安装 Antigravity CLI（agy）并完成登录。")
             )
         )
     }

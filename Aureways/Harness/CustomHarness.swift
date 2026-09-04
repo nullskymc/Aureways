@@ -11,7 +11,7 @@ final class CustomHarness: Harness {
             command: command,
             arguments: Array(parts.dropFirst()),
             builtIn: false,
-            notes: "User-defined ACP agent."
+            notes: "自定义 Agent。")
         )
     }
 }

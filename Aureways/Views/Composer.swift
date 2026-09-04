@@ -358,7 +358,7 @@ struct ComposerCard: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .buttonStyle(.glass)
-            .help("新对话将使用此 harness，并记为下次默认。已打开的会话不会跟着变。")
+            .help("新对话将使用此 Agent，并记为下次默认。已打开的会话不会跟着变。")
         } else {
             chip
                 .padding(.horizontal, 9)
@@ -376,7 +376,7 @@ struct ComposerCard: View {
            !option.options.isEmpty {
             sessionSelectChip(
                 title: option.options.first(where: { $0.id == option.value?.stringValue })?.name ?? option.name,
-                help: "本会话模型，由当前 harness 经 ACP 声明",
+                help: "切换本会话使用的模型",
                 choices: option.options,
                 selectedId: option.value?.stringValue
             ) { id in
@@ -390,7 +390,7 @@ struct ComposerCard: View {
         if let session = currentSession, session.phase.isReady, !session.modeChoices.isEmpty {
             sessionSelectChip(
                 title: session.modeChoices.first(where: { $0.id == session.currentModeId })?.name ?? "模式",
-                help: "本会话模式，由当前 harness 经 ACP 声明",
+                help: "切换本会话模式",
                 choices: session.modeChoices,
                 selectedId: session.currentModeId
             ) { id in

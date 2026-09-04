@@ -114,7 +114,7 @@ struct InfoInspectorTab: View {
                         Text(session?.agent.title ?? "Aureways")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.primary)
-                        Text("会话协议与客户端状态")
+                        Text(session == nil ? "尚未打开会话" : "当前会话")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                     }
@@ -133,18 +133,16 @@ struct InfoInspectorTab: View {
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
-                    infoRow(title: "协议版本", value: "ACP v1 (protocolVersion: 1)")
                     infoRow(title: "客户端", value: "Aureways \(AppInfo.version)")
-                    infoRow(title: "传输方式", value: "JSON-RPC 2.0 (stdio NDJSON)")
-                    infoRow(title: "客户端能力", value: "fs.readTextFile, fs.writeTextFile, terminal")
 
                     if let s = session {
-                        Divider()
                         infoRow(title: "当前 Agent", value: s.agent.title)
-                        infoRow(title: "Agent 描述", value: s.agent.subtitle)
+                        if !s.agent.subtitle.isEmpty, s.agent.subtitle != s.agent.title {
+                            infoRow(title: "来源", value: s.agent.subtitle)
+                        }
                         infoRow(title: "启动命令", value: s.agent.launchLine)
-                        infoRow(title: "工作区路径", value: s.cwd)
-                        infoRow(title: "Session ID", value: s.acpSessionId ?? "（尚未建立）")
+                        infoRow(title: "工作区", value: s.cwd)
+                        infoRow(title: "会话 ID", value: s.acpSessionId ?? "尚未建立")
                         if let mode = s.currentModeId, !mode.isEmpty {
                             infoRow(title: "当前模式", value: s.modeChoices.first(where: { $0.id == mode })?.name ?? mode)
                         }
@@ -154,10 +152,10 @@ struct InfoInspectorTab: View {
                 .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 if let s = session, s.phase.isReady, !s.configOptions.isEmpty {
-                    Text("会话配置（ACP 透传）")
+                    Text("会话选项")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    Text("由当前 harness 声明，不写入 Aureways 自己的设置。")
+                    Text("由当前 Agent 提供，只作用于本会话。")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 10) {

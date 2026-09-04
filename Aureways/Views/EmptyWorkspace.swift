@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Empty Workspace Landing View (Codex Style)
+// MARK: - Empty Workspace Landing
 
 struct EmptyWorkspaceLanding: View {
     @Environment(AppModel.self) private var model
@@ -22,7 +22,7 @@ struct EmptyWorkspaceLanding: View {
                 }
 
                 HStack(spacing: 4) {
-                    Text("你想让我们在")
+                    Text("在")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.primary)
 
@@ -34,9 +34,9 @@ struct EmptyWorkspaceLanding: View {
                     }
                     .buttonStyle(.plain)
                     .onHover { isHoveringWorkspace = $0 }
-                    .help("点击切换工作区 (当前: \(model.workspacePath))")
+                    .help("点击切换工作区（当前：\(model.workspacePath)）")
 
-                    Text("中构建什么？")
+                    Text("做什么？")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.primary)
                 }

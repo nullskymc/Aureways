@@ -2,72 +2,83 @@
 
 [![Release](https://github.com/nullskymc/aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/aureways/actions/workflows/release.yml)
 
-面向 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) 的原生 macOS 客户端。它作为 **ACP Client** 启动本机 harness（Grok Build、Codex、Claude Code 等），用 JSON-RPC stdio 交换消息，并把会话流画到 SwiftUI 界面上。
+**macOS 原生客户端**：用 SwiftUI 写成的 `.app`，不是网页，也不是套壳。选定工作区，选用本机已安装的 Agent，在系统窗口里对话、改文件、开终端。
 
-本仓库是单进程桌面应用：**前端是 SwiftUI，后端是同进程内的 ACP 连接层**，没有单独的 HTTP 服务。
+它实现 [Agent Client Protocol](https://agentclientprotocol.com)，在同一进程里拉起本机命令行 Agent。没有远程后端，也没有单独的 HTTP 服务。
 
-完整说明见 [`docs/`](docs/README.md)。
+更细的架构、界面与协议说明见 [`docs/`](docs/README.md)。
 
-## 特性
+## 能做什么
 
-- **多 Harness 会话**：内置 7 家 ACP harness 配方，支持自定义任意 stdio 命令；会话经 SQLite 持久化，可跨启动恢复
-- **流式对话**：Markdown 渲染、思考折叠、工具调用分组、计划卡片、权限确认弹窗
-- **右侧工作台面板**（`⌘B`）：统一标签条承载
-  - 文件浏览器：工作区递归目录树
-  - 文本编辑器：行号、脏标记、`⌘S` 保存、与 Agent 写文件的冲突处理
-  - 交互终端：SwiftTerm 真实 PTY，每个终端一个标签
-- **Liquid Glass**：跟随系统原生玻璃材质，深浅色全自适应
+- **原生 Mac 界面**：统一工具栏、侧栏、系统偏好设置（`⌘,`）、浅色 / 深色跟随系统；文件在 Finder 中显示，终端是本机 PTY。
+- **多个 Agent**：内置七家常见命令行 Agent，也可以在偏好设置里添加任意启动命令。会话按工作区列在侧栏，支持跨启动恢复（取决于该 Agent 是否提供恢复）。
+- **流式对话**：Markdown 正文、可展开的思考、分组的工具调用、计划步骤。输入框支持 `/` 命令、`@` 引用工作区文件，以及图片和文件附件。
+- **权限**：Agent 要读写文件或执行命令时会先征求确认；也可以改成由客户端代为批准。
+- **右侧工作台**（`⌘B`）：文件浏览器、文本编辑器（行号、`⌘S`、与 Agent 同时改文件时的冲突处理）、交互终端。每个打开的文件和终端各占一个标签。
 
-## 文档
-
-| 文档 | 内容 |
-| --- | --- |
-| [文档目录](docs/README.md) | 文档索引 |
-| [目录结构](docs/directory.md) | 仓库与源码树 |
-| [架构](docs/architecture.md) | 前后端职责、数据流 |
-| [前端](docs/frontend.md) | SwiftUI 界面与状态 |
-| [后端](docs/backend.md) | ACP 连接、进程、文件系统、终端 |
-| [协议](docs/protocol.md) | 已实现的 ACP 方法 |
-| [开发与运行](docs/development.md) | Xcode / `make open` / 测试 |
-
-## 内置 Harness
+## 内置 Agent
 
 | 名称 | 启动命令 |
 | --- | --- |
 | Grok Build | `grok agent stdio` |
 | Codex | `npx -y @agentclientprotocol/codex-acp` |
 | Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` |
-| Antigravity | `agy --acp`（否则 `npx -y agy-acp`） |
+| Antigravity | `agy --acp`（找不到时回退 `npx -y agy-acp`） |
 | GitHub Copilot | `copilot --acp --stdio` |
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 
-侧边栏可添加任意自定义 stdio ACP 命令。对应 CLI 需事先安装并完成登录。
+对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理，不进 Aureways 的设置。自定义 Agent 在偏好设置（`⌘,`）里添加。
 
-## 快速开始
+## 运行
 
-在**仓库根目录**（能看到 `Makefile` 和 `Aureways.xcodeproj` 的那一层，不是内层 `Aureways/` 源码目录）：
+要求：macOS 26+，Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。
+
+在**仓库根目录**操作（能看到 `Makefile` 和 `Aureways.xcodeproj` 的那一层，不是内层 `Aureways/` 源码目录）：
 
 ```bash
-cd /path/to/Aureways
 make open
 ```
 
-或：
+或打开工程后，在 Xcode 里选 scheme **Aureways**、目的地 **My Mac**，按 `Cmd + R`：
 
 ```bash
 open Aureways.xcodeproj
 ```
 
-在 Xcode 中选 scheme **Aureways**、目的地 **My Mac**，按 `Cmd + R`。
-
-要求：macOS 26+，Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。默认使用当前 `xcode-select` 工具链；若要用某个 Xcode.app：
+默认使用当前 `xcode-select` 工具链。若要用某个 Xcode.app：
 
 ```bash
 make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 ```
 
-## 发版与 CI
+| 命令 | 作用 |
+| --- | --- |
+| `make build` | Debug 编译 |
+| `make open` | 编译并打开 `.app` |
+| `make test` | 跑 `AurewaysTests` |
+| `make release` | Release 构建（发版用） |
+| `make clean` | 删除 `.derived` |
+
+首次命令行构建若提示缺少 Metal 工具链：
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [文档目录](docs/README.md) | 索引 |
+| [目录结构](docs/directory.md) | 仓库与源码树 |
+| [架构](docs/architecture.md) | 前后端职责、会话与持久化 |
+| [前端](docs/frontend.md) | SwiftUI 界面与状态 |
+| [后端](docs/backend.md) | 连接、进程、文件系统、终端 |
+| [协议](docs/protocol.md) | 已实现的 ACP 方法 |
+| [开发与运行](docs/development.md) | 工具链、测试、调试连接失败 |
+
+## 发版
 
 约定：**只有打 tag 才触发构建**，分支与 PR 不跑 CI。工作流见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
 
@@ -76,9 +87,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 自动创建 GitHub Release 并附带产物。
+流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 创建 GitHub Release 并附带产物。
 
-打开 dmg，把 `Aureways.app` 拖进 `Applications`。首次启动若被 Gatekeeper 拦截（产物是 ad-hoc 签名，未公证）：
+打开 dmg，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证；首次启动若被 Gatekeeper 拦截：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app
