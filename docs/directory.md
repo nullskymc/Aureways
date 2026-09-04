@@ -16,7 +16,9 @@ Aureways/                          # 仓库根
 │   ├── frontend.md
 │   ├── backend.md
 │   ├── protocol.md
-│   └── development.md
+│   ├── development.md
+│   └── brand/app-icon.md          # A 轨道 App Icon 规范
+├── design/app-icon/               # 图标几何源：build_icon.py + reference/，SVG 与 PNG 均为生成物
 ├── Aureways.xcodeproj/
 │   ├── project.pbxproj            # 两个 target：Aureways、AurewaysTests
 │   └── xcshareddata/xcschemes/
@@ -30,7 +32,8 @@ Aureways/                          # 仓库根
 │   ├── AppModel+Inspector.swift   # 面板标签状态与操作、编辑保存/冲突
 │   ├── ChatSession.swift          # 单会话 transcript 状态
 │   ├── SessionStore.swift         # sqlite 会话列表缓存
-│   ├── Assets.xcassets/           # AccentColor、空 AppIcon
+│   ├── AppIcon.icon/              # macOS 26+ Icon Composer（A / 轨道 / 星）
+│   ├── Assets.xcassets/           # AccentColor、AppIcon.appiconset 扁平回退
 │   ├── Harness/                   # 各家 ACP 运行时
 │   │   ├── Harness.swift          # 基类、配方、PATH、注册表
 │   │   ├── HarnessRuntime.swift   # 共用 stdio 连接生命周期
@@ -102,6 +105,7 @@ Aureways/                          # 仓库根
 
 | 路径 | 层 | 职责 |
 | --- | --- | --- |
+| `AppIcon.icon` | 品牌 | macOS 26 分层图标（A / 轨道 / 星） |
 | `AurewaysApp.swift` | 前端入口 | 窗口、暗色、⌘N |
 | `Views/*` | 前端 | 布局与交互 |
 | `Views/MarkdownBody.swift` | 前端 | [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 渲染 Agent 正文 |
