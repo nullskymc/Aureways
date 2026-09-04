@@ -31,6 +31,8 @@ final class InteractiveTerminal: NSObject {
         super.init()
         view.processDelegate = self
         view.font = TerminalTypeface.resolve()
+        view.nativeBackgroundColor = Palette.editorCanvasNS
+        view.nativeForegroundColor = NSColor.labelColor
     }
 
     func start() {
@@ -61,12 +63,8 @@ final class InteractiveTerminal: NSObject {
     func applyAppearance(dark: Bool) {
         guard appliedDark != dark else { return }
         appliedDark = dark
-        view.nativeBackgroundColor = dark
-            ? NSColor(calibratedRed: 0.09, green: 0.09, blue: 0.10, alpha: 1)
-            : NSColor.white
-        view.nativeForegroundColor = dark
-            ? NSColor(calibratedWhite: 0.92, alpha: 1)
-            : NSColor.black
+        view.nativeBackgroundColor = Palette.editorCanvasNS
+        view.nativeForegroundColor = NSColor.labelColor
     }
 
     fileprivate func markExited(_ code: Int32?) {
@@ -102,6 +100,47 @@ struct TerminalTabView: View {
     var body: some View {
         TerminalViewRepresentable(terminal: terminal, isDark: colorScheme == .dark, isActive: isActive)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Palette.inspectorBg)
+    }
+}
+
+/// SwiftTerm 从自己的 bounds 原点起画格子，不能靠 SwiftUI padding 让开检查器左边线。
+private final class TerminalHostView: NSView {
+    let terminalView: LocalProcessTerminalView
+    private static let insets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 8)
+
+    init(terminalView: LocalProcessTerminalView) {
+        self.terminalView = terminalView
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = Palette.editorCanvasNS.cgColor
+        addSubview(terminalView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+
+    override func layout() {
+        super.layout()
+        let inset = Self.insets
+        terminalView.frame = NSRect(
+            x: inset.left,
+            y: inset.top,
+            width: max(0, bounds.width - inset.left - inset.right),
+            height: max(0, bounds.height - inset.top - inset.bottom)
+        )
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.backgroundColor = Palette.editorCanvasNS.cgColor
     }
 }
 
@@ -116,18 +155,19 @@ private struct TerminalViewRepresentable: NSViewRepresentable {
 
     // 进程在 AppModel.openTerminalTab() 中创建；这里只挂接既有视图，
     // 避免 representable 重建导致重复启动。
-    func makeNSView(context: Context) -> LocalProcessTerminalView {
-        terminal.view
+    func makeNSView(context: Context) -> TerminalHostView {
+        TerminalHostView(terminalView: terminal.view)
     }
 
-    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+    func updateNSView(_ nsView: TerminalHostView, context: Context) {
         terminal.applyAppearance(dark: isDark)
+        nsView.layer?.backgroundColor = Palette.editorCanvasNS.cgColor
         guard let window = nsView.window else { return }
         let coordinator = context.coordinator
         if !coordinator.didApplyActiveState {
             coordinator.didApplyActiveState = true
             coordinator.wasActive = isActive
-            if !isActive, window.firstResponder === nsView {
+            if !isActive, window.firstResponder === nsView.terminalView {
                 window.makeFirstResponder(nil)
             }
             return
@@ -135,13 +175,13 @@ private struct TerminalViewRepresentable: NSViewRepresentable {
         let becameActive = isActive && !coordinator.wasActive
         coordinator.wasActive = isActive
         if !isActive {
-            if window.firstResponder === nsView {
+            if window.firstResponder === nsView.terminalView {
                 window.makeFirstResponder(nil)
             }
             return
         }
         if becameActive, window.firstResponder == nil {
-            window.makeFirstResponder(nsView)
+            window.makeFirstResponder(nsView.terminalView)
         }
     }
 
