@@ -12,6 +12,5 @@ final class CustomHarness: Harness {
             arguments: Array(parts.dropFirst()),
             builtIn: false,
             notes: "自定义 Agent。")
-        )
     }
 }

@@ -13,7 +13,6 @@ final class OpenCodeHarness: Harness {
                 arguments: ["acp"],
                 builtIn: true,
                 notes: "需要本机已安装 OpenCode。")
-            )
         )
     }
 }

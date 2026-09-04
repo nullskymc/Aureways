@@ -13,7 +13,6 @@ final class CursorHarness: Harness {
                 arguments: ["acp"],
                 builtIn: true,
                 notes: "需要已安装 Cursor 命令行工具。")
-            )
         )
     }
 }

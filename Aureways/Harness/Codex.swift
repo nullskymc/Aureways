@@ -13,7 +13,6 @@ final class CodexHarness: Harness {
                 arguments: ["-y", "@agentclientprotocol/codex-acp"],
                 builtIn: true,
                 notes: "需要 Node.js。使用本机已有的 Codex 登录。")
-            )
         )
     }
 

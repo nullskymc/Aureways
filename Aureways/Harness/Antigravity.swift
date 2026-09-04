@@ -14,7 +14,6 @@ final class AntigravityHarness: Harness {
                 arguments: ["--acp"],
                 builtIn: true,
                 notes: "需要已安装 Antigravity CLI（agy）并完成登录。")
-            )
         )
     }
 

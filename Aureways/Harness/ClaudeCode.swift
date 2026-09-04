@@ -13,7 +13,6 @@ final class ClaudeCodeHarness: Harness {
                 arguments: ["-y", "@agentclientprotocol/claude-agent-acp"],
                 builtIn: true,
                 notes: "需要 Node.js，以及可用的 claude 命令行登录。")
-            )
         )
     }
 

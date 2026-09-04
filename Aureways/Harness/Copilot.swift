@@ -13,7 +13,6 @@ final class CopilotHarness: Harness {
                 arguments: ["--acp", "--stdio"],
                 builtIn: true,
                 notes: "需要已安装 Copilot 命令行工具。")
-            )
         )
     }
 }
