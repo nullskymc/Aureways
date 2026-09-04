@@ -18,6 +18,7 @@
 		B1010000000000000000000A /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000A /* Transcript.swift */; };
 		B1010000000000000000000B /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000B /* Composer.swift */; };
 		B1010000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000C /* Assets.xcassets */; };
+		B10100000000000000000040 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000040 /* AppIcon.icon */; };
 		B1010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
 		B1010000000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000F /* SettingsView.swift */; };
 		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
@@ -105,6 +106,7 @@
 		F1010000000000000000000A /* Transcript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcript.swift; sourceTree = "<group>"; };
 		F1010000000000000000000B /* Composer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Composer.swift; sourceTree = "<group>"; };
 		F1010000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F10100000000000000000040 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		F1010000000000000000000D /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		F1010000000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
@@ -192,6 +194,7 @@
 				G10100000000000000000002 /* ACP */,
 				G10100000000000000000003 /* Views */,
 				F1010000000000000000000C /* Assets.xcassets */,
+				F10100000000000000000040 /* AppIcon.icon */,
 			);
 			path = Aureways;
 			sourceTree = "<group>";
@@ -360,6 +363,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1010000000000000000000C /* Assets.xcassets in Resources */,
+				B10100000000000000000040 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,6 +511,7 @@
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -535,6 +540,7 @@
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
