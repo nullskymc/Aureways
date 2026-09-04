@@ -44,9 +44,25 @@ struct GeneralSettingsPage: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("关于") {
-                LabeledContent("客户端", value: "Aureways \(AppInfo.version)")
-                LabeledContent("协议", value: "Agent Client Protocol")
+            Section {
+                HStack(spacing: 14) {
+                    AppIconImage(size: 64)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Aureways")
+                            .font(.title3.weight(.semibold))
+                        Text("版本 \(AppInfo.version)")
+                            .foregroundStyle(.secondary)
+                        Text("macOS 原生 Agent 客户端")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("关于")
+            } footer: {
+                Text("实现 Agent Client Protocol，在本机拉起已安装的命令行 Agent。")
             }
         }
         .formStyle(.grouped)

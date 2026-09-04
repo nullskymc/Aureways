@@ -185,7 +185,19 @@ struct ComposerCard: View {
         // 包住 buttonStyle(.glass) 控件会吞掉 bezel（实测截图验证）。
         HStack(alignment: .center, spacing: 8) {
             Menu {
-                Button("添加工作区...") { model.addWorkspace() }
+                Button("添加文件…") { pickComposerFiles() }
+                Button("添加工作区…") { model.addWorkspace() }
+                if let commands = currentSession?.availableCommands, !commands.isEmpty {
+                    Section("指令") {
+                        ForEach(commands) { command in
+                            Button {
+                                insertSlashCommand(command)
+                            } label: {
+                                Text("/\(command.name)")
+                            }
+                        }
+                    }
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
@@ -195,6 +207,7 @@ struct ComposerCard: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .buttonStyle(.glass)
+            .help("添加文件、工作区或插入指令")
 
             autoApproveButton
 
@@ -433,6 +446,27 @@ struct ComposerCard: View {
         .fixedSize()
         .buttonStyle(.glass)
         .help(help)
+    }
+
+    private func pickComposerFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.directoryURL = URL(fileURLWithPath: model.workspacePath)
+        panel.prompt = "添加"
+        guard panel.runModal() == .OK else { return }
+        attachments.append(contentsOf: ComposerAttachment.fromFileURLs(panel.urls))
+    }
+
+    private func insertSlashCommand(_ command: SlashCommand) {
+        let next = "/\(command.name) "
+        if let coordinator = editor.coordinator {
+            coordinator.setDraft(next)
+        } else {
+            draft = next
+        }
+        isFocused = true
     }
 
     private func submit() {

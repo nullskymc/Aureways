@@ -31,8 +31,7 @@ final class InteractiveTerminal: NSObject {
         super.init()
         view.processDelegate = self
         view.font = TerminalTypeface.resolve()
-        view.nativeBackgroundColor = Palette.editorCanvasNS
-        view.nativeForegroundColor = NSColor.labelColor
+        applyAppearance(dark: false, force: true)
     }
 
     func start() {
@@ -60,11 +59,15 @@ final class InteractiveTerminal: NSObject {
         view.terminate()
     }
 
-    func applyAppearance(dark: Bool) {
-        guard appliedDark != dark else { return }
+    func applyAppearance(dark: Bool, force: Bool = false) {
+        guard force || appliedDark != dark else { return }
         appliedDark = dark
-        view.nativeBackgroundColor = Palette.editorCanvasNS
-        view.nativeForegroundColor = NSColor.labelColor
+        let background = Palette.resolvedEditorCanvas(dark: dark)
+        view.nativeBackgroundColor = background
+        view.nativeForegroundColor = Palette.resolvedTerminalInk(dark: dark)
+        // nativeBackgroundColor does not flush SwiftTerm's color cache;
+        // assigning opacity is the public way to call colorsChanged().
+        view.backgroundOpacity = 1
     }
 
     fileprivate func markExited(_ code: Int32?) {
@@ -109,12 +112,14 @@ private final class TerminalHostView: NSView {
     let terminalView: LocalProcessTerminalView
     private static let insets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 8)
 
+    var onAppearanceChange: ((Bool) -> Void)?
+
     init(terminalView: LocalProcessTerminalView) {
         self.terminalView = terminalView
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = Palette.editorCanvasNS.cgColor
         addSubview(terminalView)
+        applyHostBackground(dark: isDarkAppearance)
     }
 
     required init?(coder: NSCoder) {
@@ -138,9 +143,24 @@ private final class TerminalHostView: NSView {
         )
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyHostBackground(dark: isDarkAppearance)
+        onAppearanceChange?(isDarkAppearance)
+    }
+
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = Palette.editorCanvasNS.cgColor
+        applyHostBackground(dark: isDarkAppearance)
+        onAppearanceChange?(isDarkAppearance)
+    }
+
+    func applyHostBackground(dark: Bool) {
+        layer?.backgroundColor = Palette.resolvedEditorCanvas(dark: dark).cgColor
+    }
+
+    private var isDarkAppearance: Bool {
+        effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 }
 
@@ -156,12 +176,19 @@ private struct TerminalViewRepresentable: NSViewRepresentable {
     // 进程在 AppModel.openTerminalTab() 中创建；这里只挂接既有视图，
     // 避免 representable 重建导致重复启动。
     func makeNSView(context: Context) -> TerminalHostView {
-        TerminalHostView(terminalView: terminal.view)
+        let host = TerminalHostView(terminalView: terminal.view)
+        host.onAppearanceChange = { [weak terminal] dark in
+            terminal?.applyAppearance(dark: dark, force: true)
+        }
+        return host
     }
 
     func updateNSView(_ nsView: TerminalHostView, context: Context) {
+        nsView.onAppearanceChange = { [weak terminal] dark in
+            terminal?.applyAppearance(dark: dark, force: true)
+        }
+        nsView.applyHostBackground(dark: isDark)
         terminal.applyAppearance(dark: isDark)
-        nsView.layer?.backgroundColor = Palette.editorCanvasNS.cgColor
         guard let window = nsView.window else { return }
         let coordinator = context.coordinator
         if !coordinator.didApplyActiveState {

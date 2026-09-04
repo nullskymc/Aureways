@@ -62,6 +62,14 @@ open .derived/Build/Products/Debug/Aureways.app
 
 改过代码必须重新 `make open` 或 Xcode Run，已打开的窗口不会热更新。
 
+### Dock 仍是空图标
+
+同一 bundle id `ai.aureways.client` 只能有一个「官方」图标。若 `/Applications/Aureways.app` 是更早、没有 App Icon 的包，Launch Services 会用它的空白占位，即使刚 `make open` 的 `.derived` 包图标是对的。`make open` 发现 Applications 里已有同名包时会先换上这次编出来的包再打开。仍不刷新时：
+
+```bash
+killall Dock
+```
+
 ## 用 Xcode
 
 ```bash
@@ -145,7 +153,7 @@ Runner（`macos-26`）上自动选取最新 Xcode，然后：
 
 | 项 | 值 |
 | --- | --- |
-| Marketing version | 0.1.0 |
+| Marketing version | 0.1.1 |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
 | 最低系统 | macOS 26 |

@@ -33,12 +33,11 @@ struct UserProfileFooter: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            // User Avatar
             ZStack {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.purple.opacity(0.8), Color.indigo],
+                            colors: [Palette.accent, Palette.deepNavy],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

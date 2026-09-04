@@ -10,16 +10,8 @@ struct EmptyWorkspaceLanding: View {
         VStack(spacing: 0) {
             Spacer()
 
-            VStack(spacing: 24) {
-                ZStack {
-                    Image(systemName: "cloud")
-                        .font(.system(size: 64, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Image(systemName: "terminal")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .offset(y: 4)
-                }
+            VStack(spacing: 28) {
+                BrandMark(size: 96, glow: true)
 
                 HStack(spacing: 4) {
                     Text("在")

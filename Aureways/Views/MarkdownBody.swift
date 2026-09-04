@@ -30,7 +30,7 @@ struct MarkdownBody: View {
                 FontWeight(.semibold)
             }
             .link {
-                ForegroundColor(Palette.sky)
+                ForegroundColor(Palette.accent)
             }
             .heading1 { configuration in
                 configuration.label

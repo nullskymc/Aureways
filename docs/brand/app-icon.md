@@ -190,8 +190,10 @@
 | Copy Resources 阶段 | 含 `AppIcon.icon` |
 | Debug / Release 构建设置 | `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` |
 
-重建后 Dock / Finder 常常还显示旧图标，那是系统图标缓存不是接线错了：`killall Dock`
-即可刷新，Finder 里 `touch Aureways.app`。
+重建后 Dock / Finder 常常还显示旧图标，常见有两种原因：
+
+1. **`/Applications/Aureways.app` 是旧包。** Launch Services 按 bundle id 认图标，Applications 里 9 月 1 日那份没有 `CFBundleIconName`，Dock 就会一直是空白占位。`make open` 会把刚编的包同步过去。
+2. **系统图标缓存。** `killall Dock` 即可刷新；Finder 里 `touch Aureways.app`。
 
 想在 Icon Composer 里手调玻璃也可以：打开 `Aureways/AppIcon.icon`，改完覆盖保存。
 `icon_json()` 输出的就是 Icon Composer 自己会写的那套键值，所以下次跑脚本不会把
@@ -249,8 +251,8 @@ GUI 的改动冲掉——只有**改了 GUI 里脚本没覆盖的项**时才需�
 | 资产 | 用在哪 |
 |---|---|
 | 原图（标志 + 地球） | 官网头图、启动画面、宣传海报、壁纸。**不是 App Icon。** |
-| 蓝底白标 / 分层 `.icon` | Dock、Launchpad、Finder、App Store、设置、通知。 |
-| 白底蓝标矢量 | 文档页眉、PPT、打印物料、浅色网页。 |
+| 蓝底白标 / 分层 `.icon` | Dock、Launchpad、Finder、App Store、设置「关于」、通知。 |
+| 白底蓝标 / 深色白标矢量 | 空白画布 `BrandMark`、文档页眉、PPT、打印物料、浅色网页。 |
 | 单色剪影 | Clear / Tinted、菜单栏精简、模板水印。 |
 
 ---
@@ -261,6 +263,8 @@ GUI 的改动冲掉——只有**改了 GUI 里脚本没覆盖的项**时才需�
 |---|---|
 | `Aureways/AppIcon.icon/` | Xcode 26+ 工程图标（`ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`） |
 | `Aureways/Assets.xcassets/AppIcon.appiconset/` | 扁平回退 PNG（16–1024） |
+| `Aureways/Assets.xcassets/BrandMark.imageset/` | 界面内平面标志（浅色蓝标 / 深色白标 SVG） |
+| `Aureways/Assets.xcassets/AccentColor.colorset/` | 系统强调色，Orbit Blue / 深色提亮蓝 |
 | `design/app-icon/` | 分层 SVG、色版预览、重建脚本 `build_icon.py` |
 | `design/app-icon/reference/` | 三张 1408 参考稿，几何拟合的唯一依据 |
 

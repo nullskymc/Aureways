@@ -32,6 +32,7 @@ REFERENCE = ROOT / "reference"
 ICON_DIR = REPO / "Aureways" / "AppIcon.icon"
 ICON_ASSETS = ICON_DIR / "Assets"
 ICONSET = REPO / "Aureways" / "Assets.xcassets" / "AppIcon.appiconset"
+MARKSET = REPO / "Aureways" / "Assets.xcassets" / "BrandMark.imageset"
 
 ORBIT_BLUE = (0x00, 0x3D, 0xA5)
 DEEP_NAVY = (0x00, 0x2B, 0x73)
@@ -668,6 +669,31 @@ def export_composer_preview():
           + (f" — FAILED: {', '.join(bad)}" if bad else ""))
 
 
+def write_brand_mark_imageset():
+    """In-app planar mark: blue on light, white on dark. Not the Dock icon."""
+    MARKSET.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / "logo_on_white.svg", MARKSET / "mark_light.svg")
+    shutil.copy(ROOT / "logo_on_dark.svg", MARKSET / "mark_dark.svg")
+    write_text(MARKSET / "Contents.json", json.dumps({
+        "images": [
+            {"filename": "mark_light.svg", "idiom": "universal"},
+            {
+                "appearances": [
+                    {"appearance": "luminosity", "value": "dark"},
+                ],
+                "filename": "mark_dark.svg",
+                "idiom": "universal",
+            },
+        ],
+        "info": {"author": "xcode", "version": 1},
+        "properties": {
+            "preserves-vector-data": True,
+            "template-rendering-intent": "original",
+        },
+    }, indent=2) + "\n")
+    print("wrote", MARKSET.relative_to(REPO))
+
+
 def build():
     a_ds, a_polys = a_shape(knockout=True)
     o_d, o_poly = orbit_shape()
@@ -691,6 +717,7 @@ def build():
     write_text(ROOT / "logo_default.svg",
                svg_doc(mark_ds, ICON_WHITE, bg=ORBIT_BLUE))
     write_text(ROOT / "logo_dark.svg", svg_doc(mark_ds, DARK_FG, bg=DEEP_NAVY))
+    write_brand_mark_imageset()
 
     save_png(flat_png(mark_polys, CANVAS, ICON_WHITE, ORBIT_BLUE),
              ROOT / "logo_default_1024.png")

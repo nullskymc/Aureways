@@ -17,7 +17,7 @@ enum Chrome {
     static let composerMaxWidth: CGFloat = 780
 }
 
-/// 主操作玻璃按钮：整行卡片、金色加号、悬停反馈（侧栏新建对话、设置页添加入口）。
+/// 主操作玻璃按钮：整行卡片、品牌色加号、悬停反馈（侧栏新建对话、设置页添加入口）。
 struct GlassPrimaryButton: View {
     let title: String
     var systemImage: String = "plus"

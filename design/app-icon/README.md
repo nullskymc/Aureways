@@ -7,15 +7,16 @@ Layered source for the A-orbit app icon. Production rules: [`docs/brand/app-icon
 | `A.svg` / `Orbit.svg` / `Spark.svg` | Icon Composer layers (1024², white fill, no corner crop) |
 | `logo_default_1024.png` | Default / Dock preview — Orbit Blue `#003DA5` + white mark |
 | `logo_dark_1024.png` | Dark preview — Deep Navy `#002B73` + `#F2F5FA` |
-| `logo_on_white.svg` | Print / docs (blue mark, transparent ground) |
-| `logo_on_dark.svg` | Web on dark (white mark, transparent ground) |
+| `logo_on_white.svg` | Print / docs / in-app `BrandMark` light (blue mark, transparent ground) |
+| `logo_on_dark.svg` | Web on dark / in-app `BrandMark` dark (white mark, transparent ground) |
 | `preview_{16,32,64,128,256}.png` | Scale check |
 | `preview_composer_{default,dark}.png` | `ictool` export of the real Liquid Glass render |
 | `reference/mark_on_{blue,black,white}_1408.png` | The three supplied renders the geometry is fitted to |
 
 The Xcode source of truth is `Aureways/AppIcon.icon` (three Liquid Glass groups).
 Flattened sizes also live in `Aureways/Assets.xcassets/AppIcon.appiconset/` as a
-fallback.
+fallback. The in-app planar mark is `Aureways/Assets.xcassets/BrandMark.imageset/`
+(copied from the two transparent SVGs above).
 
 ## Rebuild
 

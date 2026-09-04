@@ -33,7 +33,7 @@ Aureways/                          # 仓库根
 │   ├── ChatSession.swift          # 单会话 transcript 状态
 │   ├── SessionStore.swift         # sqlite 会话列表缓存
 │   ├── AppIcon.icon/              # macOS 26+ Icon Composer（A / 轨道 / 星）
-│   ├── Assets.xcassets/           # AccentColor、AppIcon.appiconset 扁平回退
+│   ├── Assets.xcassets/           # AccentColor、BrandMark 平面标志、AppIcon.appiconset 扁平回退
 │   ├── Harness/                   # 各家 ACP 运行时
 │   │   ├── Harness.swift          # 基类、配方、PATH、注册表
 │   │   ├── HarnessRuntime.swift   # 共用 stdio 连接生命周期
@@ -53,7 +53,7 @@ Aureways/                          # 仓库根
 │   │   ├── Connection.swift       # 子进程 + 双向 RPC
 │   │   └── ClientOps.swift        # fs/*、terminal/*
 │   └── Views/                     # 前端
-│       ├── Palette.swift          # 色彩
+│       ├── Palette.swift          # 色彩、BrandMark、AppIconImage
 │       ├── Chrome.swift           # Liquid Glass 修饰器
 │       ├── RootView.swift         # NavigationSplitView
 │       ├── Sidebar.swift          # 新对话、底栏
@@ -63,7 +63,9 @@ Aureways/                          # 仓库根
 │       ├── ToolViews.swift        # 工具组、计划卡
 │       ├── MarkdownBody.swift     # MarkdownUI 渲染
 │       ├── Composer.swift         # 输入框
-│       ├── PermissionSheet.swift  # 权限确认
+│       ├── ComposerTextView.swift # NSTextView 输入与拖拽
+│       ├── CompletionPopup.swift  # / 与 @ 补全
+│       ├── PermissionCard.swift   # 权限确认
 │       ├── InspectorViews.swift   # 右栏面板容器与信息标签
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树
@@ -73,7 +75,8 @@ Aureways/                          # 仓库根
 │       ├── AgentSheets.swift      # 自定义 Agent
 │       └── SettingsView.swift     # 设置中心
 └── AurewaysTests/
-    └── ProtocolTests.swift        # JSON-RPC 与 mock agent 集成测试
+    ├── ProtocolTests.swift        # JSON-RPC 与 mock agent 集成测试
+    └── ComposerTextViewTests.swift
 ```
 
 ## Xcode Target
