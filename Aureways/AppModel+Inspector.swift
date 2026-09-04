@@ -15,15 +15,6 @@ enum PaneTab: Identifiable, Equatable {
         }
     }
 
-    var icon: String {
-        switch self {
-        case .browser: return "folder"
-        case .info: return "info.circle"
-        case .file: return "doc.text"
-        case .terminal: return "terminal"
-        }
-    }
-
     var isClosable: Bool {
         self != .browser
     }
@@ -78,13 +69,14 @@ extension AppModel {
             errorMessage = "文件超过 2MB，暂不支持打开"
             return
         }
-        guard let data = try? Data(contentsOf: url), !data.contains(0), String(data: data, encoding: .utf8) != nil else {
+        guard let data = try? Data(contentsOf: url), !data.contains(0), let text = String(data: data, encoding: .utf8) else {
             errorMessage = "无法打开：仅支持 UTF-8 文本文件"
             return
         }
         var state = FileTabState()
         state.baselineMtime = modificationDate(of: url)
         fileTabStates[path] = state
+        editorDrafts[path] = text
         insertPaneTab(tab)
     }
 
@@ -197,12 +189,30 @@ extension AppModel {
         pendingSaveContent = nil
     }
 
+    func requestReloadFileTab(_ path: String) {
+        if fileTabStates[path]?.isDirty == true {
+            pendingReloadPath = path
+        } else {
+            reloadFileTab(path)
+        }
+    }
+
+    func confirmPendingReload() {
+        guard let path = pendingReloadPath else { return }
+        pendingReloadPath = nil
+        reloadFileTab(path)
+    }
+
     func reloadFileTab(_ path: String) {
         guard var state = fileTabStates[path] else { return }
-        state.baselineMtime = modificationDate(of: URL(fileURLWithPath: path))
+        let url = URL(fileURLWithPath: path)
+        state.baselineMtime = modificationDate(of: url)
         state.externallyModified = false
         state.isDirty = false
         state.reloadToken += 1
+        if let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) {
+            editorDrafts[path] = text
+        }
         fileTabStates[path] = state
     }
 

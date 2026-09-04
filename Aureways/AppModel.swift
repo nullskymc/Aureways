@@ -41,6 +41,7 @@ final class AppModel {
     var pendingSavePath: String?
     var pendingSaveContent: String?
     var pendingClosePath: String?
+    var pendingReloadPath: String?
     var editorDrafts: [String: String] = [:]
     var terminalTitles: [UUID: String] = [:]
     var searchQuery = ""

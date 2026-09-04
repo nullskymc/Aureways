@@ -47,4 +47,23 @@ enum Palette {
 
     /// macOS unemphasized list selection — gray, not the gold brand accent.
     static let selection = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+
+    /// Background for inspector / sidebar panels (subtle contrast against pure white chat canvas).
+    static let inspectorBg = Color.adaptive(
+        light: Color(red: 0.955, green: 0.958, blue: 0.965),
+        dark: Color(red: 0.12, green: 0.12, blue: 0.13)
+    )
+
+    /// Same canvas as `inspectorBg`, for AppKit editor + gutter so they don't band.
+    static let editorCanvasNS = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1)
+            : NSColor(red: 0.955, green: 0.958, blue: 0.965, alpha: 1)
+    }
+
+    /// Crisp physical 1px split divider separating workspace columns.
+    static let splitDivider = Color.adaptive(
+        light: Color(white: 0.0, opacity: 0.12),
+        dark: Color(white: 1.0, opacity: 0.14)
+    )
 }

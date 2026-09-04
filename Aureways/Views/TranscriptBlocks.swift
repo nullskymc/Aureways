@@ -294,12 +294,13 @@ private struct AgentMessage: View {
 private struct ThoughtStep: View {
     let text: String
     @State private var isExpanded = false
+    @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: 7) {
             Image(systemName: "sparkles")
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Palette.gold)
                 .frame(width: 14)
                 .padding(.top, 2)
             Text(text)
@@ -316,10 +317,13 @@ private struct ThoughtStep: View {
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .padding(.top, 4)
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .opacity(isHovered ? 0.92 : 1)
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
         }
+        .onHover { isHovered = $0 }
         .help(isExpanded ? "收起思考" : "展开完整思考")
     }
 }
@@ -330,6 +334,7 @@ private struct ActivityCard: View {
     var run: ActivityRun?
     @State private var userExpanded: Bool?
     @State private var openCallID: String?
+    @State private var isHeaderHovered = false
 
     // 运行中默认展开，让人看到工作流进展（思考全文与工具详情仍各自收起）；
     // 完成后自动收纳成摘要行，与正文做层次隔离。用户手动切换优先于默认。
@@ -368,7 +373,7 @@ private struct ActivityCard: View {
                     userExpanded = !isExpanded
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if isBusy {
                         ProgressView()
                             .controlSize(.mini)
@@ -387,22 +392,40 @@ private struct ActivityCard: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .background {
+                if isHeaderHovered {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Palette.cardHover.opacity(0.35))
+                }
+            }
+            .onHover { isHeaderHovered = $0 }
 
             if isExpanded {
-                VStack(alignment: .leading, spacing: 10) {
+                Divider()
+                    .overlay(Palette.splitDivider)
+                    .padding(.vertical, 2)
+
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(steps) { step in
                         stepView(step)
                     }
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .liquidGlassCard(cornerRadius: 12, veil: 0.32)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Palette.border, lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
         .onChange(of: isLive) {
             // 回合结束统一收纳：运行中手动展开过的也一并收起。
             if !isLive {
@@ -446,7 +469,7 @@ private struct ActivityCard: View {
             MarkdownBody(source: text)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .tools(_, let calls):
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 ForEach(calls, id: \.toolCallId) { call in
                     ToolCompactRow(call: call, isOpen: openCallID == call.toolCallId) {
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -456,7 +479,7 @@ private struct ActivityCard: View {
                 }
             }
         case .plan(_, let entries):
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: entry.status == "completed" ? "checkmark.circle" : "circle")
@@ -468,6 +491,9 @@ private struct ActivityCard: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
         }
     }
 }

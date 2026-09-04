@@ -6,6 +6,7 @@ struct ToolCompactRow: View {
     let call: ToolCallView
     let isOpen: Bool
     let onToggle: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -20,10 +21,23 @@ struct ToolCompactRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .background {
+                if isHovered {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Palette.cardHover.opacity(0.40))
+                }
+            }
+            .onHover { isHovered = $0 }
 
             if isOpen {
                 if let rawInput = call.rawInput, let inputStr = try? String(data: rawInput.encode(), encoding: .utf8) {
@@ -32,7 +46,7 @@ struct ToolCompactRow: View {
                         .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
                 if !call.contentText.isEmpty {
                     Text(call.contentText)
@@ -41,11 +55,10 @@ struct ToolCompactRow: View {
                         .lineLimit(12)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
             }
         }
-        .padding(.leading, 4)
         .padding(.vertical, 2)
     }
 

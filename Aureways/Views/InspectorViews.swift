@@ -7,19 +7,23 @@ struct InspectorPaneView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 0) {
-            PaneTabBar()
-
-            ZStack {
-                // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
-                ForEach(model.paneTabs) { tab in
-                    let isActive = model.activePaneTabId == tab.id
-                    tabContent(tab)
-                        .opacity(isActive ? 1 : 0)
-                        .allowsHitTesting(isActive)
-                }
+        ZStack {
+            // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
+            ForEach(model.paneTabs) { tab in
+                let isActive = model.activePaneTabId == tab.id
+                tabContent(tab, isActive: isActive)
+                    .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(isActive)
+                    .zIndex(isActive ? 1 : 0)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.inspectorBg)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Palette.splitDivider)
+                .frame(width: 1)
+                .allowsHitTesting(false)
         }
         .alert("文件已被外部修改", isPresented: Binding(
             get: { model.pendingSavePath != nil },
@@ -60,20 +64,33 @@ struct InspectorPaneView: View {
         } message: {
             Text("“\(model.pendingClosePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 还有未保存的修改。")
         }
+        .alert("重新载入会丢失未保存的修改", isPresented: Binding(
+            get: { model.pendingReloadPath != nil },
+            set: { if !$0 { model.pendingReloadPath = nil } }
+        )) {
+            Button("重新载入", role: .destructive) {
+                model.confirmPendingReload()
+            }
+            Button("取消", role: .cancel) {
+                model.pendingReloadPath = nil
+            }
+        } message: {
+            Text("“\(model.pendingReloadPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 有未保存的修改，从磁盘重新载入会丢弃它们。")
+        }
     }
 
     @ViewBuilder
-    private func tabContent(_ tab: PaneTab) -> some View {
+    private func tabContent(_ tab: PaneTab, isActive: Bool) -> some View {
         switch tab {
         case .browser:
-            FileBrowserTabView()
+            FileBrowserTabView(isActive: isActive)
         case .info:
             InfoInspectorTab(session: model.selectedSession)
         case .file(let path):
-            FileEditorTabView(path: path)
+            FileEditorTabView(path: path, isActive: isActive)
         case .terminal(let id):
             if let terminal = model.interactiveTerminals[id] {
-                TerminalTabView(terminal: terminal)
+                TerminalTabView(terminal: terminal, isActive: isActive)
             }
         }
     }
@@ -88,9 +105,32 @@ struct InfoInspectorTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("会话与协议信息")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 9) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Palette.accent)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session?.agent.title ?? "Aureways")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.primary)
+                        Text("会话协议与客户端状态")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Palette.badgeBg.opacity(0.45))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Palette.border, lineWidth: 0.5)
+                )
 
                 VStack(alignment: .leading, spacing: 8) {
                     infoRow(title: "协议版本", value: "ACP v1 (protocolVersion: 1)")

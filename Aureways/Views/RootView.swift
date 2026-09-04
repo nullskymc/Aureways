@@ -41,16 +41,7 @@ struct RootView: View {
                     }
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    model.inspectorOpen.toggle()
-                } label: {
-                    Image(systemName: "sidebar.right")
-                        .foregroundStyle(model.inspectorOpen ? .primary : .secondary)
-                }
-                .help("检查器 (⌘B / ⌥⌘I)")
-                .keyboardShortcut("b", modifiers: [.command])
-            }
+            InspectorToolbarContent()
         }
         .liquidGlassWindow(appearance: model.colorScheme)
         .alert("出错了", isPresented: Binding(
@@ -75,6 +66,12 @@ struct RootView: View {
                 model.inspectorOpen.toggle()
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
+            .opacity(0)
+            .allowsHitTesting(false)
+            Button("") {
+                model.inspectorOpen.toggle()
+            }
+            .keyboardShortcut("b", modifiers: [.command])
             .opacity(0)
             .allowsHitTesting(false)
         }
