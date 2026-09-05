@@ -61,7 +61,7 @@ Aureways/                          # 仓库根
 │       ├── Transcript.swift       # 状态条、消息列表
 │       ├── TranscriptBlocks.swift # 用户/助手/思考块
 │       ├── ToolViews.swift        # 工具组、计划卡
-│       ├── MarkdownBody.swift     # MarkdownUI 渲染
+│       ├── MarkdownBody.swift     # SwiftStreamingMarkdown 渲染
 │       ├── Composer.swift         # 输入框
 │       ├── ComposerTextView.swift # NSTextView 输入与拖拽
 │       ├── CompletionPopup.swift  # / 与 @ 补全
@@ -111,7 +111,7 @@ Aureways/                          # 仓库根
 | `AppIcon.icon` | 品牌 | macOS 26 分层图标（A / 轨道 / 星） |
 | `AurewaysApp.swift` | 前端入口 | 窗口、暗色、⌘N |
 | `Views/*` | 前端 | 布局与交互 |
-| `Views/MarkdownBody.swift` | 前端 | [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 渲染 Agent 正文 |
+| `Views/MarkdownBody.swift` | 前端 | [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown) 渲染 Agent 正文（配 `MarkdownDocumentCache` 解析缓存） |
 | `Views/SettingsView.swift` | 前端 | 通用 / Agent / 工作区 / 权限 |
 | `AppModel.swift` 及 `AppModel+*` | 前后端交界 | 会话列表、connect/send/retry/cancel |
 | `ChatSession.swift` | 前后端交界 | 单会话 transcript |

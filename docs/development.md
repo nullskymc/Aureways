@@ -87,16 +87,20 @@ open Aureways.xcodeproj
 
 ## Swift 包
 
+直接依赖只有两个（声明在 `Aureways.xcodeproj` 的 package reference 里）：
+
 | 包 | 用途 |
 | --- | --- |
-| [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 2.4.1 | Agent 正文 Markdown 渲染 |
-| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) | 右侧面板交互终端（真实 PTY + 终端模拟） |
+| [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown)（revision 固定到 `5f7c04e0`） | Agent 正文 Markdown 渲染（`MarkdownBody.swift`）与解析缓存（`MarkdownDocumentCache.swift`） |
+| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 | 右侧面板交互终端（真实 PTY + 终端模拟） |
 
-版本锁在 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。命令行第一次编译会拉 `swift-markdown-ui`、`cmark-gfm`、`NetworkImage`、`SwiftTerm` 及其传递依赖。
+其它库都是随它们传递进来的（`Package.resolved` 里可见 `swift-markdown` / `swift-cmark` 解析、`highlightswift` 代码高亮、`iosMath`、`SwiftUI-Shimmer`、`equatable` 等），精确版本锁在 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。
 
-两个命令行构建的坑（Makefile 已处理第一个）：
+命令行构建的三个坑：
 
-- **SwiftTerm 带 build tool 插件**（生成构建信息），`xcodebuild` 默认要交互式确认。Makefile 统一加了 `-skipPackagePluginValidation`；在 Xcode IDE 里首次构建按提示允许即可。
+- **SwiftTerm 带 build tool 插件**（生成构建信息），`xcodebuild` 默认要交互式确认。
+- **SwiftStreamingMarkdown 依赖 ordo-one/equatable（一个 swift-syntax 宏包）**，宏的交互确认是另一个开关。
+  这两项 Makefile 统一用 `-skipPackagePluginValidation -skipMacroValidation` 关掉；在 Xcode IDE 里首次构建按提示允许即可。
 - **SwiftTerm 的 Metal 渲染着色器**需要 Metal Toolchain。Xcode beta 默认不带，首次报 `cannot execute tool 'metal' due to missing Metal Toolchain` 时执行一次：
 
 ```bash
@@ -153,7 +157,7 @@ Runner（`macos-26`）上自动选取最新 Xcode，然后：
 
 | 项 | 值 |
 | --- | --- |
-| Marketing version | 0.1.1 |
+| Marketing version | 0.1.2 |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
 | 最低系统 | macOS 26 |

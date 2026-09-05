@@ -1,99 +1,132 @@
+<div align="center">
+
+<img src="design/app-icon/logo_default_1024.png" width="128" height="128" alt="Aureways — A-orbit mark" />
+
 # Aureways
 
+**A native macOS client for agentic coding.** A SwiftUI app — not a web view, not an Electron shell. Pick a workspace, talk to an agent that's already installed on your Mac, and let it edit files and run terminals in a native window.
+
 [![Release](https://github.com/nullskymc/aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/aureways/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**macOS 原生客户端**：用 SwiftUI 写成的 `.app`，不是网页，也不是套壳。选定工作区，选用本机已安装的 Agent，在系统窗口里对话、改文件、开终端。
+[中文说明](README.zh-CN.md) · [Documentation](docs/README.md)
 
-它实现 [Agent Client Protocol](https://agentclientprotocol.com)，在同一进程里拉起本机命令行 Agent。没有远程后端，也没有单独的 HTTP 服务。
+</div>
 
-更细的架构、界面与协议说明见 [`docs/`](docs/README.md)。
+Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com) and launches your local CLI agent as a child process over stdio NDJSON. There is no remote backend and no separate HTTP service — the client runs the agent directly, in-process.
 
-## 能做什么
+## Features
 
-- **原生 Mac 界面**：统一工具栏、侧栏、系统偏好设置（`⌘,`）、浅色 / 深色跟随系统；文件在 Finder 中显示，终端是本机 PTY。
-- **多个 Agent**：内置七家常见命令行 Agent，也可以在偏好设置里添加任意启动命令。会话按工作区列在侧栏，支持跨启动恢复（取决于该 Agent 是否提供恢复）。
-- **流式对话**：Markdown 正文、可展开的思考、分组的工具调用、计划步骤。输入框支持 `/` 命令、`@` 引用工作区文件，以及图片和文件附件。
-- **权限**：Agent 要读写文件或执行命令时会先征求确认；也可以改成由客户端代为批准。
-- **右侧工作台**（`⌘B`）：文件浏览器、文本编辑器（行号、`⌘S`、与 Agent 同时改文件时的冲突处理）、交互终端。每个打开的文件和终端各占一个标签。
+- **Native Mac surfaces** — unified toolbar, sidebar, system Settings (`⌘,`), light/dark following the system (overridable in Settings). "Reveal in Finder" and a real PTY terminal, not a web approximation.
+- **Any ACP agent** — seven agents ship built in, or add any launch command from Settings. Sessions live under their workspace in the sidebar and restore across launches when the agent supports it.
+- **Streaming transcript** — Markdown body, collapsible thinking, grouped tool calls, plan steps. The composer takes `/` commands, `@` workspace-file references, and image/file attachments. Long transcripts are virtualized so scrolling stays cheap.
+- **Permissions** — the agent asks before reading/writing files or running commands; you can instead let the client approve on its behalf.
+- **Workbench** (`⌘B`) — a file browser, a text editor (line numbers, `⌘S`, conflict handling when you and the agent edit the same file), and interactive terminals. Every open file and terminal keeps its own tab, so switching doesn't lose state.
 
-## 内置 Agent
+```
+┌──────────────┬────────────────────────────────────────────┬──────────────┐
+│ Sidebar      │  Unified toolbar: workspace · status · search │ Inspector ⌘B │
+│  • New chat ⌘N│                                            │  • File browser│
+│  • Workspace  ├────────────────────────────────────────────┤  • Text editor │
+│    sessions   │  Transcript (centered, streaming)          │  • Terminal    │
+│    ⌘1 … ⌘9   │   user bubble · agent message · thinking    │  • Info        │
+│               │   tool cards · plan steps                  │               │
+│               ├────────────────────────────────────────────┤               │
+│               │  Floating composer (⌘Return to send)       │               │
+└──────────────┴────────────────────────────────────────────┴──────────────┘
+```
 
-| 名称 | 启动命令 |
+## Built-in agents
+
+| Agent | Launch command |
 | --- | --- |
 | Grok Build | `grok agent stdio` |
 | Codex | `npx -y @agentclientprotocol/codex-acp` |
 | Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` |
-| Antigravity | `agy --acp`（找不到时回退 `npx -y agy-acp`） |
+| Antigravity | `agy --acp` (falls back to `npx -y agy-acp`) |
 | GitHub Copilot | `copilot --acp --stdio` |
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 
-对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理，不进 Aureways 的设置。自定义 Agent 在偏好设置（`⌘,`）里添加。
+Install and sign in to the matching CLI first. Login and API keys live in each vendor's own tool — they don't go through Aureways. Add custom agents in Settings (`⌘,`).
 
-## 运行
+## Getting started
 
-要求：macOS 26+，Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。
+**Install** — grab the `.dmg` from [Releases](https://github.com/nullskymc/aureways/releases) and drag `Aureways.app` into `Applications`. Builds are ad-hoc signed and not notarized; if Gatekeeper blocks first launch:
 
-在**仓库根目录**操作（能看到 `Makefile` 和 `Aureways.xcodeproj` 的那一层，不是内层 `Aureways/` 源码目录）：
+```bash
+xattr -dr com.apple.quarantine /Applications/Aureways.app
+```
+
+**Build from source** — requires macOS 26+ and Xcode 26+ (developed against Xcode 27). The app sandbox is off. Run from the **repository root** (where `Makefile` and `Aureways.xcodeproj` live, not the inner `Aureways/` source directory):
 
 ```bash
 make open
 ```
 
-或打开工程后，在 Xcode 里选 scheme **Aureways**、目的地 **My Mac**，按 `Cmd + R`：
+Or open the project in Xcode, pick scheme **Aureways** and destination **My Mac**, then press `⌘R`:
 
 ```bash
 open Aureways.xcodeproj
 ```
 
-默认使用当前 `xcode-select` 工具链。若要用某个 Xcode.app：
+To build with a specific Xcode instead of the current `xcode-select` toolchain:
 
 ```bash
 make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 ```
 
-| 命令 | 作用 |
+| Command | What it does |
 | --- | --- |
-| `make build` | Debug 编译 |
-| `make open` | 编译并打开 `.app` |
-| `make test` | 跑 `AurewaysTests` |
-| `make release` | Release 构建（发版用） |
-| `make clean` | 删除 `.derived` |
+| `make build` | Debug build |
+| `make open` | Build and open the `.app` |
+| `make test` | Run `AurewaysTests` |
+| `make release` | Release build (for shipping) |
+| `make clean` | Remove `.derived` |
 
-首次命令行构建若提示缺少 Metal 工具链：
+If the first command-line build reports a missing Metal toolchain:
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-## 文档
+## Keyboard shortcuts
 
-| 文档 | 内容 |
+| Keys | Action |
 | --- | --- |
-| [文档目录](docs/README.md) | 索引 |
-| [目录结构](docs/directory.md) | 仓库与源码树 |
-| [架构](docs/architecture.md) | 前后端职责、会话与持久化 |
-| [前端](docs/frontend.md) | SwiftUI 界面与状态 |
-| [后端](docs/backend.md) | 连接、进程、文件系统、终端 |
-| [协议](docs/protocol.md) | 已实现的 ACP 方法 |
-| [开发与运行](docs/development.md) | 工具链、测试、调试连接失败 |
+| `⌘N` | New chat |
+| `⌘1` … `⌘9` | Select session |
+| `⌘B` / `⌥⌘I` | Toggle the workbench |
+| `⌘,` | Settings |
+| `⌘Return` | Send message |
+| `⌘.` | Stop generation |
+| `/` in composer | Slash commands |
+| `@` in composer | Reference workspace files |
 
-## 发版
+## Documentation
 
-约定：**只有打 tag 才触发构建**，分支与 PR 不跑 CI。工作流见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+| Document | Covers |
+| --- | --- |
+| [Index](docs/README.md) | Reading order |
+| [Directory](docs/directory.md) | Repo and source tree |
+| [Architecture](docs/architecture.md) | Front/back responsibilities, session lifecycle |
+| [Frontend](docs/frontend.md) | SwiftUI UI and state |
+| [Backend](docs/backend.md) | Connection, process, filesystem, terminal |
+| [Protocol](docs/protocol.md) | Which ACP methods are implemented |
+| [Development](docs/development.md) | Toolchain, tests, debugging connection failures |
+
+The in-depth docs are written in Chinese.
+
+## Releasing
+
+By convention, only a `v*` tag triggers CI — branches and PRs don't build. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 创建 GitHub Release 并附带产物。
-
-打开 dmg，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证；首次启动若被 Gatekeeper 拦截：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Aureways.app
-```
+Pipeline: `make test` → Release build → package `Aureways-<tag>.dmg` → create a GitHub Release with the artifact.
 
 ## License
 
