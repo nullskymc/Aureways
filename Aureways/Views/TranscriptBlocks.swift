@@ -1,143 +1,22 @@
+import AppKit
 import SwiftUI
 
-// MARK: - Grouped blocks
-
-enum ActivityStep: Identifiable {
-    case thought(UUID, String)
-    case tools(UUID, [ToolCallView])
-    case plan(UUID, [PlanEntry])
-    /// 夹在工作流中间、经正文通道发来的 agent 消息——不是最终回答。
-    case message(UUID, String)
-
-    var id: UUID {
-        switch self {
-        case .thought(let id, _), .tools(let id, _), .plan(let id, _), .message(let id, _):
-            return id
-        }
-    }
-}
-
-enum TranscriptBlock: Identifiable {
-    case user(UUID, String, [TranscriptAttachment])
-    case agent(UUID, String)
-    case activity(UUID, [ActivityStep], ActivityRun?)
-    case status(UUID, String)
-
-    var id: UUID {
-        switch self {
-        case .user(let id, _, _), .agent(let id, _), .activity(let id, _, _), .status(let id, _):
-            return id
-        }
-    }
-
-    /// Collapse thought + tool + plan runs into one card per assistant turn.
-    /// 部分 harness 用正文通道发中间消息（"我接下来要…"），先缓冲再定性：
-    /// 后面跟了活动就吸收为组内消息步骤，只有回合尾部的文本才算正文。
-    static func group(_ items: [TranscriptItem], runs: [UUID: ActivityRun] = [:]) -> [TranscriptBlock] {
-        var blocks: [TranscriptBlock] = []
-        var steps: [ActivityStep] = []
-        var activityID: UUID?
-        var tools: [ToolCallView] = []
-        var toolsID: UUID?
-        var pendingAgents: [(UUID, String)] = []
-
-        func flushTools() {
-            guard !tools.isEmpty else { return }
-            steps.append(.tools(toolsID ?? UUID(), tools))
-            tools = []
-            toolsID = nil
-        }
-
-        func flushActivity() {
-            flushTools()
-            guard !steps.isEmpty else { return }
-            let id = activityID ?? steps[0].id
-            blocks.append(.activity(id, steps, combinedRun(for: steps, in: runs)))
-            steps = []
-            activityID = nil
-        }
-
-        func absorbPendingAgents() {
-            for (id, text) in pendingAgents {
-                flushTools()
-                if activityID == nil { activityID = id }
-                steps.append(.message(id, text))
-            }
-            pendingAgents = []
-        }
-
-        func emitPendingAgentsAsBody() {
-            guard !pendingAgents.isEmpty else { return }
-            flushActivity()
-            for (id, text) in pendingAgents {
-                blocks.append(.agent(id, text))
-            }
-            pendingAgents = []
-        }
-
-        for item in items {
-            switch item {
-            case .user(let id, let text, let attachments):
-                emitPendingAgentsAsBody()
-                flushActivity()
-                blocks.append(.user(id, text, attachments))
-            case .agent(let id, let text):
-                pendingAgents.append((id, text))
-            case .thought(let id, let text):
-                absorbPendingAgents()
-                flushTools()
-                if activityID == nil { activityID = id }
-                steps.append(.thought(id, text))
-            case .tool(let id, let call):
-                absorbPendingAgents()
-                if activityID == nil { activityID = id }
-                if tools.isEmpty { toolsID = id }
-                tools.append(call)
-            case .plan(let id, let entries):
-                absorbPendingAgents()
-                flushTools()
-                if activityID == nil { activityID = id }
-                steps.append(.plan(id, entries))
-            case .status(_, let text) where isNoiseStatus(text):
-                continue
-            case .status(let id, let text):
-                emitPendingAgentsAsBody()
-                flushActivity()
-                blocks.append(.status(id, text))
-            }
-        }
-        emitPendingAgentsAsBody()
-        flushActivity()
-        return blocks
-    }
-
-    /// 活动组可能被中间消息切成多个 run，合并成一段时长。
-    private static func combinedRun(for steps: [ActivityStep], in runs: [UUID: ActivityRun]) -> ActivityRun? {
-        let collected = steps.compactMap { runs[$0.id] }
-        guard let first = collected.first else { return nil }
-        let startedAt = collected.map(\.startedAt).min() ?? first.startedAt
-        guard collected.allSatisfy({ $0.endedAt != nil }) else {
-            return ActivityRun(startedAt: startedAt, endedAt: nil)
-        }
-        return ActivityRun(startedAt: startedAt, endedAt: collected.compactMap(\.endedAt).max())
-    }
-
-    private static func isNoiseStatus(_ text: String) -> Bool {
-        let lowered = text.lowercased()
-        return lowered.hasPrefix("stop:") || lowered.hasPrefix("mode:")
-    }
-}
-
-struct TranscriptBlockView: View {
+struct TranscriptBlockView: View, Equatable {
     let block: TranscriptBlock
     var isStreaming = false
+
+    // SwiftUI 的 View 现在是 @MainActor 协议，成员默认跟着隔离；Equatable.== 是
+    // nonisolated 需求。block / isStreaming 都是 Sendable 值，比较两份副本没有竞争。
+    nonisolated static func == (lhs: TranscriptBlockView, rhs: TranscriptBlockView) -> Bool {
+        lhs.isStreaming == rhs.isStreaming && lhs.block == rhs.block
+    }
 
     var body: some View {
         switch block {
         case .user(_, let text, let attachments):
             UserBubble(text: text, attachments: attachments)
         case .agent(_, let text):
-            AgentMessage(markdown: text)
+            AgentMessage(markdown: text, isStreaming: isStreaming)
         case .activity(_, let steps, let run):
             ActivityCard(steps: steps, isLive: isStreaming, run: run)
         case .status(_, let text):
@@ -214,17 +93,19 @@ private struct UserBubble: View {
 
 private struct UserAttachmentView: View {
     let attachment: TranscriptAttachment
-    @State private var image: NSImage?
+    private let image: NSImage?
+
+    init(attachment: TranscriptAttachment) {
+        self.attachment = attachment
+        self.image = TranscriptImageStore.cached(attachment) ?? TranscriptImageStore.prefetch(attachment)
+    }
 
     var body: some View {
-        Group {
-            if attachment.kind == "image" {
-                imageView
-            } else {
-                fileChip
-            }
+        if attachment.kind == "image" {
+            imageView
+        } else {
+            fileChip
         }
-        .onAppear(perform: loadImage)
     }
 
     @ViewBuilder
@@ -263,28 +144,14 @@ private struct UserAttachmentView: View {
         .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private func loadImage() {
-        guard image == nil else { return }
-        if let base64 = attachment.imageBase64 {
-            let clean = base64.contains(";base64,") ? String(base64.split(separator: ";base64,").last ?? "") : base64
-            let stripped = clean.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let data = Data(base64Encoded: stripped, options: .ignoreUnknownCharacters) {
-                image = NSImage(data: data)
-                return
-            }
-        }
-        if let path = attachment.path {
-            let filePath = path.hasPrefix("file://") ? (URL(string: path)?.path ?? path) : path
-            image = NSImage(contentsOfFile: filePath)
-        }
-    }
 }
 
 private struct AgentMessage: View {
     let markdown: String
+    var isStreaming = false
 
     var body: some View {
-        MarkdownBody(source: markdown)
+        MarkdownBody(source: markdown, isStreaming: isStreaming)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -420,7 +287,14 @@ private struct ActivityCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 12, veil: 0.32)
+        // 内容层用 .regularMaterial，不叠玻璃——这是 docs/frontend.md 已经写明的
+        // 规则，也是 Apple 的 Materials 指南：Liquid Glass 属于浮在内容之上的
+        // 导航层，不该铺在列表行 / 卡片上。实测每张卡都是一层实时背景采样，
+        // 滚动时 vImage 的模糊卷积占到主线程 self time 的 2%。
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(Palette.border, lineWidth: 0.5)
@@ -465,9 +339,6 @@ private struct ActivityCard: View {
         switch step {
         case .thought(_, let text):
             ThoughtStep(text: text)
-        case .message(_, let text):
-            MarkdownBody(source: text)
-                .frame(maxWidth: .infinity, alignment: .leading)
         case .tools(_, let calls):
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(calls, id: \.toolCallId) { call in

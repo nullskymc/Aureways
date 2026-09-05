@@ -13,6 +13,8 @@ struct SettingsView: View {
                 .tabItem { Label("工作区", systemImage: "folder") }
             PermissionSettingsPage()
                 .tabItem { Label("权限", systemImage: "checkmark.shield") }
+            MCPSettingsPage()
+                .tabItem { Label("MCP", systemImage: "cable.connector") }
         }
         .frame(width: 560, height: 520)
         .liquidGlassWindow(appearance: model.colorScheme)
@@ -281,5 +283,185 @@ struct PermissionSettingsPage: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+}
+
+struct MCPSettingsPage: View {
+    @Environment(AppModel.self) private var model
+    @State private var isAdding = false
+
+    private var reportedServers: [McpServerConfig] {
+        var seen = Set<String>()
+        var servers: [McpServerConfig] = []
+        for session in model.sessions where !session.isClosed {
+            for server in session.reportedMcpServers where seen.insert(server.name).inserted {
+                servers.append(server)
+            }
+        }
+        return servers
+    }
+
+    private var agentCaps: McpCapabilities? {
+        model.runtimes[model.selectedAgentId]?.capabilities.mcpCapabilities
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                if model.mcpServers.isEmpty {
+                    Text("还没有配置 MCP 服务器。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.mcpServers) { server in
+                        mcpRow(server)
+                    }
+                }
+                Button("添加 MCP 服务器…") {
+                    isAdding = true
+                }
+            } header: {
+                Text("发给 Agent 的服务器")
+            } footer: {
+                Text("新建或恢复会话时写入 session/new 的 mcpServers。stdio 是规范基线；HTTP / SSE 仅当当前 Agent 声明 mcpCapabilities.http / sse 时才会发送。")
+            }
+
+            if let caps = agentCaps {
+                Section("当前 Agent 能力") {
+                    LabeledContent("HTTP") { Text(caps.http ? "支持" : "不支持") }
+                    LabeledContent("SSE") { Text(caps.sse ? "支持" : "不支持") }
+                }
+            }
+
+            if !reportedServers.isEmpty {
+                Section {
+                    ForEach(reportedServers) { server in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(server.name)
+                            Text(server.summary.isEmpty ? server.transport.rawValue : server.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .textSelection(.enabled)
+                        }
+                    }
+                } header: {
+                    Text("Agent 回传")
+                } footer: {
+                    Text("部分 Agent 会在 session/new、session/load 或 session/list 里带回已连接的 MCP 服务器。这里只读展示。")
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .sheet(isPresented: $isAdding) {
+            AddMCPServerSheet()
+                .environment(model)
+        }
+    }
+
+    @ViewBuilder
+    private func mcpRow(_ server: McpServerConfig) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Toggle("", isOn: Binding(
+                get: { server.enabled },
+                set: { enabled in
+                    if let index = model.mcpServers.firstIndex(where: { $0.id == server.id }) {
+                        model.mcpServers[index].enabled = enabled
+                    }
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(server.name)
+                    Text(server.transport.rawValue.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Text(server.summary.isEmpty ? "未填写命令或地址" : server.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+            }
+            Spacer()
+            Button("移除", role: .destructive) {
+                model.mcpServers.removeAll { $0.id == server.id }
+            }
+        }
+    }
+}
+
+private struct AddMCPServerSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var transport: McpServerConfig.Transport = .stdio
+    @State private var command = ""
+    @State private var url = ""
+
+    private var canSave: Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        switch transport {
+        case .stdio:
+            return !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .http, .sse:
+            return !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("添加 MCP 服务器")
+                .font(.headline)
+            Form {
+                TextField("名称", text: $name)
+                Picker("传输", selection: $transport) {
+                    Text("stdio").tag(McpServerConfig.Transport.stdio)
+                    Text("HTTP").tag(McpServerConfig.Transport.http)
+                    Text("SSE").tag(McpServerConfig.Transport.sse)
+                }
+                if transport == .stdio {
+                    TextField("启动命令", text: $command)
+                        .help("可带参数，例如 npx -y @modelcontextprotocol/server-filesystem /path")
+                } else {
+                    TextField("URL", text: $url)
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("添加") { save() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+
+    private func save() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var commandName = ""
+        var args: [String] = []
+        if transport == .stdio {
+            let parts = AgentCatalog.splitCommandLine(command.trimmingCharacters(in: .whitespacesAndNewlines))
+            commandName = parts.first ?? ""
+            args = Array(parts.dropFirst())
+        }
+        model.mcpServers.append(
+            McpServerConfig(
+                name: trimmedName,
+                transport: transport,
+                command: commandName,
+                arguments: args,
+                url: url.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        )
+        dismiss()
     }
 }

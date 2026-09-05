@@ -7,6 +7,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppModel.shared?.terminateAllTerminals()
         }
     }
+
+    #if DEBUG
+    nonisolated func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            ScrollProbe.shared.start()
+        }
+    }
+    #endif
 }
 
 @main

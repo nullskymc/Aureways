@@ -1,179 +1,160 @@
 import AppKit
-import MarkdownUI
+import SwiftStreamingMarkdown
 import SwiftUI
 
+/// Agent 正文交给 Microsoft SwiftStreamingMarkdown（cmark-gfm），本仓库不维护解析器。
+/// 字体对齐对话画布 13.5pt；颜色用 Palette / 系统语义色，不走 Copilot 资源。
+///
+/// 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（自己在视图里解析）：
+/// 解析结果存在 `MarkdownDocumentCache` 里，回收重建时能在 `init` 同步拿到，块一
+/// 放上去就有真实高度——`LazyVStack` 的高度估算依赖这一点。
 struct MarkdownBody: View {
     let source: String
+    var isStreaming: Bool
 
-    var body: some View {
-        Markdown(source)
-            .markdownTheme(aurewaysTheme)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(ClearSelectableTextBackground())
+    @State private var document: RenderableDocument?
+
+    init(source: String, isStreaming: Bool = false) {
+        self.source = source
+        self.isStreaming = isStreaming
+        _document = State(initialValue: MarkdownDocumentCache.shared.cached(source))
     }
 
-    private var aurewaysTheme: Theme {
-        Theme()
-            .text {
-                FontSize(13.5)
-                ForegroundColor(.primary)
-                BackgroundColor(.clear)
+    private var config: MarkdownRenderConfig {
+        isStreaming ? AurewaysMarkdown.animated : AurewaysMarkdown.plain
+    }
+
+    var body: some View {
+        Group {
+            if let document {
+                DocumentView(renderableDocument: document, config: config)
+            } else {
+                // 解析落地前用同字号明文占位。高度只是近似，但远好过 0——
+                // 高度 0 会让虚拟化的 stack 把这条消息当成不存在。
+                Text(source)
+                    .font(.system(size: AurewaysMarkdown.body))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .code {
-                FontFamilyVariant(.monospaced)
-                FontSize(12.5)
-                ForegroundColor(.primary)
-                BackgroundColor(Palette.badgeBg)
-            }
-            .strong {
-                FontWeight(.semibold)
-            }
-            .link {
-                ForegroundColor(Palette.accent)
-            }
-            .heading1 { configuration in
-                configuration.label
-                    .relativeLineSpacing(.em(0.125))
-                    .markdownMargin(top: 18, bottom: 10)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(.em(1.6))
-                        BackgroundColor(.clear)
-                    }
-            }
-            .heading2 { configuration in
-                configuration.label
-                    .relativeLineSpacing(.em(0.125))
-                    .markdownMargin(top: 16, bottom: 8)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(.em(1.3))
-                        BackgroundColor(.clear)
-                    }
-            }
-            .heading3 { configuration in
-                configuration.label
-                    .relativeLineSpacing(.em(0.125))
-                    .markdownMargin(top: 14, bottom: 8)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(.em(1.15))
-                        BackgroundColor(.clear)
-                    }
-            }
-            .heading4 { configuration in
-                configuration.label
-                    .markdownMargin(top: 12, bottom: 6)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        BackgroundColor(.clear)
-                    }
-            }
-            .paragraph { configuration in
-                configuration.label
-                    .fixedSize(horizontal: false, vertical: true)
-                    .relativeLineSpacing(.em(0.22))
-                    .markdownMargin(top: 0, bottom: 10)
-            }
-            .blockquote { configuration in
-                HStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Palette.border)
-                        .frame(width: 3)
-                    configuration.label
-                        .markdownTextStyle {
-                            ForegroundColor(.secondary)
-                            BackgroundColor(.clear)
-                        }
-                        .padding(.leading, 10)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .markdownMargin(top: 0, bottom: 10)
-            }
-            .codeBlock { configuration in
-                ScrollView(.horizontal) {
-                    configuration.label
-                        .fixedSize(horizontal: false, vertical: true)
-                        .relativeLineSpacing(.em(0.2))
-                        .markdownTextStyle {
-                            FontFamilyVariant(.monospaced)
-                            FontSize(12)
-                            BackgroundColor(.clear)
-                        }
-                        .padding(10)
-                }
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .markdownMargin(top: 0, bottom: 10)
-            }
-            .listItem { configuration in
-                configuration.label
-                    .markdownMargin(top: .em(0.2))
-            }
-            .table { configuration in
-                configuration.label
-                    .fixedSize(horizontal: false, vertical: true)
-                    .markdownTableBorderStyle(.init(color: Palette.border))
-                    .markdownTableBackgroundStyle(
-                        .alternatingRows(.clear, Palette.badgeBg)
-                    )
-                    .markdownMargin(top: 0, bottom: 10)
-            }
-            .tableCell { configuration in
-                configuration.label
-                    .markdownTextStyle {
-                        if configuration.row == 0 {
-                            FontWeight(.semibold)
-                        }
-                        BackgroundColor(.clear)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-            }
-            .thematicBreak {
-                Divider()
-                    .markdownMargin(top: 16, bottom: 16)
-            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: source) {
+            document = await MarkdownDocumentCache.shared.document(
+                for: source,
+                config: config,
+                // 流式中间态不入缓存：不会被回看，只会把有用的条目挤出去。
+                store: !isStreaming
+            )
+        }
     }
 }
 
-/// macOS 开启 textSelection 后，系统可能插入带白底的 NSTextView。
-private struct ClearSelectableTextBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> ProbeView {
-        ProbeView()
+/// 对话画布的 Markdown 渲染配置。`MarkdownDocumentCache` 预热时也用 `plain`。
+enum AurewaysMarkdown {
+    static let body: CGFloat = 13.5
+    static let code: CGFloat = 12.5
+    static let table: CGFloat = 12.5
+    static let chrome: CGFloat = 11
+
+    /// 两个配置各只构造一次。每次求值新建 config 会让库里
+    /// `CodeBlockView.onChange(of: config)` 判定不等，白白重跑一次语法高亮。
+    static let plain = config.withShouldAnimateText(value: false)
+    static let animated = config.withShouldAnimateText(value: true)
+
+    static let bodyFonts = fonts(body)
+    static let tableFonts = fonts(table)
+    static let chromeFonts = fonts(chrome)
+    static let codeFonts = TextFonts(
+        normal: mono(code),
+        italic: nil,
+        bold: NSFont.monospacedSystemFont(ofSize: code, weight: .semibold),
+        boldItalic: nil,
+        preferredLetterSpacing: nil,
+        preferredLineHeight: nil
+    )
+
+    static let config: MarkdownRenderConfig = {
+        let defaults = MarkdownRenderConfig.default
+        return MarkdownRenderConfig(
+            shouldAnimateText: false,
+            blockQuoteStyle: .init(textFonts: bodyFonts, textColor: .secondary),
+            headingStyle: .init(
+                h1Font: headingFonts(21),
+                h2Font: headingFonts(17.5),
+                h3Font: headingFonts(15.5),
+                h4Font: headingFonts(14),
+                h5Font: headingFonts(13.5),
+                h6Font: headingFonts(13.5),
+                textColor: .primary
+            ),
+            orderedListStyle: .init(textFonts: bodyFonts, textColor: .primary),
+            paragraphStyle: .init(textFonts: bodyFonts, textColor: .primary),
+            tableStyle: .init(
+                textFonts: tableFonts,
+                headerTextColor: .primary,
+                regularTextColor: .primary,
+                headerBackgroundColor: Palette.badgeBg,
+                borderColor: Palette.border,
+                actionButtonColor: Palette.accent
+            ),
+            inlineStyle: .init(
+                boldTextColor: .primary,
+                linkTextFont: system(body),
+                linkTextColor: Palette.accent,
+                linkUnderlineStyle: [],
+                codeTextFont: mono(code),
+                codeTextColor: .primary,
+                codeBackgroundColor: Palette.badgeBg,
+                codeUnderlineColor: .clear
+            ),
+            textContextMenu: defaults.textContextMenu,
+            citationConfig: .init(
+                font: defaults.citationConfig.font,
+                textColor: .secondary,
+                backgroundColor: Palette.badgeBg
+            ),
+            codeBlockConfig: CodeBlockConfig(
+                theme: .xcode,
+                backgroundColor: Palette.badgeBg,
+                foregroundColor: .secondary,
+                codeTextFonts: codeFonts,
+                chromeTextFonts: chromeFonts
+            ),
+            blockSpacing: defaults.blockSpacing,
+            textSelectionConfig: defaults.textSelectionConfig,
+            thematicBreakColor: Palette.border,
+            imageConfig: defaults.imageConfig
+        )
+    }()
+
+    static func headingFonts(_ size: CGFloat) -> TextFonts {
+        fonts(size, weight: .semibold)
     }
 
-    func updateNSView(_ nsView: ProbeView, context: Context) {
-        nsView.clear()
+    static func fonts(_ size: CGFloat, weight: NSFont.Weight = .regular) -> TextFonts {
+        TextFonts(
+            normal: system(size, weight: weight),
+            italic: system(size, weight: weight, italic: true),
+            bold: system(size, weight: .semibold),
+            boldItalic: system(size, weight: .semibold, italic: true),
+            preferredLetterSpacing: nil,
+            preferredLineHeight: nil
+        )
     }
 
-    final class ProbeView: NSView {
-        private var handled = Set<ObjectIdentifier>()
+    static func system(
+        _ size: CGFloat,
+        weight: NSFont.Weight = .regular,
+        italic: Bool = false
+    ) -> NSFont {
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        guard italic else { return font }
+        let descriptor = font.fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: size) ?? font
+    }
 
-        override var intrinsicContentSize: NSSize { .zero }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            clear()
-        }
-
-        override func layout() {
-            super.layout()
-            clear()
-        }
-
-        func clear() {
-            walk(superview)
-        }
-
-        private func walk(_ view: NSView?) {
-            guard let view else { return }
-            if let textView = view as? NSTextView, handled.insert(ObjectIdentifier(textView)).inserted {
-                textView.drawsBackground = false
-                textView.backgroundColor = .clear
-            }
-            view.subviews.forEach(walk)
-        }
+    static func mono(_ size: CGFloat) -> NSFont {
+        NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
 }

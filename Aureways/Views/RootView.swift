@@ -123,6 +123,7 @@ struct MainWorkspaceView: View {
     private var workspaceColumn: some View {
         if let session = model.selectedSession {
             TranscriptView(session: session)
+                .id(session.id)
         } else {
             EmptyWorkspaceLanding()
         }

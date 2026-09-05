@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import QuartzCore
 
 extension AppModel {
     func connectNew(_ session: ChatSession) async {
@@ -10,13 +12,21 @@ extension AppModel {
             guard let connection = runtime.connection else {
                 throw ACPError.launch("Agent process is not running")
             }
-            await connection.allowWorkspace(session.cwd)
+            await prepareWorkspaces(connection, session: session)
             let created = try await connection.newSession(
                 cwd: session.cwd,
+                additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                mcpServers: mcpPayload(for: runtime.capabilities),
                 meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
             )
             guard !session.isClosed else { return }
-            session.applySetup(sessionId: created.sessionId, modes: created.modes, configOptions: created.configOptions)
+            session.applySetup(
+                sessionId: created.sessionId,
+                modes: created.modes,
+                configOptions: created.configOptions,
+                mcpServers: created.mcpServers
+            )
+            flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
         } catch {
@@ -40,14 +50,22 @@ extension AppModel {
             session.resetTranscript()
             session.isReplaying = true
             defer { session.isReplaying = false }
-            await connection.allowWorkspace(session.cwd)
+            await prepareWorkspaces(connection, session: session)
             let loaded = try await connection.loadSession(
                 sessionId: acpId,
                 cwd: session.cwd,
+                additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                mcpServers: mcpPayload(for: runtime.capabilities),
                 meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
             )
             guard !session.isClosed else { return }
-            session.applySetup(sessionId: loaded.sessionId ?? acpId, modes: loaded.modes, configOptions: loaded.configOptions)
+            session.applySetup(
+                sessionId: loaded.sessionId ?? acpId,
+                modes: loaded.modes,
+                configOptions: loaded.configOptions,
+                mcpServers: loaded.mcpServers
+            )
+            flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
         } catch {
@@ -70,21 +88,37 @@ extension AppModel {
                 session.resetTranscript()
                 session.isReplaying = true
                 defer { session.isReplaying = false }
-                await connection.allowWorkspace(session.cwd)
+                await prepareWorkspaces(connection, session: session)
                 let loaded = try await connection.loadSession(
                     sessionId: acpId,
                     cwd: session.cwd,
+                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                    mcpServers: mcpPayload(for: runtime.capabilities),
                     meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
                 )
-                session.applySetup(sessionId: loaded.sessionId ?? acpId, modes: loaded.modes, configOptions: loaded.configOptions)
+                session.applySetup(
+                    sessionId: loaded.sessionId ?? acpId,
+                    modes: loaded.modes,
+                    configOptions: loaded.configOptions,
+                    mcpServers: loaded.mcpServers
+                )
+                flushSessionUpdates()
                 session.phase = .ready
             } else {
-                await connection.allowWorkspace(session.cwd)
+                await prepareWorkspaces(connection, session: session)
                 let created = try await connection.newSession(
                     cwd: session.cwd,
+                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                    mcpServers: mcpPayload(for: runtime.capabilities),
                     meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
                 )
-                session.applySetup(sessionId: created.sessionId, modes: created.modes, configOptions: created.configOptions)
+                session.applySetup(
+                    sessionId: created.sessionId,
+                    modes: created.modes,
+                    configOptions: created.configOptions,
+                    mcpServers: created.mcpServers
+                )
+                flushSessionUpdates()
                 session.phase = .ready
                 persistIfNeeded(session)
             }
@@ -125,9 +159,14 @@ extension AppModel {
             return
         }
         session.isStreaming = true
-        defer { session.isStreaming = false }
+        defer {
+            flushSessionUpdates()
+            session.isStreaming = false
+        }
         do {
-            let response = try await connection.prompt(sessionId: acpId, prompt: message.contentBlocks())
+            let caps = runtimes[session.agent.id]?.capabilities.promptCapabilities
+            let response = try await connection.prompt(sessionId: acpId, prompt: message.contentBlocks(promptCapabilities: caps))
+            flushSessionUpdates()
             session.finalizeOpenToolCalls("completed")
             if let reason = response.stopReason {
                 session.items.append(.status(UUID(), "Stop: \(reason)"))
@@ -152,6 +191,9 @@ extension AppModel {
                 guard let acpId = session.acpSessionId, let remote = listedById[acpId] else { continue }
                 if let title = remote.title, !title.isEmpty {
                     session.title = title
+                }
+                if !remote.mcpServers.isEmpty {
+                    session.reportedMcpServers = remote.mcpServers
                 }
                 persistIfNeeded(session)
             }
@@ -205,6 +247,13 @@ extension AppModel {
         return false
     }
 
+    func prepareWorkspaces(_ connection: ACPConnection, session: ChatSession) async {
+        await connection.allowWorkspace(session.cwd)
+        for path in extraWorkspaceRoots(besides: session.cwd) {
+            await connection.allowWorkspace(path)
+        }
+    }
+
     func allowWorkspaceOnRuntimes(_ path: String) async {
         for runtime in runtimes.values {
             await runtime.connection?.allowWorkspace(path)
@@ -227,13 +276,18 @@ extension AppModel {
     }
 
     func handlers(for agentId: String) -> ACPHandlers {
+        let inbox = sessionUpdateInbox
         let bridge = AgentBridge(agentId: agentId, model: self)
         return ACPHandlers(
             onUpdate: { notification in
-                await MainActor.run { bridge.model?.applyUpdate(agentId: agentId, notification) }
+                inbox.push(SessionUpdateInbox.Event(agentId: agentId, notification: notification))
+                DispatchQueue.main.async {
+                    AppModel.shared?.armSessionUpdatePump()
+                }
             },
             onPermission: { prompt in
                 await MainActor.run {
+                    bridge.model?.flushSessionUpdates()
                     if let tool = prompt.toolCall {
                         bridge.model?.session(agentId: agentId, acpSessionId: prompt.sessionId)?.appendTool(tool)
                     }
@@ -301,6 +355,29 @@ extension AppModel {
             session.resumePermission(.cancelled)
         }
     }
+
+    func armSessionUpdatePump() {
+        if sessionUpdatePulse == nil {
+            let pulse = DisplayPulse()
+            pulse.onTick = { [weak self] in
+                self?.flushSessionUpdates()
+            }
+            pulse.start()
+            sessionUpdatePulse = pulse
+        }
+    }
+
+    func flushSessionUpdates() {
+        let events = sessionUpdateInbox.take()
+        if events.isEmpty {
+            sessionUpdatePulse?.stop()
+            sessionUpdatePulse = nil
+            return
+        }
+        for event in SessionUpdateInbox.coalesced(events) {
+            applyUpdate(agentId: event.agentId, event.notification)
+        }
+    }
 }
 
 private final class AgentBridge: @unchecked Sendable {
@@ -310,5 +387,89 @@ private final class AgentBridge: @unchecked Sendable {
     init(agentId: String, model: AppModel) {
         self.agentId = agentId
         self.model = model
+    }
+}
+
+final class SessionUpdateInbox: @unchecked Sendable {
+    struct Event {
+        var agentId: String
+        var notification: SessionNotification
+    }
+
+    private let lock = NSLock()
+    private var events: [Event] = []
+
+    var isEmpty: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return events.isEmpty
+    }
+
+    func push(_ event: Event) {
+        lock.lock()
+        events.append(event)
+        lock.unlock()
+    }
+
+    func take() -> [Event] {
+        lock.lock()
+        defer { lock.unlock() }
+        let copy = events
+        events.removeAll(keepingCapacity: true)
+        return copy
+    }
+
+    static func coalesced(_ events: [Event]) -> [Event] {
+        var result: [Event] = []
+        result.reserveCapacity(events.count)
+        for event in events {
+            if let last = result.last,
+               last.agentId == event.agentId,
+               let merged = last.notification.merging(event.notification) {
+                result[result.count - 1] = Event(agentId: last.agentId, notification: merged)
+            } else {
+                result.append(event)
+            }
+        }
+        return result
+    }
+}
+
+/// 按帧合并 session update，避免流式输出把主线程刷爆。
+/// macOS 没有 CADisplayLink(target:selector:)，只能从 NSScreen/NSView/NSWindow 派生；
+/// 拿不到屏幕（无 key window、无头环境）时退回 30Hz 定时器，否则 flush 会彻底停摆。
+@MainActor
+final class DisplayPulse: NSObject {
+    var onTick: (() -> Void)?
+    private var link: CADisplayLink?
+    private var timer: Timer?
+
+    func start() {
+        guard link == nil, timer == nil else { return }
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            let link = screen.displayLink(target: self, selector: #selector(tick))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            link.add(to: .main, forMode: .common)
+            self.link = link
+        } else {
+            timer = Timer.scheduledTimer(
+                timeInterval: 1.0 / 30.0,
+                target: self,
+                selector: #selector(tick),
+                userInfo: nil,
+                repeats: true
+            )
+        }
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+        timer?.invalidate()
+        timer = nil
+    }
+
+    @objc private func tick() {
+        onTick?()
     }
 }

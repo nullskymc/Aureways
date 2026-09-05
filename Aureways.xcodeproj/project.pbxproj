@@ -23,6 +23,7 @@
 		B1010000000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000F /* SettingsView.swift */; };
 		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
+		B20100000000000000000042 /* TranscriptPerfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000041 /* TranscriptPerfTests.swift */; };
 		B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000002 /* ComposerTextViewTests.swift */; };
 		B20100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
 		B20100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
@@ -33,6 +34,12 @@
 		B2010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
 		B10100000000000000000012 /* ChatSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000012 /* ChatSession.swift */; };
 		B20100000000000000000012 /* ChatSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000012 /* ChatSession.swift */; };
+		B10100000000000000000041 /* TranscriptBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000041 /* TranscriptBlock.swift */; };
+		B20100000000000000000041 /* TranscriptBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000041 /* TranscriptBlock.swift */; };
+		B10100000000000000000043 /* PerfFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000042 /* PerfFixture.swift */; };
+		B10100000000000000000045 /* ScrollProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000044 /* ScrollProbe.swift */; };
+		B10100000000000000000047 /* MarkdownDocumentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000046 /* MarkdownDocumentCache.swift */; };
+		B20100000000000000000043 /* PerfFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000042 /* PerfFixture.swift */; };
 		B10100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
 		B10100000000000000000031 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000031 /* ComposerTextView.swift */; };
 		B10100000000000000000032 /* WorkspaceIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000032 /* WorkspaceIndex.swift */; };
@@ -73,7 +80,7 @@
 		B20100000000000000000028 /* OpenCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000028 /* OpenCode.swift */; };
 		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
-		BF10100000000000000000001 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* MarkdownUI */; };
+		BF10100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* SwiftStreamingMarkdown */; };
 		BF10200000000000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = PD10200000000000000000001 /* SwiftTerm */; };
 		B1010000000000000000002B /* AppModel+Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002B /* AppModel+Inspector.swift */; };
 		B1010000000000000000002C /* PaneTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002C /* PaneTabBar.swift */; };
@@ -111,8 +118,13 @@
 		F1010000000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
+		F20100000000000000000041 /* TranscriptPerfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPerfTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000002 /* ComposerTextViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextViewTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000012 /* ChatSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSession.swift; sourceTree = "<group>"; };
+		F10100000000000000000041 /* TranscriptBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBlock.swift; sourceTree = "<group>"; };
+		F10100000000000000000042 /* PerfFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfFixture.swift; sourceTree = "<group>"; };
+		F10100000000000000000044 /* ScrollProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollProbe.swift; sourceTree = "<group>"; };
+		F10100000000000000000046 /* MarkdownDocumentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocumentCache.swift; sourceTree = "<group>"; };
 		F10100000000000000000030 /* ComposerAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachment.swift; sourceTree = "<group>"; };
 		F10100000000000000000031 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		F10100000000000000000032 /* WorkspaceIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceIndex.swift; sourceTree = "<group>"; };
@@ -153,7 +165,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF10100000000000000000001 /* MarkdownUI in Frameworks */,
+				BF10100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */,
 				BF10200000000000000000001 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -187,6 +199,10 @@
 				F1010000000000000000001B /* AppModel+Runtime.swift */,
 				F1010000000000000000002B /* AppModel+Inspector.swift */,
 				F10100000000000000000012 /* ChatSession.swift */,
+				F10100000000000000000041 /* TranscriptBlock.swift */,
+				F10100000000000000000042 /* PerfFixture.swift */,
+				F10100000000000000000044 /* ScrollProbe.swift */,
+				F10100000000000000000046 /* MarkdownDocumentCache.swift */,
 				F10100000000000000000030 /* ComposerAttachment.swift */,
 				F10100000000000000000032 /* WorkspaceIndex.swift */,
 				F1010000000000000000000D /* SessionStore.swift */,
@@ -253,6 +269,7 @@
 			isa = PBXGroup;
 			children = (
 				F20100000000000000000001 /* ProtocolTests.swift */,
+				F20100000000000000000041 /* TranscriptPerfTests.swift */,
 				F20100000000000000000002 /* ComposerTextViewTests.swift */,
 			);
 			path = AurewaysTests;
@@ -292,7 +309,7 @@
 			);
 			name = Aureways;
 			packageProductDependencies = (
-				PD10100000000000000000001 /* MarkdownUI */,
+				PD10100000000000000000001 /* SwiftStreamingMarkdown */,
 				PD10200000000000000000001 /* SwiftTerm */,
 			);
 			productName = Aureways;
@@ -344,7 +361,7 @@
 			);
 			mainGroup = G10100000000000000000000;
 			packageReferences = (
-				PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */,
 				PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			productRefGroup = G10100000000000000000009 /* Products */;
@@ -388,6 +405,10 @@
 				B1010000000000000000000F /* SettingsView.swift in Sources */,
 				B10100000000000000000010 /* MarkdownBody.swift in Sources */,
 				B10100000000000000000012 /* ChatSession.swift in Sources */,
+				B10100000000000000000041 /* TranscriptBlock.swift in Sources */,
+				B10100000000000000000043 /* PerfFixture.swift in Sources */,
+				B10100000000000000000045 /* ScrollProbe.swift in Sources */,
+				B10100000000000000000047 /* MarkdownDocumentCache.swift in Sources */,
 				B10100000000000000000030 /* ComposerAttachment.swift in Sources */,
 				B10100000000000000000031 /* ComposerTextView.swift in Sources */,
 				B10100000000000000000032 /* WorkspaceIndex.swift in Sources */,
@@ -429,6 +450,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
+				B20100000000000000000042 /* TranscriptPerfTests.swift in Sources */,
 				B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */,
 				B20100000000000000000030 /* ComposerAttachment.swift in Sources */,
 				B20100000000000000000031 /* ComposerTextView.swift in Sources */,
@@ -438,6 +460,8 @@
 				B20100000000000000000007 /* Connection.swift in Sources */,
 				B2010000000000000000000D /* SessionStore.swift in Sources */,
 				B20100000000000000000012 /* ChatSession.swift in Sources */,
+				B20100000000000000000041 /* TranscriptBlock.swift in Sources */,
+				B20100000000000000000043 /* PerfFixture.swift in Sources */,
 				B2010000000000000000001C /* SessionModels.swift in Sources */,
 				B2010000000000000000001D /* UpdateModels.swift in Sources */,
 				B20100000000000000000020 /* Harness.swift in Sources */,
@@ -622,12 +646,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+		PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
+			repositoryURL = "https://github.com/microsoft/SwiftStreamingMarkdown";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.1;
+				kind = revision;
+				revision = 5f7c04e0558df6146f90d482edb62cb456986bda;
 			};
 		};
 		PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
@@ -641,10 +665,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		PD10100000000000000000001 /* MarkdownUI */ = {
+		PD10100000000000000000001 /* SwiftStreamingMarkdown */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PK10100000000000000000001 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
-			productName = MarkdownUI;
+			package = PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */;
+			productName = SwiftStreamingMarkdown;
 		};
 		PD10200000000000000000001 /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;

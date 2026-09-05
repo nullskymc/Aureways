@@ -20,8 +20,10 @@ endif
 .PHONY: build release test open clean
 
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
-# command-line builds do not stall on approval.
-XCBUILD_FLAGS := -skipPackagePluginValidation
+# command-line builds do not stall on approval. SwiftStreamingMarkdown pulls in
+# ordo-one/equatable, a swift-syntax macro package, which needs the macro
+# equivalent of that flag for the same reason.
+XCBUILD_FLAGS := -skipPackagePluginValidation -skipMacroValidation
 APP := $(DERIVED)/Build/Products/Debug/Aureways.app
 INSTALL_APP := /Applications/Aureways.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister

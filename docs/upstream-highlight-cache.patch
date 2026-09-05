@@ -1,0 +1,164 @@
+Cache syntax-highlight results and honour the fence's language tag
+
+Problem
+-------
+`CodeBlockView` re-highlights on every `.onAppear`, and `HighlightTaskManager`
+keeps no cache. In a virtualized transcript (`LazyVStack`) a code block is
+recycled every time it scrolls back on screen, so the same block is tokenized
+by highlight.js again and again.
+
+It also discards the fenced language. `CodeBlockView` holds `language` and puts
+it in the chrome label, but `updateAttributedString` calls the two-argument
+`attributedText(_:colors:)` overload, which uses `mode: .automatic` —
+highlight.js auto-detection across every bundled language.
+
+Measured on an M-series Mac (release build, HighlightSwift at 99c431b), a
+~20-line Swift block:
+
+    attributedText(_:colors:)            .automatic        median 16.6 ms
+    attributedText(_:language:colors:)   explicit "swift"  median  3.2 ms
+
+    50 blocks, serialized, .automatic                      median  518 ms
+    50 blocks, serialized, explicit language                median  116 ms
+
+So auto-detection costs 5.2x, and one block exceeds a 60 Hz frame budget.
+
+Fix
+---
+1. Forward `language` to the highlighter, falling back to `.automatic` when the
+   fence carries no tag.
+2. Cache results process-wide, keyed by (code, language, colors). Each
+   `CodeBlockView` owns its own `HighlightTaskManager` in a `@StateObject`, and
+   that state does not survive recycling, so the cache has to outlive the view.
+   Results are immutable for a given key, so this is safe.
+
+Uses the existing `@WithLock` wrapper rather than introducing new concurrency
+primitives, matching `AppAppearance` and `ParagraphViewCache`.
+
+--- a/Sources/MarkdownText/UI/HighlightTaskManager.swift
++++ b/Sources/MarkdownText/UI/HighlightTaskManager.swift
+@@ -6,43 +6,84 @@
+ import Foundation
+ import HighlightSwift
+
+ actor HighlightTaskManager: ObservableObject {
+   /// Shared Highlight instance to avoid creating multiple JSContext/HLJS instances.
+   /// Each Highlight() creates its own JSContext and evaluates highlight.min.js (~600KB).
+   /// When multiple CodeBlockViews render concurrently, N separate JSContexts cause
+   /// JavaScriptCore OOM crashes (COPILOT-IOS-3F9C, 3F7Z, 3FSQ).
+   private static let sharedHighlight = Highlight()
+
++  /// A highlight result is a pure function of (code, language, colors), and
++  /// tokenizing a 20-line block costs ~17 ms with auto-detection. A virtualized
++  /// transcript re-runs `CodeBlockView.onAppear` every time a block is recycled
++  /// back on screen, so without a cache that cost is paid again on every pass.
++  ///
++  /// The cache is static because each `CodeBlockView` owns its own task manager
++  /// in a `@StateObject`, and that state is destroyed when the view is recycled.
++  private struct CacheKey: Hashable {
++    let code: String
++    let language: String
++    let colors: HighlightColors
++  }
++
++  @WithLock
++  private static var cache: [CacheKey: AttributedString] = [:]
++  @WithLock
++  private static var cacheOrder: [CacheKey] = []
++
++  /// Bounded so a long session cannot pin every code block ever displayed.
++  private static let cacheLimit = 512
++
++  private static func cached(_ key: CacheKey) -> AttributedString? {
++    $cache.read { $0[key] }
++  }
++
++  private static func store(_ value: AttributedString, for key: CacheKey) {
++    let isNew = $cache.mutate { entries -> Bool in
++      entries.updateValue(value, forKey: key) == nil
++    }
++    guard isNew else { return }
++    let evicted = $cacheOrder.mutate { order -> CacheKey? in
++      order.append(key)
++      return order.count > cacheLimit ? order.removeFirst() : nil
++    }
++    if let evicted {
++      $cache.mutate { $0.removeValue(forKey: evicted) }
++    }
++  }
++
+   private var latestCode: String?
+   private var latestColors: HighlightColors?
++  private var latestLanguage: String = ""
+   private var isProcessing = false
+
+-  func enqueueCode(_ code: String, colors: HighlightColors, completion: @escaping (AttributedString) -> Void) {
++  func enqueueCode(
++    _ code: String,
++    language: String = "",
++    colors: HighlightColors,
++    completion: @escaping (AttributedString) -> Void
++  ) {
++    // A cache hit skips the JS round trip entirely, which is what makes
++    // scrolling back over already-seen code blocks free.
++    let key = CacheKey(code: code, language: language, colors: colors)
++    if let hit = Self.cached(key) {
++      Task { @MainActor in completion(hit) }
++      return
++    }
++
+     latestCode = code
+     latestColors = colors
++    latestLanguage = language
+
+     if !isProcessing {
+       Task {
+         await processQueue(completion: completion)
+       }
+     }
+   }
+
+   private func processQueue(completion: @escaping (AttributedString) -> Void) async {
+     guard !isProcessing else { return }
+
+     isProcessing = true
+
+     while let codeToProcess = latestCode, let colors = latestColors {
++      let language = latestLanguage
+       latestCode = nil
+
+-      if let result = try? await Self.sharedHighlight.attributedText(codeToProcess, colors: colors) {
++      // An explicit language is ~5x cheaper than auto-detection across every
++      // bundled language, and the fence usually carries one.
++      let result: AttributedString?
++      if language.isEmpty {
++        result = try? await Self.sharedHighlight.attributedText(codeToProcess, colors: colors)
++      } else {
++        result = try? await Self.sharedHighlight.attributedText(
++          codeToProcess, language: language, colors: colors
++        )
++          // An unrecognized alias throws; fall back rather than showing plain text.
++          ?? (try? await Self.sharedHighlight.attributedText(codeToProcess, colors: colors))
++      }
++
++      if let result {
++        Self.store(result, for: CacheKey(code: codeToProcess, language: language, colors: colors))
+         await MainActor.run {
+           completion(result)
+         }
+       }
+     }
+
+     isProcessing = false
+   }
+ }
+--- a/Sources/MarkdownText/UI/CodeBlockView.swift
++++ b/Sources/MarkdownText/UI/CodeBlockView.swift
+@@ -29,7 +29,7 @@
+   private func updateAttributedString(code: String, scheme: ColorScheme) async {
+     let colors = config.codeBlockConfig.theme.highlightColors(for: scheme)
+-    await taskManager.enqueueCode(code, colors: colors) { newAttributedString in
++    await taskManager.enqueueCode(code, language: language, colors: colors) { newAttributedString in
+       self.attributedString = newAttributedString
+     }
+   }

@@ -50,9 +50,14 @@ final class AppModel {
     var errorMessage: String?
     var customTitle = ""
     var customCommand = ""
+    var mcpServers: [McpServerConfig] = [] {
+        didSet { persistMcpServers() }
+    }
 
     var runtimes: [String: HarnessRuntime] = [:]
     let store: SessionStore?
+    let sessionUpdateInbox = SessionUpdateInbox()
+    var sessionUpdatePulse: DisplayPulse?
 
     var colorScheme: ColorScheme? {
         switch appearance {
@@ -115,6 +120,7 @@ final class AppModel {
             UserDefaults.standard.set(AntigravityHarness.id, forKey: "selectedAgentId")
         }
         store = try? SessionStore.applicationDefault()
+        mcpServers = Self.loadMcpServers()
 
         if let store, let cached = try? store.list() {
             var seenIDs = Set<String>()
@@ -136,6 +142,9 @@ final class AppModel {
         refreshAvailability()
         bootstrapWorkspaces(currentPath: initialWorkspace)
         updateWorkspaceBranch()
+        #if DEBUG
+        installPerfFixtureIfRequested()
+        #endif
         AppModel.shared = self
     }
 
@@ -166,4 +175,55 @@ final class AppModel {
         let data = agents.filter { !$0.builtIn }.compactMap { try? JSONEncoder().encode($0) }
         UserDefaults.standard.set(data, forKey: "customAgents")
     }
+
+    func persistMcpServers() {
+        if let data = try? JSONEncoder().encode(mcpServers) {
+            UserDefaults.standard.set(data, forKey: "mcpServers")
+        }
+    }
+
+    static func loadMcpServers() -> [McpServerConfig] {
+        guard let data = UserDefaults.standard.data(forKey: "mcpServers") else { return [] }
+        return (try? JSONDecoder().decode([McpServerConfig].self, from: data)) ?? []
+    }
+
+    func mcpPayload(for capabilities: AgentCapabilities) -> [JSONValue] {
+        mcpServers.compactMap { $0.json(capabilities: capabilities.mcpCapabilities) }
+    }
+
+    func extraWorkspaceRoots(besides cwd: String) -> [String] {
+        var seen = Set<String>([cwd])
+        var roots: [String] = []
+        for workspace in workspaces {
+            let path = workspace.path
+            guard !path.isEmpty, seen.insert(path).inserted else { continue }
+            roots.append(path)
+        }
+        return roots
+    }
+
+    func additionalDirectories(for runtime: HarnessRuntime, cwd: String) -> [String] {
+        guard runtime.capabilities.canAdditionalDirectories else { return [] }
+        return extraWorkspaceRoots(besides: cwd)
+    }
+
+    #if DEBUG
+    /// Adds a pre-filled, agent-free session so scrolling can be traced against
+    /// a fixed transcript. No-op unless `AUREWAYS_PERF_TURNS` is set.
+    /// See `PerfFixture` for the shape of the transcript.
+    func installPerfFixtureIfRequested() {
+        guard let turns = PerfFixture.requestedTurns, let agent = agents.first else { return }
+        let session = ChatSession(
+            agent: agent,
+            cwd: workspacePath,
+            title: "Perf fixture · \(turns) turns",
+            phase: .ready
+        )
+        session.items = PerfFixture.items(turns: turns)
+        session.activityRuns = PerfFixture.runs(for: session.items)
+        sessions.insert(session, at: 0)
+        selectedSessionID = session.id
+        NSLog("[perf] fixture session: %d turns, %d items", turns, session.items.count)
+    }
+    #endif
 }

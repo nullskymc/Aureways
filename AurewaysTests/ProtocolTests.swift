@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 final class ProtocolTests: XCTestCase {
@@ -80,13 +81,167 @@ final class ProtocolTests: XCTestCase {
         } else {
             XCTFail("expected fallback .other for malformed image")
         }
-        if case .other(let json) = try decode("""
+        if case .audio(let data, let mime) = try decode("""
         {"type":"audio","data":"QUJD","mimeType":"audio/wav"}
         """) {
-            XCTAssertEqual(json["type"]?.stringValue, "audio")
+            XCTAssertEqual(data, "QUJD")
+            XCTAssertEqual(mime, "audio/wav")
         } else {
-            XCTFail("expected fallback .other for audio")
+            XCTFail("expected audio block")
         }
+
+        let resource = try encoded(.resource(
+            uri: "file:///tmp/notes.md",
+            mimeType: "text/markdown",
+            text: "# hi",
+            blob: nil
+        ))
+        XCTAssertEqual(resource["type"]?.stringValue, "resource")
+        XCTAssertEqual(resource["resource"]?["uri"]?.stringValue, "file:///tmp/notes.md")
+        XCTAssertEqual(resource["resource"]?["text"]?.stringValue, "# hi")
+
+        if case .resource(let uri, let mime, let text, let blob) = try decode("""
+        {"type":"resource","resource":{"uri":"file:///tmp/notes.md","mimeType":"text/markdown","text":"# hi"}}
+        """) {
+            XCTAssertEqual(uri, "file:///tmp/notes.md")
+            XCTAssertEqual(mime, "text/markdown")
+            XCTAssertEqual(text, "# hi")
+            XCTAssertNil(blob)
+        } else {
+            XCTFail("expected resource block")
+        }
+    }
+
+    func testOutgoingMessageEmbedsTextFilesAndDropsOversizedImages() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let notes = directory.appendingPathComponent("notes.md")
+        try "# hello".write(to: notes, atomically: true, encoding: .utf8)
+
+        let message = OutgoingMessage(
+            text: "see this",
+            attachments: [
+                TranscriptAttachment(id: UUID(), kind: "file", name: "notes.md", path: notes.path, mimeType: "text/markdown", imageBase64: nil)
+            ]
+        )
+        let blocks = message.contentBlocks(promptCapabilities: PromptCapabilities(image: true, audio: false, embeddedContext: true))
+        XCTAssertEqual(blocks.count, 2)
+        if case .resource(_, let mime, let text, _) = blocks[1] {
+            XCTAssertEqual(mime, "text/markdown")
+            XCTAssertEqual(text, "# hello")
+        } else {
+            XCTFail("expected embedded resource")
+        }
+
+        let linked = message.contentBlocks(promptCapabilities: PromptCapabilities(image: true, audio: false, embeddedContext: false))
+        if case .resourceLink(let uri, let name) = linked[1] {
+            XCTAssertTrue(uri.contains("notes.md"))
+            XCTAssertEqual(name, "notes.md")
+        } else {
+            XCTFail("expected resource_link when embeddedContext is off")
+        }
+    }
+
+    func testMcpServerAndUsageDecoding() throws {
+        let stdio = McpServerConfig(name: "fs", command: "/usr/bin/mcp", arguments: ["--root", "/tmp"])
+        let payload = stdio.json(capabilities: McpCapabilities(http: false, sse: false))
+        XCTAssertEqual(payload?["name"]?.stringValue, "fs")
+        XCTAssertEqual(payload?["command"]?.stringValue, "/usr/bin/mcp")
+        XCTAssertNil(payload?["type"])
+
+        let http = McpServerConfig(name: "remote", transport: .http, url: "https://example.test")
+        XCTAssertNil(http.json(capabilities: McpCapabilities(http: false, sse: false)))
+        XCTAssertEqual(http.json(capabilities: McpCapabilities(http: true, sse: false))?["type"]?.stringValue, "http")
+
+        let request = NewSessionRequest(
+            cwd: "/tmp/project",
+            mcpServers: [stdio.json(capabilities: nil)!],
+            additionalDirectories: ["/tmp/shared"]
+        )
+        let encoded = try JSONValue.decode(from: JSONEncoder.acp.encode(request))
+        XCTAssertEqual(encoded["additionalDirectories"]?.arrayValue?.compactMap(\.stringValue), ["/tmp/shared"])
+        XCTAssertEqual(encoded["mcpServers"]?.arrayValue?.count, 1)
+
+        let json = try JSONValue.decode(from: """
+        {"sessionId":"s1","update":{"sessionUpdate":"usage_update","used":1200,"size":8000,"cost":{"amount":0.02,"currency":"USD"}}}
+        """)
+        let note = SessionNotification(json: json)
+        if case .usage(let usage) = note?.update {
+            XCTAssertEqual(usage.used, 1200)
+            XCTAssertEqual(usage.size, 8000)
+            XCTAssertEqual(usage.costAmount, 0.02)
+            XCTAssertEqual(usage.costCurrency, "USD")
+        } else {
+            XCTFail("expected usage_update")
+        }
+
+        let tool = try JSONValue.decode(from: """
+        {"toolCallId":"c1","title":"Edit","kind":"edit","status":"completed","locations":[{"path":"/tmp/a.swift","line":12}],"content":[{"type":"diff","path":"/tmp/a.swift","oldText":"a","newText":"b"}]}
+        """)
+        let call = ToolCallView(json: tool)
+        XCTAssertEqual(call.locations.first?.path, "/tmp/a.swift")
+        XCTAssertEqual(call.locations.first?.line, 12)
+        XCTAssertEqual(call.diffs.first?.path, "/tmp/a.swift")
+        XCTAssertEqual(call.diffs.first?.newText, "b")
+    }
+
+    @MainActor
+    func testUsageUpdateDoesNotRewriteTranscript() {
+        let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        session.appendUser("hi")
+        let revision = session.transcriptRevision
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .usage(SessionUsage(json: .object(["used": .number(10), "size": .number(100)]))!)
+        ))
+        XCTAssertEqual(session.items.count, 1)
+        XCTAssertEqual(session.transcriptRevision, revision)
+        XCTAssertEqual(session.usage?.used, 10)
+        XCTAssertEqual(session.usage?.size, 100)
+    }
+
+    func testSessionUpdateChunkCoalescing() {
+        let notes = [
+            SessionNotification(sessionId: "s1", update: .agentMessageChunk(.text("Hel"))),
+            SessionNotification(sessionId: "s1", update: .agentMessageChunk(.text("lo "))),
+            SessionNotification(sessionId: "s1", update: .agentMessageChunk(.text("world"))),
+            SessionNotification(sessionId: "s1", update: .agentThoughtChunk(.text("hmm"))),
+            SessionNotification(sessionId: "s1", update: .agentMessageChunk(.text("!"))),
+        ]
+        let merged = SessionNotification.coalesced(notes)
+        XCTAssertEqual(merged.count, 3)
+        if case .agentMessageChunk(let content) = merged[0].update {
+            XCTAssertEqual(content.text, "Hello world")
+        } else {
+            XCTFail("expected merged agent text")
+        }
+        if case .agentThoughtChunk(let content) = merged[1].update {
+            XCTAssertEqual(content.text, "hmm")
+        } else {
+            XCTFail("expected thought chunk")
+        }
+        if case .agentMessageChunk(let content) = merged[2].update {
+            XCTAssertEqual(content.text, "!")
+        } else {
+            XCTFail("expected trailing agent chunk")
+        }
+    }
+
+    func testTranscriptImageStoreDecodesOnce() {
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        let attachment = TranscriptAttachment(
+            id: UUID(),
+            kind: "image",
+            name: "dot.png",
+            path: nil,
+            mimeType: "image/png",
+            imageBase64: png
+        )
+        let first = TranscriptImageStore.prefetch(attachment)
+        XCTAssertNotNil(first)
+        let cached = TranscriptImageStore.cached(attachment)
+        XCTAssertTrue(cached === first)
     }
 
     func testPermissionEncoding() throws {
@@ -414,13 +569,17 @@ final class ProtocolTests: XCTestCase {
 
     func testSessionCapabilitiesDecoding() throws {
         let json = """
-        {"loadSession":true,"sessionCapabilities":{"list":{},"delete":{}}}
+        {"loadSession":true,"mcpCapabilities":{"http":true,"sse":false},"sessionCapabilities":{"list":{},"delete":{},"additionalDirectories":{}},"promptCapabilities":{"image":true,"embeddedContext":true}}
         """
         let capabilities = try JSONDecoder.acp.decode(AgentCapabilities.self, from: Data(json.utf8))
         XCTAssertTrue(capabilities.canLoad)
         XCTAssertTrue(capabilities.canList)
         XCTAssertTrue(capabilities.canDelete)
+        XCTAssertTrue(capabilities.canAdditionalDirectories)
         XCTAssertTrue(capabilities.canPersistHistory)
+        XCTAssertEqual(capabilities.mcpCapabilities?.http, true)
+        XCTAssertEqual(capabilities.mcpCapabilities?.sse, false)
+        XCTAssertEqual(capabilities.promptCapabilities?.allowsEmbeddedContext, true)
     }
 
     func testHistoryAgentListLoadDelete() async throws {

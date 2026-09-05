@@ -58,16 +58,19 @@ struct InitializeRequest: Encodable, Sendable {
 struct SessionCapabilities: Decodable, Sendable, Equatable {
     var list = false
     var delete = false
+    var additionalDirectories = false
 
-    init(list: Bool = false, delete: Bool = false) {
+    init(list: Bool = false, delete: Bool = false, additionalDirectories: Bool = false) {
         self.list = list
         self.delete = delete
+        self.additionalDirectories = additionalDirectories
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
         list = Self.isEnabled(container, "list")
         delete = Self.isEnabled(container, "delete")
+        additionalDirectories = Self.isEnabled(container, "additionalDirectories")
     }
 
     private static func isEnabled(_ container: KeyedDecodingContainer<DynamicCodingKey>, _ key: String) -> Bool {
@@ -79,23 +82,43 @@ struct SessionCapabilities: Decodable, Sendable, Equatable {
     }
 }
 
+struct McpCapabilities: Decodable, Sendable, Equatable {
+    var http = false
+    var sse = false
+
+    init(http: Bool = false, sse: Bool = false) {
+        self.http = http
+        self.sse = sse
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        http = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("http")) ?? false
+        sse = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("sse")) ?? false
+    }
+}
+
 struct AgentCapabilities: Decodable, Sendable, Equatable {
     var loadSession = false
     var promptCapabilities: PromptCapabilities?
+    var mcpCapabilities: McpCapabilities?
     var sessionCapabilities = SessionCapabilities()
 
     var canLoad: Bool { loadSession }
     var canList: Bool { sessionCapabilities.list }
     var canDelete: Bool { sessionCapabilities.delete }
+    var canAdditionalDirectories: Bool { sessionCapabilities.additionalDirectories }
     var canPersistHistory: Bool { canLoad || canList }
 
     init(
         loadSession: Bool = false,
         promptCapabilities: PromptCapabilities? = nil,
+        mcpCapabilities: McpCapabilities? = nil,
         sessionCapabilities: SessionCapabilities = SessionCapabilities()
     ) {
         self.loadSession = loadSession
         self.promptCapabilities = promptCapabilities
+        self.mcpCapabilities = mcpCapabilities
         self.sessionCapabilities = sessionCapabilities
     }
 
@@ -103,6 +126,7 @@ struct AgentCapabilities: Decodable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
         loadSession = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("loadSession")) ?? false
         promptCapabilities = try container.decodeIfPresent(PromptCapabilities.self, forKey: DynamicCodingKey("promptCapabilities"))
+        mcpCapabilities = try container.decodeIfPresent(McpCapabilities.self, forKey: DynamicCodingKey("mcpCapabilities"))
         sessionCapabilities = try container.decodeIfPresent(SessionCapabilities.self, forKey: DynamicCodingKey("sessionCapabilities")) ?? SessionCapabilities()
     }
 }
@@ -111,6 +135,16 @@ struct PromptCapabilities: Decodable, Sendable, Equatable {
     var image: Bool?
     var audio: Bool?
     var embeddedContext: Bool?
+
+    var allowsImage: Bool { image != false }
+    var allowsAudio: Bool { audio == true }
+    var allowsEmbeddedContext: Bool { embeddedContext != false }
+
+    init(image: Bool? = nil, audio: Bool? = nil, embeddedContext: Bool? = nil) {
+        self.image = image
+        self.audio = audio
+        self.embeddedContext = embeddedContext
+    }
 }
 
 struct AuthMethod: Decodable, Sendable, Identifiable, Equatable {

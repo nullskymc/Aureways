@@ -37,11 +37,31 @@
 - **居中黄金排版**：对话流与空白页均约束在 **`maxWidth: 780pt` 居中文本容器** 内，消除宽屏状态下横向撑满的空旷感。
 - **消息卡片轻量化**：
   - **用户消息**：右侧对齐的现代连续曲率气泡（`cornerRadius: 16`），自适应包裹文字。
-  - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧由 [MarkdownUI](https://github.com/gonzalezreal/swift-markdown-ui) 渲染标题、列表、围栏代码和表格。
+  - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧由 [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown) 渲染标题、列表、围栏代码和表格。
   - **思考过程**：默认折叠成一行「思考」。
   - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起，点开才是短文件名列表，再点一行才看参数/输出。不再每条一张 COMPLETED 大卡片。
   - **计划**：一行摘要 + 可展开步骤。
 - **空白落地页 (`EmptyWorkspaceLanding`)**：A 轨道平面标志（浅色蓝标 / 深色白标，`BrandMark`）叠在 Orbit Blue 液态漫射光斑上，居中引导用户输入。Dock 用的分层 squircle 图标不进这块画布。
+
+#### 转录的渲染与虚拟化
+
+长会话滚动的成本必须与**可见内容**成正比，不能与转录总长度成正比。这一节的每条约束都是为此存在的，改动前请先读。
+
+- **一律 `LazyVStack`**，配 `.scrollTargetLayout()`。曾经在非流式时退回 eager `VStack`，因为库的 `MarkdownView` 在异步解析落地前高度是 0，虚拟化的 stack 会把整段历史当成空的、进会话一片空白。代价是每帧布局开销随块数线性增长：实测同一 build 下，单步滚动成本从 90 blocks 的 2.25 ms 涨到 300 blocks 的 23.02 ms，单核跑满。
+- **解析结果由 `MarkdownDocumentCache` 持有，不由视图持有。** `MarkdownBody` 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（视图内自己解析），并在 `init` 里同步查缓存，所以块一放上去就有真实高度——上面那条虚拟化的前提就靠这个成立。会话打开和每回合结束时后台预热（300 条约 54 ms）。
+- **位置跟随不读绝对偏移。** 用 `ScrollPosition` + `scrollTo(edge: .bottom)`，判据是 `onScrollTargetVisibilityChange` 报告的「最后一块是否可见」。虚拟化下未放置部分的高度是估算值，`contentOffset` / `contentSize` 会随估算漂移，拿它做阈值会不稳（这也是 Apple 在 WWDC26 "Dive into lazy stacks and scrolling with SwiftUI" 里明确点出的反模式）。底部留白用 `.safeAreaPadding`，这样 `scrollTo(edge:)` 认安全区、最后一条消息停在输入卡上方。
+- **写 `@State` 前先比较。** 滚动相关的回调每秒触发多次，无条件写状态会让 `TranscriptView.body` 跟着重算，连带 `TranscriptBlock.group` 重跑一遍整段历史。
+- **超长文本先在字符串层面截断再交给 `Text`。** `lineLimit` 只限制显示行数，`Text` 仍会把整个字符串排版；工具的输入 / 输出动辄是整个文件（见 `ToolViews.swift` 的 `clamped`）。
+- **回归测量。** `AurewaysTests/TranscriptPerfTests.swift` 是微基准（`make test 2>&1 | grep 'PERF '`）；`ScrollProbe` + `PerfFixture` 提供固定转录下的滚动探针，两者都只编进 Debug：
+
+  ```
+  AUREWAYS_PERF_TURNS=50 AUREWAYS_PERF_SCROLL=1 \
+    .derived/Build/Products/Debug/Aureways.app/Contents/MacOS/Aureways
+  ```
+
+  探针是「固定工作量、测时间」：走固定步数，每步强制同步布局与绘制并计时。不要改回按定时器测帧间隔——窗口被遮挡或失焦时绘制会被节流，慢的配置反而测出来快。绝对值运行间可差数倍，只信同一 build 内交替跑出来的对比。
+
+- **已知未解决**：库的 `CodeBlockView` 每次 `onAppear` 都重跑一次 highlight.js，无缓存，且丢掉围栏的语言标签走全语言自动探测（16.6 ms/块，传语言只需 3.2 ms）。只改颜色不改块高，所以不造成布局抖动，代价是 CPU 与续航。补丁见 `docs/upstream-highlight-cache.patch`，需要 fork 或 vendor 才能应用。
 
 ### 2.3 悬浮输入卡片 (ComposerCard)
 - **居中悬浮卡片 (`maxWidth: 780pt`)**：自然悬浮于主画布下方。
@@ -88,7 +108,11 @@
 | --- | --- |
 | `Aureways/Views/RootView.swift` | 根容器 `NavigationSplitView`、统一工具栏、快捷键路由 |
 | `Aureways/Views/Sidebar.swift` | 新对话、工作区树、会话状态、底栏偏好设置 |
-| `Aureways/Views/Transcript.swift` | 居中对话流容器、轻量化消息气泡、思考折叠块 |
+| `Aureways/Views/Transcript.swift` | 居中对话流容器（虚拟化 + 位置跟随），见 §2.2「转录的渲染与虚拟化」 |
+| `Aureways/Views/TranscriptBlocks.swift` | 消息气泡、活动卡、思考折叠块等行视图 |
+| `Aureways/TranscriptBlock.swift` | `TranscriptItem` → 渲染行的分组（纯数据，无视图依赖，故可进测试目标） |
+| `Aureways/Views/MarkdownBody.swift` | Agent 正文渲染与画布 Markdown 配置（`AurewaysMarkdown`） |
+| `Aureways/MarkdownDocumentCache.swift` | 已解析 Markdown 文档缓存与后台预热 |
 | `Aureways/Views/Composer.swift` | 居中悬浮输入框、`+` 菜单（文件 / 工作区 / 指令）、会话模型/模式透传、权限切换 |
 | `Aureways/Views/Palette.swift` | 色彩、A 轨道平面标志 `BrandMark`、设置页 `AppIconImage` |
 | `Aureways/Views/InspectorViews.swift` | 右侧面板容器：标签页分发、保存冲突/关闭确认弹窗、信息标签 |

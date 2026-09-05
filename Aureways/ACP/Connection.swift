@@ -89,16 +89,31 @@ actor ACPConnection {
         await fileOps.addWorkspace(path)
     }
 
-    func newSession(cwd: String, meta: [String: JSONValue]? = nil) async throws -> NewSessionResponse {
+    func newSession(
+        cwd: String,
+        additionalDirectories: [String] = [],
+        mcpServers: [JSONValue] = [],
+        meta: [String: JSONValue]? = nil
+    ) async throws -> NewSessionResponse {
         var requestBody = NewSessionRequest(cwd: cwd)
+        requestBody.additionalDirectories = additionalDirectories
+        requestBody.mcpServers = mcpServers
         requestBody.meta = meta
         let result = try await request("session/new", params: encodeJSON(requestBody))
         let data = try result.encode()
         return try JSONDecoder.acp.decode(NewSessionResponse.self, from: data)
     }
 
-    func loadSession(sessionId: String, cwd: String, meta: [String: JSONValue]? = nil) async throws -> LoadSessionResponse {
+    func loadSession(
+        sessionId: String,
+        cwd: String,
+        additionalDirectories: [String] = [],
+        mcpServers: [JSONValue] = [],
+        meta: [String: JSONValue]? = nil
+    ) async throws -> LoadSessionResponse {
         var requestBody = LoadSessionRequest(sessionId: sessionId, cwd: cwd)
+        requestBody.additionalDirectories = additionalDirectories
+        requestBody.mcpServers = mcpServers
         requestBody.meta = meta
         let result = try await request("session/load", params: encodeJSON(requestBody))
         let data = try result.encode()

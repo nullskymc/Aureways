@@ -146,6 +146,16 @@ struct InfoInspectorTab: View {
                         if let mode = s.currentModeId, !mode.isEmpty {
                             infoRow(title: "当前模式", value: s.modeChoices.first(where: { $0.id == mode })?.name ?? mode)
                         }
+                        if let usage = s.usage {
+                            infoRow(title: "上下文", value: usageLabel(usage))
+                            usageBar(usage)
+                        }
+                        if !s.reportedMcpServers.isEmpty {
+                            infoRow(
+                                title: "MCP",
+                                value: s.reportedMcpServers.map(\.name).joined(separator: "、")
+                            )
+                        }
                     }
                 }
                 .padding(12)
@@ -202,6 +212,29 @@ struct InfoInspectorTab: View {
                     .font(.system(size: 12, design: .monospaced))
             }
         }
+    }
+
+    private func usageLabel(_ usage: SessionUsage) -> String {
+        var parts = ["\(usage.used) / \(usage.size)"]
+        if let amount = usage.costAmount {
+            let currency = usage.costCurrency ?? ""
+            parts.append(String(format: "%.4f %@", amount, currency).trimmingCharacters(in: .whitespaces))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func usageBar(_ usage: SessionUsage) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.badgeBg)
+                Capsule()
+                    .fill(usage.percent > 0.9 ? Color.red : Palette.accent)
+                    .frame(width: max(4, geo.size.width * usage.percent))
+            }
+        }
+        .frame(height: 4)
+        .padding(.top, 2)
     }
 
     @ViewBuilder

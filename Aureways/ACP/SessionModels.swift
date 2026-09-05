@@ -1,5 +1,129 @@
 import Foundation
 
+struct McpServerConfig: Codable, Identifiable, Equatable, Sendable {
+    enum Transport: String, Codable, CaseIterable, Sendable {
+        case stdio
+        case http
+        case sse
+    }
+
+    var id: UUID
+    var name: String
+    var transport: Transport
+    var command: String
+    var arguments: [String]
+    var url: String
+    var enabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        transport: Transport = .stdio,
+        command: String = "",
+        arguments: [String] = [],
+        url: String = "",
+        enabled: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.transport = transport
+        self.command = command
+        self.arguments = arguments
+        self.url = url
+        self.enabled = enabled
+    }
+
+    init?(json: JSONValue) {
+        let type = json["type"]?.stringValue?.lowercased()
+        let command = json["command"]?.stringValue ?? ""
+        let url = json["url"]?.stringValue ?? ""
+        let name = json["name"]?.stringValue ?? ""
+        guard !name.isEmpty else { return nil }
+        let transport: Transport
+        if type == "http" || (!url.isEmpty && command.isEmpty && type != "stdio") {
+            transport = type == "sse" ? .sse : .http
+        } else if type == "sse" {
+            transport = .sse
+        } else {
+            transport = .stdio
+        }
+        self.init(
+            name: name,
+            transport: transport,
+            command: command,
+            arguments: json["args"]?.arrayValue?.compactMap(\.stringValue) ?? [],
+            url: url,
+            enabled: true
+        )
+    }
+
+    var summary: String {
+        switch transport {
+        case .stdio:
+            return ([command] + arguments).filter { !$0.isEmpty }.joined(separator: " ")
+        case .http, .sse:
+            return url
+        }
+    }
+
+    func json(capabilities: McpCapabilities?) -> JSONValue? {
+        guard enabled, !name.isEmpty else { return nil }
+        switch transport {
+        case .stdio:
+            guard !command.isEmpty else { return nil }
+            return .object([
+                "name": .string(name),
+                "command": .string(command),
+                "args": .array(arguments.map(JSONValue.string)),
+                "env": .array([]),
+            ])
+        case .http:
+            guard capabilities?.http == true, !url.isEmpty else { return nil }
+            return .object([
+                "type": .string("http"),
+                "name": .string(name),
+                "url": .string(url),
+                "headers": .array([]),
+            ])
+        case .sse:
+            guard capabilities?.sse == true, !url.isEmpty else { return nil }
+            return .object([
+                "type": .string("sse"),
+                "name": .string(name),
+                "url": .string(url),
+                "headers": .array([]),
+            ])
+        }
+    }
+}
+
+struct SessionUsage: Equatable, Sendable {
+    var used: Int
+    var size: Int
+    var costAmount: Double?
+    var costCurrency: String?
+
+    var percent: Double {
+        guard size > 0 else { return 0 }
+        return min(1, Double(used) / Double(size))
+    }
+
+    init?(json: JSONValue) {
+        let used = json["used"]?.int64Value.map(Int.init)
+            ?? json["usedTokens"]?.int64Value.map(Int.init)
+        let size = json["size"]?.int64Value.map(Int.init)
+            ?? json["sizeTokens"]?.int64Value.map(Int.init)
+            ?? json["contextWindow"]?.int64Value.map(Int.init)
+        guard let used, let size else { return nil }
+        self.used = used
+        self.size = size
+        if case .number(let value) = json["cost"]?["amount"] {
+            costAmount = value
+        }
+        costCurrency = json["cost"]?["currency"]?.stringValue
+    }
+}
+
 struct NewSessionRequest: Encodable, Sendable {
     var cwd: String
     var mcpServers: [JSONValue] = []
@@ -102,6 +226,7 @@ struct NewSessionResponse: Decodable, Sendable {
     var sessionId: String
     var modes: SessionModeState?
     var configOptions: [SessionConfigOption]
+    var mcpServers: [McpServerConfig]
 
     init(from decoder: Decoder) throws {
         let json = try JSONValue(from: decoder)
@@ -111,6 +236,7 @@ struct NewSessionResponse: Decodable, Sendable {
         self.sessionId = sessionId
         modes = json["modes"].flatMap { SessionModeState(json: $0) }
         configOptions = json["configOptions"]?.arrayValue?.compactMap(SessionConfigOption.init(json:)) ?? []
+        mcpServers = json["mcpServers"]?.arrayValue?.compactMap(McpServerConfig.init(json:)) ?? []
     }
 }
 
@@ -147,12 +273,14 @@ struct LoadSessionResponse: Decodable, Sendable {
     var sessionId: String?
     var modes: SessionModeState?
     var configOptions: [SessionConfigOption]
+    var mcpServers: [McpServerConfig]
 
     init(from decoder: Decoder) throws {
         let json = try JSONValue(from: decoder)
         sessionId = json["sessionId"]?.stringValue
         modes = json["modes"].flatMap { SessionModeState(json: $0) }
         configOptions = json["configOptions"]?.arrayValue?.compactMap(SessionConfigOption.init(json:)) ?? []
+        mcpServers = json["mcpServers"]?.arrayValue?.compactMap(McpServerConfig.init(json:)) ?? []
     }
 }
 
@@ -178,6 +306,22 @@ struct SessionListItem: Decodable, Sendable, Equatable {
     var title: String?
     var updatedAt: String?
     var createdAt: String?
+    var mcpServers: [McpServerConfig]
+    var additionalDirectories: [String]
+
+    init(from decoder: Decoder) throws {
+        let json = try JSONValue(from: decoder)
+        guard let sessionId = json["sessionId"]?.stringValue, !sessionId.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "missing sessionId"))
+        }
+        self.sessionId = sessionId
+        cwd = json["cwd"]?.stringValue
+        title = json["title"]?.stringValue
+        updatedAt = json["updatedAt"]?.stringValue
+        createdAt = json["createdAt"]?.stringValue
+        mcpServers = json["mcpServers"]?.arrayValue?.compactMap(McpServerConfig.init(json:)) ?? []
+        additionalDirectories = json["additionalDirectories"]?.arrayValue?.compactMap(\.stringValue) ?? []
+    }
 }
 
 struct ListSessionsResponse: Decodable, Sendable {

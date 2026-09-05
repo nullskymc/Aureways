@@ -103,6 +103,8 @@ final class ChatSession: Identifiable {
     var isReplaying = false
     var configOptions: [SessionConfigOption] = []
     var modes: SessionModeState?
+    var usage: SessionUsage?
+    var reportedMcpServers: [McpServerConfig] = []
     var activityRuns: [UUID: ActivityRun] = [:]
     private var currentRunID: UUID?
     private var currentUserMessageId: String?
@@ -131,6 +133,15 @@ final class ChatSession: Identifiable {
         configOptions.first(where: \.isModel)
     }
 
+    /// 走 Markdown 渲染的正文（只有 agent 消息；思考 / 工具输出是明文）。
+    /// `MarkdownDocumentCache` 预热用这个列表。
+    var markdownSources: [String] {
+        items.compactMap {
+            if case .agent(_, let text) = $0, !text.isEmpty { return text }
+            return nil
+        }
+    }
+
     init(agent: AgentProfile, cwd: String, title: String? = nil, acpSessionId: String? = nil, createdAt: Date = Date(), phase: SessionPhase = .connecting) {
         self.agent = agent
         self.cwd = cwd
@@ -142,6 +153,9 @@ final class ChatSession: Identifiable {
 
     func appendUser(_ text: String, attachments: [TranscriptAttachment] = []) {
         currentUserMessageId = nil
+        for attachment in attachments where attachment.kind == "image" {
+            TranscriptImageStore.prefetch(attachment)
+        }
         items.append(.user(UUID(), text, attachments))
         if !isReplaying, SessionTitle.isPlaceholder(title) {
             let source = text.isEmpty ? (attachments.first?.name ?? text) : text
@@ -151,27 +165,22 @@ final class ChatSession: Identifiable {
     }
 
     func apply(_ notification: SessionNotification) {
+        var visual = false
         switch notification.update {
         case .agentMessageChunk(let content):
             currentUserMessageId = nil
-            if case .image(let data, let mimeType, let uri) = content {
-                if let uri, !uri.isEmpty {
-                    appendText("\n\n![\(URL(string: uri)?.lastPathComponent ?? "image")](\(uri))\n\n", asThought: false)
-                } else if !data.isEmpty {
-                    appendText("\n\n![image](data:\(mimeType);base64,\(data))\n\n", asThought: false)
-                }
-            } else if case .resourceLink(let uri, let name) = content {
-                appendText("[\(name)](\(uri))", asThought: false)
-            } else {
-                appendText(content.text ?? "", asThought: false)
-            }
+            appendAgentContent(content)
+            visual = true
         case .agentThoughtChunk(let content):
             appendText(content.text ?? "", asThought: true)
+            visual = true
         case .userMessageChunk(let content):
             applyUserChunk(content, messageId: notification.messageId)
+            visual = true
         case .toolCall(let call):
             currentUserMessageId = nil
             appendTool(call)
+            visual = true
         case .toolCallUpdate(let call):
             currentUserMessageId = nil
             if let index = items.lastIndex(where: {
@@ -185,6 +194,7 @@ final class ChatSession: Identifiable {
             } else {
                 appendTool(call)
             }
+            visual = true
         case .plan(let entries):
             currentUserMessageId = nil
             if let index = items.lastIndex(where: { if case .plan = $0 { return true }; return false }) {
@@ -196,6 +206,7 @@ final class ChatSession: Identifiable {
                 beginRun(id)
                 items.append(.plan(id, entries))
             }
+            visual = true
         case .availableCommands(let commands):
             availableCommands = commands
         case .sessionInfo(let title) where !title.isEmpty:
@@ -210,13 +221,45 @@ final class ChatSession: Identifiable {
             }
             if !isReplaying {
                 items.append(.status(UUID(), "Mode: \(mode)"))
+                visual = true
             }
         case .configOption(let id, let value) where !id.isEmpty:
             applyConfigOption(id: id, value: value)
+        case .usage(let usage):
+            self.usage = usage
         default:
             break
         }
-        transcriptRevision += 1
+        if visual {
+            transcriptRevision += 1
+        }
+    }
+
+    /// Agent 图片不要把 base64 写进 Markdown：流式重解析会把整段历史拖垮。
+    private func appendAgentContent(_ content: ContentBlock) {
+        switch content {
+        case .image(_, _, let uri):
+            if let uri, !uri.isEmpty {
+                let name = URL(string: uri)?.lastPathComponent ?? "image"
+                appendText("\n\n![\(name)](\(uri))\n\n", asThought: false)
+            } else {
+                appendText("\n\n(图片)\n\n", asThought: false)
+            }
+        case .resourceLink(let uri, let name):
+            appendText("[\(name)](\(uri))", asThought: false)
+        case .resource(let uri, _, let text, _):
+            if let text, !text.isEmpty {
+                appendText(text, asThought: false)
+            } else if !uri.isEmpty {
+                appendText(uri, asThought: false)
+            }
+        case .audio:
+            appendText("\n\n(音频)\n\n", asThought: false)
+        case .text(let value):
+            appendText(value, asThought: false)
+        case .other:
+            appendText(content.text ?? "", asThought: false)
+        }
     }
 
     func waitForPermission(_ prompt: PermissionPrompt) async -> PermissionDecision {
@@ -295,10 +338,18 @@ final class ChatSession: Identifiable {
         if changed { transcriptRevision += 1 }
     }
 
-    func applySetup(sessionId: String, modes: SessionModeState?, configOptions: [SessionConfigOption]) {
+    func applySetup(
+        sessionId: String,
+        modes: SessionModeState?,
+        configOptions: [SessionConfigOption],
+        mcpServers: [McpServerConfig] = []
+    ) {
         acpSessionId = sessionId
         self.modes = modes
         self.configOptions = configOptions
+        if !mcpServers.isEmpty {
+            reportedMcpServers = mcpServers
+        }
     }
 
     func applyConfigOption(id: String, value: JSONValue) {
@@ -315,6 +366,8 @@ final class ChatSession: Identifiable {
         activityRuns = [:]
         currentRunID = nil
         currentUserMessageId = nil
+        usage = nil
+        reportedMcpServers = []
         transcriptRevision += 1
     }
 
@@ -386,6 +439,7 @@ final class ChatSession: Identifiable {
                 }
             }
             if let attachment, !isDuplicateAttachment(attachment, in: existingAttachments) {
+                if attachment.kind == "image" { TranscriptImageStore.prefetch(attachment) }
                 existingAttachments.append(attachment)
             }
             items[items.count - 1] = .user(id, updatedText, existingAttachments)
