@@ -6,7 +6,7 @@
 
 **A native macOS client for agentic coding.** A SwiftUI app — not a web view, not an Electron shell. Pick a workspace, talk to an agent that's already installed on your Mac, and let it edit files and run terminals in a native window.
 
-[![Release](https://github.com/nullskymc/aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/aureways/actions/workflows/release.yml)
+[![Release](https://github.com/nullskymc/Aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/Aureways/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [中文说明](README.zh-CN.md) · [Documentation](docs/README.md)
@@ -52,7 +52,7 @@ Install and sign in to the matching CLI first. Login and API keys live in each v
 
 ## Getting started
 
-**Install** — grab the `.dmg` from [Releases](https://github.com/nullskymc/aureways/releases) and drag `Aureways.app` into `Applications`. Builds are ad-hoc signed and not notarized; if Gatekeeper blocks first launch:
+**Install** — grab the `.dmg` from [Releases](https://github.com/nullskymc/Aureways/releases) and drag `Aureways.app` into `Applications`. Builds are ad-hoc signed and not notarized; if Gatekeeper blocks first launch:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app

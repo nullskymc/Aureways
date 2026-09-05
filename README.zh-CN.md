@@ -6,7 +6,7 @@
 
 **面向 agentic coding 的 macOS 原生客户端。** 用 SwiftUI 写成的 `.app`——不是网页，也不是套壳。选定工作区，在系统窗口里对话、改文件、开终端，让 agent 干活。
 
-[![Release](https://github.com/nullskymc/aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/aureways/actions/workflows/release.yml)
+[![Release](https://github.com/nullskymc/Aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/Aureways/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [English](README.md) · [文档目录](docs/README.md)
@@ -52,7 +52,7 @@
 
 ## 运行
 
-**安装**——从 [Releases](https://github.com/nullskymc/aureways/releases) 下载 `.dmg`，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证；首次启动若被 Gatekeeper 拦截：
+**安装**——从 [Releases](https://github.com/nullskymc/Aureways/releases) 下载 `.dmg`，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证；首次启动若被 Gatekeeper 拦截：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app
