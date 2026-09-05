@@ -296,11 +296,36 @@ extension AppModel {
                     if let option = prompt.options.first(where: \.isAllow) ?? prompt.options.first {
                         return .selected(option.optionId)
                     }
+                    // Auto-approve is on but the request carried no options we can
+                    // pick. Denying silently here is indistinguishable from the
+                    // tool being broken, so say so.
+                    await MainActor.run {
+                        bridge.model?.appendLog(
+                            agentId: agentId,
+                            line: "✗ permission auto-denied: request carried no options (\(prompt.title))"
+                        )
+                    }
                     return .cancelled
                 }
                 guard let session = await MainActor.run(body: {
                     bridge.model?.session(agentId: agentId, acpSessionId: prompt.sessionId)
-                }) else { return .cancelled }
+                }) else {
+                    // No session matched the id the agent used, so the prompt can
+                    // never reach the UI and the turn would be denied without a
+                    // trace. `acpSessionId` is reassigned from what session/load
+                    // returns, so a mismatch here is the likely cause.
+                    await MainActor.run {
+                        let known = bridge.model?.sessions
+                            .filter { $0.agent.id == agentId }
+                            .map { $0.acpSessionId ?? "nil" }
+                            .joined(separator: ", ") ?? ""
+                        bridge.model?.appendLog(
+                            agentId: agentId,
+                            line: "✗ permission auto-denied: no session for id \(prompt.sessionId) (known: \(known))"
+                        )
+                    }
+                    return .cancelled
+                }
                 return await session.waitForPermission(prompt)
             },
             onLog: { line in

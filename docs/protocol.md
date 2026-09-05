@@ -26,11 +26,29 @@
 | `session/request_permission` | 有 | 弹窗或自动选 allow |
 | `fs/read_text_file` | 有 | 限制在会话 `cwd` 下 |
 | `fs/write_text_file` | 有 | 限制在会话 `cwd` 下 |
-| `terminal/create` | 有 | 非 PTY |
+| `terminal/create` | 有 | 非 PTY；`command` 按规范当程序名，解析不到即报错（agent 侧的偏差在各自 Harness 里改写） |
 | `terminal/output` | 有 | |
 | `terminal/wait_for_exit` | 有 | flatten `exitCode` |
 | `terminal/kill` / `release` | 有 | |
 | `x.ai/*` | 忽略 | Grok 扩展只记日志 |
+
+## 各 Agent 的协议偏差（客户端兼容层）
+
+Agent 我们改不了，只能在客户端吸收。修正统一挂在 `Harness.normalizeClientRequest(method:params:)`
+上（默认空实现），由 `HarnessRuntime.start` 注入到 `ACPHandlers.normalizeRequest`，在
+`ACPConnection.perform` 里对进来的请求先跑一遍。这样每条偏差都归属到需要它的那个 agent，
+`ACP/` 目录保持按规范直读。新增偏差请加在对应 Harness 里，不要写进 `ACPConnection`。
+
+| Agent | 偏差 | 客户端怎么处理 |
+| --- | --- | --- |
+| Grok Build | `terminal/create` 把整条 shell 行塞进 `command`，不发 `args`（规范里 `command` 是程序名） | `GrokBuild.swift` 的 `normalizeClientRequest`：`args` 为空时改写成 `$SHELL -lc "<原 command>"`。对这个 agent 一律走 shell，builtin / 管道 / 重定向的行为才一致 |
+
+`ACP/` 层不做任何猜测：`TerminalHost.create` 里 `command` 解析不到就报
+`terminal command not found on PATH: …`，不会替 agent 改写成 shell 调用。想让某个 agent
+的形状被接受，就在它的 Harness 里改写。
+
+回归覆盖在 `AurewaysTests/TerminalHostTests.swift`（`TerminalHostTests` 测规范路径，
+`GrokTerminalNormalizationTests` 测 Grok 改写，`GrokTerminalEndToEndTests` 测两半接起来）。
 
 ## `session/update` 变体
 

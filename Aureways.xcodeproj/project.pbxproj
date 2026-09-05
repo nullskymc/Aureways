@@ -24,6 +24,7 @@
 		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
 		B20100000000000000000042 /* TranscriptPerfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000041 /* TranscriptPerfTests.swift */; };
+		B20100000000000000000044 /* TerminalHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000042 /* TerminalHostTests.swift */; };
 		B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000002 /* ComposerTextViewTests.swift */; };
 		B20100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
 		B20100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
@@ -119,6 +120,7 @@
 		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000041 /* TranscriptPerfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPerfTests.swift; sourceTree = "<group>"; };
+		F20100000000000000000042 /* TerminalHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000002 /* ComposerTextViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextViewTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000012 /* ChatSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSession.swift; sourceTree = "<group>"; };
 		F10100000000000000000041 /* TranscriptBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBlock.swift; sourceTree = "<group>"; };
@@ -270,6 +272,7 @@
 			children = (
 				F20100000000000000000001 /* ProtocolTests.swift */,
 				F20100000000000000000041 /* TranscriptPerfTests.swift */,
+				F20100000000000000000042 /* TerminalHostTests.swift */,
 				F20100000000000000000002 /* ComposerTextViewTests.swift */,
 			);
 			path = AurewaysTests;
@@ -451,6 +454,7 @@
 			files = (
 				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
 				B20100000000000000000042 /* TranscriptPerfTests.swift in Sources */,
+				B20100000000000000000044 /* TerminalHostTests.swift in Sources */,
 				B20100000000000000000034 /* ComposerTextViewTests.swift in Sources */,
 				B20100000000000000000030 /* ComposerAttachment.swift in Sources */,
 				B20100000000000000000031 /* ComposerTextView.swift in Sources */,

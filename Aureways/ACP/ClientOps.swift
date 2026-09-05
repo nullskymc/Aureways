@@ -164,8 +164,10 @@ actor TerminalHost {
         self.environment = environment
     }
 
-    func create(params: JSONValue) throws -> JSONValue {
-        let command = params["command"]?.stringValue ?? "/bin/zsh"
+    /// Starts a terminal and reports the command line actually launched, which
+    /// can differ from what was requested — see the shell fallback below.
+    func create(params: JSONValue) throws -> (result: JSONValue, launched: String) {
+        let requested = params["command"]?.stringValue ?? "/bin/zsh"
         let args = params["args"]?.arrayValue?.compactMap(\.stringValue) ?? []
         let cwd = params["cwd"]?.stringValue
         let limit = params["outputByteLimit"]?.int64Value.map(Int.init) ?? 1024 * 1024
@@ -177,10 +179,21 @@ actor TerminalHost {
                 }
             }
         }
+
+        // `command` is the program name and `args` are its arguments — that is
+        // what the spec says, and this layer reads the spec straight. An agent
+        // that packs a whole shell line into `command` gets an error naming it,
+        // not a reinterpretation: the correction belongs in that agent's
+        // `Harness.normalizeClientRequest`, where it stays attributable.
+        guard let executable = HostEnvironment.resolveExecutable(requested, environment: env) else {
+            throw ACPError.agent(-32602, "terminal command not found on PATH: \(requested)")
+        }
+
         let id = UUID().uuidString
-        let terminal = try AgentTerminal(id: id, command: command, arguments: args, cwd: cwd, env: env, byteLimit: limit)
+        let terminal = try AgentTerminal(id: id, command: executable, arguments: args, cwd: cwd, env: env, byteLimit: limit)
         terminals[id] = terminal
-        return .object(["terminalId": .string(id)])
+        let launched = ([executable] + args).joined(separator: " ")
+        return (.object(["terminalId": .string(id)]), launched)
     }
 
     func output(id: String) throws -> JSONValue {

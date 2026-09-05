@@ -78,6 +78,11 @@ class HarnessRuntime {
     ) async throws {
         await connection?.shutdown()
         connection = nil
+        // The harness owns its own protocol quirks; hand them to the connection.
+        var handlers = handlers
+        handlers.normalizeRequest = { [harness] method, params in
+            harness.normalizeClientRequest(method: method, params: params)
+        }
         let launched = try ACPConnection.launch(
             ACPLaunch(
                 command: harness.launchCommand(),

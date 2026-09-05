@@ -16,7 +16,11 @@ struct AgentProfile: Identifiable, Codable, Hashable, Sendable {
 
 /// Shared ACP stdio launch recipe. Each vendor subclasses this file's type
 /// so command line, env, availability, and session `_meta` stay in one place.
-class Harness {
+///
+/// Immutable after construction (`profile` is the only stored property), hence
+/// the unchecked conformance — a harness is handed to the connection actor so
+/// it can normalize incoming requests off the main actor.
+class Harness: @unchecked Sendable {
     let profile: AgentProfile
 
     var id: String { profile.id }
@@ -41,6 +45,18 @@ class Harness {
     func sessionMeta(autoApprove: Bool) -> [String: JSONValue]? {
         _ = autoApprove
         return nil
+    }
+
+    /// Rewrite an agent → client request before the client handles it.
+    ///
+    /// Agents deviate from ACP in small ways that only the client can absorb —
+    /// we do not get to fix the agent. Keeping the corrections on the harness
+    /// rather than in `ACPConnection` means each one stays attributable to the
+    /// agent that needs it, and the protocol layer stays a straight reading of
+    /// the spec. Default is a no-op.
+    func normalizeClientRequest(method: String, params: JSONValue) -> JSONValue {
+        _ = method
+        return params
     }
 
     func isAvailable() -> Bool {

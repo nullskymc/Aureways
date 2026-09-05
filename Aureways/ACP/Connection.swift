@@ -12,6 +12,9 @@ struct ACPHandlers: Sendable {
     var onPermission: @Sendable (PermissionPrompt) async -> PermissionDecision
     var onLog: @Sendable (String) async -> Void
     var onFileOp: (@Sendable (String, String) async -> Void)? = nil
+    /// Per-harness correction of an incoming agent → client request. See
+    /// `Harness.normalizeClientRequest`.
+    var normalizeRequest: (@Sendable (String, JSONValue) -> JSONValue)? = nil
     var onExit: (@Sendable (Int32) async -> Void)? = nil
 }
 
@@ -76,9 +79,23 @@ actor ACPConnection {
     }
 
     func initialize() async throws -> InitializeResponse {
-        let result = try await request("initialize", params: encodeJSON(InitializeRequest()))
+        let payload = try encodeJSON(InitializeRequest())
+        // One line each way at connection setup. An agent MUST NOT call any
+        // terminal method unless the client advertised `terminal: true`, so when
+        // terminal tools appear dead the first thing to rule out is whether the
+        // capability actually made it onto the wire and what the agent replied.
+        await handlers.onLog("→ initialize \(Self.compact(payload))")
+        let result = try await request("initialize", params: payload)
+        await handlers.onLog("← initialize result \(Self.compact(result))")
         let data = try result.encode()
         return try JSONDecoder.acp.decode(InitializeResponse.self, from: data)
+    }
+
+    private static func compact(_ value: JSONValue, limit: Int = 600) -> String {
+        guard let data = try? value.encode(), let text = String(data: data, encoding: .utf8) else {
+            return "(unencodable)"
+        }
+        return text.count > limit ? String(text.prefix(limit)) + "…" : text
     }
 
     func isActive() -> Bool {
@@ -300,16 +317,26 @@ actor ACPConnection {
     }
 
     private func handleRequest(id: JSONRPCID, method: String, params: JSONValue?) async {
+        // Log every agent -> client request. The volume is low (only fs/*,
+        // terminal/* and session/request_permission arrive this way) and without
+        // it a client-side failure is invisible: the error below goes back to the
+        // agent over the wire and nothing reaches the UI, so "the agent cannot
+        // use the terminal" and "the client never got asked" look identical.
+        await handlers.onLog("← \(method)")
         do {
-            let result = try await perform(method: method, params: params ?? .object([:]))
+            let result = try await perform(method: method, rawParams: params ?? .object([:]))
             try await write(.response(id: id, result: result))
         } catch {
             let message = error.localizedDescription
+            await handlers.onLog("✗ \(method) failed: \(message)")
             try? await write(.error(id: id, code: -32000, message: message, data: nil))
         }
     }
 
-    private func perform(method: String, params: JSONValue) async throws -> JSONValue {
+    private func perform(method: String, rawParams: JSONValue) async throws -> JSONValue {
+        // Let the harness correct the request first: some agents send shapes the
+        // spec does not allow and we cannot patch the agent.
+        let params = handlers.normalizeRequest?(method, rawParams) ?? rawParams
         switch method {
         case "session/request_permission":
             guard let prompt = PermissionPrompt(json: params) else {
@@ -334,7 +361,17 @@ actor ACPConnection {
             await handlers.onFileOp?("write", path)
             return .object([:])
         case "terminal/create":
-            return try await terminals.create(params: params)
+            // Spell out what was asked for and what actually ran: a failure here
+            // is almost always the command not resolving on PATH or a relative
+            // cwd (the spec requires an absolute one), and neither is guessable
+            // from the error alone.
+            let command = params["command"]?.stringValue ?? "?"
+            let args = params["args"]?.arrayValue?.compactMap(\.stringValue) ?? []
+            let cwd = params["cwd"]?.stringValue ?? "(inherited)"
+            await handlers.onLog("  terminal/create \(command) \(args.joined(separator: " ")) — cwd \(cwd)")
+            let created = try await terminals.create(params: params)
+            await handlers.onLog("  terminal/create launched: \(created.launched)")
+            return created.result
         case "terminal/output":
             guard let id = params["terminalId"]?.stringValue else {
                 throw ACPError.invalidJSON("missing terminalId")
