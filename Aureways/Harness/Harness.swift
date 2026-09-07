@@ -86,6 +86,7 @@ enum HarnessRegistry {
             CopilotHarness(),
             CursorHarness(),
             OpenCodeHarness(),
+            OhMyPiHarness(),
         ]
     }
 
@@ -152,6 +153,7 @@ enum HostEnvironment {
             "/opt/homebrew/sbin",
             "/usr/local/bin",
             "\(NSHomeDirectory())/.local/bin",
+            "\(NSHomeDirectory())/.bun/bin",
             "\(NSHomeDirectory())/.cargo/bin",
             "\(NSHomeDirectory())/.volta/bin",
             "\(NSHomeDirectory())/.fnm",

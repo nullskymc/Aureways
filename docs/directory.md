@@ -44,6 +44,7 @@ Aureways/                          # 仓库根
 │   │   ├── Copilot.swift
 │   │   ├── Cursor.swift
 │   │   ├── OpenCode.swift
+│   │   ├── OhMyPi.swift
 │   │   └── CustomHarness.swift
 │   ├── ACP/                       # 后端：协议与进程
 │   │   ├── JSONRPC.swift          # JSON-RPC 2.0 NDJSON + JSONValue
@@ -117,7 +118,7 @@ Aureways/                          # 仓库根
 | `ChatSession.swift` | 前后端交界 | 单会话 transcript |
 | `Harness/Harness.swift` | 后端 | 基类、AgentProfile、PATH |
 | `Harness/HarnessRuntime.swift` | 前后端交界 | 一 harness 一 ACP 进程 |
-| `Harness/*.swift` | 后端 | Grok / Codex / Claude / Antigravity 等各自启动参数 |
+| `Harness/*.swift` | 后端 | Grok / Codex / Claude / Antigravity / Oh My Pi 等各自启动参数 |
 | `SessionStore.swift` | 本地缓存 | sqlite `session_links` |
 | `ACP/Connection.swift` | 后端 | JSON-RPC 连接生命周期 |
 | `ACP/JSONRPC.swift` / `Models.swift` / `SessionModels.swift` / `UpdateModels.swift` | 后端 | 编解码 |

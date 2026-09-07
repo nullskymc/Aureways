@@ -118,6 +118,7 @@ Harness 要自己安装并登录，例如：
 
 - Grok Build：`grok` 在 PATH 且已 auth
 - Codex / Claude：Node.js + `npx`，以及各自 CLI 登录
+- Oh My Pi：Bun + `omp`（`bun install -g @oh-my-pi/pi-coding-agent`），登录在 omp 自己的配置里。启动命令是 `omp acp`，自动批准会加 `--yolo`
 - Antigravity：官方 ACP 包 `agy_acp_server.par`（与 `localharness_external` 同目录，默认 `~/.local/share/antigravity-acp/`，wrapper 为 `agy_acp_server`）。`agy` CLI 没有 `--acp`，也不要用第三方 `npx agy-acp`。安装命令见仓库 README
 
 ## 测试
@@ -130,8 +131,8 @@ make test
 
 ## 调试连接失败
 
-1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy_acp_server`
-2. GUI PATH 不含 nvm：把 `node`/`npx` 链到 `/opt/homebrew/bin`，或自定义 agent 填绝对路径
+1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy_acp_server`、`omp acp`
+2. GUI PATH 不含 nvm / bun：把 `node`/`npx`/`bun`/`omp` 链到 `/opt/homebrew/bin` 或 `~/.bun/bin`，或自定义 agent 填绝对路径
 3. 右侧面板开一个交互终端，直接复现命令看输出
 4. `initialize` 卡死：确认对方 stdout 只有 NDJSON，没有横幅日志
 

@@ -292,6 +292,15 @@ final class ProtocolTests: XCTestCase {
             command.hasSuffix("agy_acp_server") || command.hasSuffix("agy_acp_server.par"),
             command
         )
+
+        XCTAssertTrue(ids.contains(OhMyPiHarness.id))
+        XCTAssertFalse(ids.contains("pi"))
+        let omp = OhMyPiHarness()
+        XCTAssertEqual(omp.profile.command, "omp")
+        XCTAssertEqual(omp.profile.arguments, ["acp"])
+        XCTAssertEqual(omp.launchArguments(autoApprove: false), ["acp"])
+        XCTAssertEqual(omp.launchArguments(autoApprove: true), ["acp", "--yolo"])
+        XCTAssertNil(omp.sessionMeta(autoApprove: true))
     }
 
     func testGrokImageCapabilityOverride() {

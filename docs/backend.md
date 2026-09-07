@@ -23,14 +23,14 @@
 `HostEnvironment.augmented()` 在 GUI 进程的 PATH 前拼接：
 
 - `/opt/homebrew/bin`、`/usr/local/bin`
-- `~/.local/bin`、`~/.cargo/bin`、`~/.volta/bin`
+- `~/.local/bin`、`~/.bun/bin`、`~/.cargo/bin`、`~/.volta/bin`
 - `/usr/bin`、`/bin`
 
 `resolveExecutable` 按 PATH `isExecutableFile` 查找。找不到则 `ACPError.launch("Command not found: …")`，前端 `phase = .failed`。
 
 侧栏绿点 = 启动命令（如 `grok`、`npx`）在 PATH 上，不保证该 harness 已登录或能完成 `initialize`。
 
-Auto-approve 时由当前 `Harness.sessionMeta` / `launchArguments` 决定透传。Grok Build 把参数换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 里再声明一次。
+Auto-approve 时由当前 `Harness.sessionMeta` / `launchArguments` 决定透传。Grok Build 把参数换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 里再声明一次。Oh My Pi 把参数换成 `["acp", "--yolo"]`。
 
 ## JSON-RPC 循环
 

@@ -79,6 +79,8 @@
 		B20100000000000000000027 /* Cursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000027 /* Cursor.swift */; };
 		B10100000000000000000028 /* OpenCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000028 /* OpenCode.swift */; };
 		B20100000000000000000028 /* OpenCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000028 /* OpenCode.swift */; };
+		B10100000000000000000052 /* OhMyPi.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000052 /* OhMyPi.swift */; };
+		B20100000000000000000052 /* OhMyPi.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000052 /* OhMyPi.swift */; };
 		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		BF10100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* SwiftStreamingMarkdown */; };
@@ -159,6 +161,7 @@
 		F10100000000000000000026 /* Copilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Copilot.swift; sourceTree = "<group>"; };
 		F10100000000000000000027 /* Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cursor.swift; sourceTree = "<group>"; };
 		F10100000000000000000028 /* OpenCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCode.swift; sourceTree = "<group>"; };
+		F10100000000000000000052 /* OhMyPi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OhMyPi.swift; sourceTree = "<group>"; };
 		F10100000000000000000029 /* CustomHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomHarness.swift; sourceTree = "<group>"; };
 		F1010000000000000000002B /* AppModel+Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Inspector.swift"; sourceTree = "<group>"; };
 		F1010000000000000000002C /* PaneTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTabBar.swift; sourceTree = "<group>"; };
@@ -298,6 +301,7 @@
 				F10100000000000000000026 /* Copilot.swift */,
 				F10100000000000000000027 /* Cursor.swift */,
 				F10100000000000000000028 /* OpenCode.swift */,
+				F10100000000000000000052 /* OhMyPi.swift */,
 				F10100000000000000000029 /* CustomHarness.swift */,
 				F10100000000000000000050 /* HarnessQuota.swift */,
 			);
@@ -467,6 +471,7 @@
 				B10100000000000000000026 /* Copilot.swift in Sources */,
 				B10100000000000000000027 /* Cursor.swift in Sources */,
 				B10100000000000000000028 /* OpenCode.swift in Sources */,
+				B10100000000000000000052 /* OhMyPi.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */,
@@ -502,6 +507,7 @@
 				B20100000000000000000026 /* Copilot.swift in Sources */,
 				B20100000000000000000027 /* Cursor.swift in Sources */,
 				B20100000000000000000028 /* OpenCode.swift in Sources */,
+				B20100000000000000000052 /* OhMyPi.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,

@@ -22,7 +22,7 @@ Aureways 是 **ACP Client**，不是 Agent。Agent 是本机已安装的 harness
                            │ stdin / stdout / stderr
 ┌──────────────────────────▼──────────────────────────────┐
 │  Harness 子进程                                         │
-│  grok | npx …codex-acp | agy_acp_server | …           │
+│  grok | npx …codex-acp | agy_acp_server | omp acp | … │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ JSON-RPC `id` 必须按数字解析。`NSNumber` 在 Swift 里可能桥成 `Bool
 | 透传 | `configOptions` / `set_config_option`，旧 `modes` / `set_mode` | 已打开会话的 Composer 与检查器「信息」 |
 | Harness | API Key、CLI 登录、家目录配置 | 不进 Aureways；Agent 页只说明 |
 
-Auto-approve 是 Client 如何回答 `session/request_permission`。是否再透传到 CLI，由各 `Harness` 子类决定（Grok 会加 `--always-approve` 与 `_meta.yoloMode`）。
+Auto-approve 是 Client 如何回答 `session/request_permission`。是否再透传到 CLI，由各 `Harness` 子类决定（Grok 会加 `--always-approve` 与 `_meta.yoloMode`；Oh My Pi 会加 `--yolo`）。
 
 ## 与「前后端分离」的关系
 
