@@ -307,8 +307,11 @@ actor ACPConnection {
     }
 
     private func handleNotification(_ method: String, params: JSONValue?) async {
-        guard method == "session/update", let params, let notification = SessionNotification(json: params) else {
-            if let method = Optional(method), method.hasPrefix("x.ai/") {
+        let isSessionUpdate = method == "session/update"
+            || method == "x.ai/session/update"
+            || method == "_x.ai/session/update"
+        guard isSessionUpdate, let params, let notification = SessionNotification(json: params) else {
+            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
                 await handlers.onLog(method)
             }
             return
@@ -318,11 +321,12 @@ actor ACPConnection {
 
     private func handleRequest(id: JSONRPCID, method: String, params: JSONValue?) async {
         // Log every agent -> client request. The volume is low (only fs/*,
-        // terminal/* and session/request_permission arrive this way) and without
-        // it a client-side failure is invisible: the error below goes back to the
-        // agent over the wire and nothing reaches the UI, so "the agent cannot
-        // use the terminal" and "the client never got asked" look identical.
-        await handlers.onLog("← \(method)")
+        // terminal/* and session/request_permission arrive this way) and
+        // without it a client-side failure is invisible:
+        // the error below goes back to the agent over the wire and nothing
+        // reaches the UI, so "the agent cannot use the terminal" and "the
+        // client never got asked" look identical.
+        await handlers.onLog("← \(method) \(Self.compact(params ?? .null, limit: 240))")
         do {
             let result = try await perform(method: method, rawParams: params ?? .object([:]))
             try await write(.response(id: id, result: result))

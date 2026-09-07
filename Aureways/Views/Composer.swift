@@ -18,8 +18,6 @@ struct ComposerDock: View {
     var body: some View {
         VStack(spacing: 8) {
             if let pending = pendingPermission {
-                // 不加插入动画：过渡期间 dock 高度逐帧变化，会连续触发
-                // 转录区底部留白重算与 scrollTo，LazyVStack 会渲染崩坏。
                 PermissionCard(
                     session: pending.session,
                     prompt: pending.prompt,

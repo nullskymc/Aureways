@@ -381,7 +381,7 @@ extension AppModel {
         for session in sessions where session.agent.id == agentId && (session.phase.isReady || session.phase == .connecting) {
             session.phase = .idle
             session.isStreaming = false
-            session.resumePermission(.cancelled)
+            session.resumeBlockingPrompts()
         }
     }
 

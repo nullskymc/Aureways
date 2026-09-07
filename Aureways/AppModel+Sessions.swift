@@ -69,7 +69,7 @@ extension AppModel {
         session.promptTask?.cancel()
         session.promptTask = nil
         session.isStreaming = false
-        session.resumePermission(.cancelled)
+        session.resumeBlockingPrompts()
         guard let acpId = session.acpSessionId else { return }
         Task {
             if let connection = await liveConnection(for: session.agent) {
@@ -81,7 +81,7 @@ extension AppModel {
     func close(_ session: ChatSession) {
         session.promptTask?.cancel()
         session.promptTask = nil
-        session.resumePermission(.cancelled)
+        session.resumeBlockingPrompts()
         session.isStreaming = false
         if let acpId = session.acpSessionId {
             Task {
@@ -110,7 +110,7 @@ extension AppModel {
     func forget(_ session: ChatSession) {
         session.promptTask?.cancel()
         session.promptTask = nil
-        session.resumePermission(.cancelled)
+        session.resumeBlockingPrompts()
         session.isClosed = true
         if let acpId = session.acpSessionId {
             try? store?.delete(agentId: session.agent.id, acpSessionId: acpId)
@@ -126,7 +126,7 @@ extension AppModel {
         guard canDelete(session), let acpId = session.acpSessionId else { return }
         session.promptTask?.cancel()
         session.promptTask = nil
-        session.resumePermission(.cancelled)
+        session.resumeBlockingPrompts()
         session.isClosed = true
         Task {
             do {

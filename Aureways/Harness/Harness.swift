@@ -59,6 +59,13 @@ class Harness: @unchecked Sendable {
         return params
     }
 
+    /// Rewrite advertised `initialize` capabilities. Same reason as
+    /// `normalizeClientRequest`: some agents lie or omit fields, and the
+    /// correction belongs on the harness, not in the protocol layer.
+    func normalizeCapabilities(_ capabilities: AgentCapabilities) -> AgentCapabilities {
+        capabilities
+    }
+
     func isAvailable() -> Bool {
         HostEnvironment.resolveExecutable(launchCommand()) != nil
     }

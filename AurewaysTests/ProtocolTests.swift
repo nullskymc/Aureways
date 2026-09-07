@@ -252,6 +252,18 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(cancelled["outcome"]?["outcome"]?.stringValue, "cancelled")
     }
 
+    func testPermissionOptionDescription() throws {
+        let withNotes = try JSONValue.decode(from: """
+        {"optionId":"dev","name":"(Recommended) 协助开发或修复当前项目","kind":"allow_once","description":"继续写代码"}
+        """)
+        let option = PermissionOption(json: withNotes)
+        XCTAssertEqual(option?.name, "(Recommended) 协助开发或修复当前项目")
+        XCTAssertEqual(option?.description, "继续写代码")
+
+        let emptyNotes = try JSONValue.decode(from: #"{"optionId":"b","name":"允许","kind":"allow_once","description":""}"#)
+        XCTAssertNil(PermissionOption(json: emptyNotes)?.description)
+    }
+
     func testCatalogSplit() {
         let parts = AgentCatalog.splitCommandLine(#"npx -y "@agentclientprotocol/codex-acp""#)
         XCTAssertEqual(parts, ["npx", "-y", "@agentclientprotocol/codex-acp"])
@@ -265,8 +277,8 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(HarnessRegistry.migrateAgentId("codex"), "codex")
 
         let grok = GrokBuildHarness()
-        XCTAssertEqual(grok.launchArguments(autoApprove: false), ["agent", "stdio"])
-        XCTAssertEqual(grok.launchArguments(autoApprove: true), ["agent", "--always-approve", "stdio"])
+        XCTAssertEqual(grok.launchArguments(autoApprove: false), ["agent", "--no-leader", "stdio"])
+        XCTAssertEqual(grok.launchArguments(autoApprove: true), ["agent", "--always-approve", "--no-leader", "stdio"])
         XCTAssertEqual(grok.sessionMeta(autoApprove: true)?["yoloMode"]?.boolValue, true)
         XCTAssertNil(grok.sessionMeta(autoApprove: false))
         XCTAssertNil(CodexHarness().sessionMeta(autoApprove: true))
@@ -280,6 +292,33 @@ final class ProtocolTests: XCTestCase {
             command.hasSuffix("agy_acp_server") || command.hasSuffix("agy_acp_server.par"),
             command
         )
+    }
+
+    func testGrokImageCapabilityOverride() {
+        let advertised = AgentCapabilities(
+            promptCapabilities: PromptCapabilities(image: false, audio: false, embeddedContext: true)
+        )
+        let grok = GrokBuildHarness().normalizeCapabilities(advertised)
+        XCTAssertEqual(grok.promptCapabilities?.image, true)
+        XCTAssertEqual(CodexHarness().normalizeCapabilities(advertised).promptCapabilities?.image, false)
+
+        let paste = OutgoingMessage(
+            text: "see this",
+            attachments: [
+                TranscriptAttachment(
+                    id: UUID(),
+                    kind: "image",
+                    name: "图片",
+                    path: nil,
+                    mimeType: "image/png",
+                    imageBase64: "QUJD"
+                )
+            ]
+        )
+        let blocked = paste.contentBlocks(promptCapabilities: advertised.promptCapabilities)
+        XCTAssertFalse(blocked.contains { if case .image = $0 { return true }; return false })
+        let allowed = paste.contentBlocks(promptCapabilities: grok.promptCapabilities)
+        XCTAssertTrue(allowed.contains { if case .image = $0 { return true }; return false })
     }
 
     func testCustomAgentIdsAreUnique() {

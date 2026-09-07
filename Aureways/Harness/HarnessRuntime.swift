@@ -101,7 +101,7 @@ class HarnessRuntime {
         if let info = initResponse.agentInfo {
             agentInfo = [info.title ?? info.name, info.version].filter { !$0.isEmpty }.joined(separator: " ")
         }
-        capabilities = initResponse.agentCapabilities ?? AgentCapabilities()
+        capabilities = harness.normalizeCapabilities(initResponse.agentCapabilities ?? AgentCapabilities())
         if let version = initResponse.protocolVersion, version != 1 {
             await handlers.onLog("Negotiated protocol version \(version)")
         }

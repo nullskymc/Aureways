@@ -30,18 +30,20 @@
 | `terminal/output` | 有 | |
 | `terminal/wait_for_exit` | 有 | flatten `exitCode` |
 | `terminal/kill` / `release` | 有 | |
-| `x.ai/*` | 忽略 | Grok 扩展只记日志 |
+| 其它 `x.ai/*` | 忽略 | 未知 Grok 扩展只记日志 |
 
 ## 各 Agent 的协议偏差（客户端兼容层）
 
-Agent 我们改不了，只能在客户端吸收。修正统一挂在 `Harness.normalizeClientRequest(method:params:)`
-上（默认空实现），由 `HarnessRuntime.start` 注入到 `ACPHandlers.normalizeRequest`，在
-`ACPConnection.perform` 里对进来的请求先跑一遍。这样每条偏差都归属到需要它的那个 agent，
-`ACP/` 目录保持按规范直读。新增偏差请加在对应 Harness 里，不要写进 `ACPConnection`。
+Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.normalizeClientRequest(method:params:)`
+（`ACPConnection.perform` 里先跑一遍）；握手能力挂在 `Harness.normalizeCapabilities`
+（`HarnessRuntime.handshake` 写入 runtime 之前）。默认都是空实现。这样每条偏差都归属到
+需要它的那个 agent，`ACP/` 目录保持按规范直读。新增偏差请加在对应 Harness 里，不要写进
+`ACPConnection`。
 
 | Agent | 偏差 | 客户端怎么处理 |
 | --- | --- | --- |
 | Grok Build | `terminal/create` 把整条 shell 行塞进 `command`，不发 `args`（规范里 `command` 是程序名） | `GrokBuild.swift` 的 `normalizeClientRequest`：`args` 为空时改写成 `$SHELL -lc "<原 command>"`。对这个 agent 一律走 shell，builtin / 管道 / 重定向的行为才一致 |
+| Grok Build | `initialize` 声明 `promptCapabilities.image: false`，但 `session/prompt` 实际接受 `{type:"image"}` | `normalizeCapabilities` 把 `image` 改成 `true`。不改的话 Composer 会给图片贴「不支持」角标并禁发，剪贴板图片（没有文件路径可降级）会被丢掉 |
 
 `ACP/` 层不做任何猜测：`TerminalHost.create` 里 `command` 解析不到就报
 `terminal command not found on PATH: …`，不会替 agent 改写成 shell 调用。想让某个 agent

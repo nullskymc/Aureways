@@ -17,14 +17,36 @@ final class GrokBuildHarness: Harness {
     }
 
     override func launchArguments(autoApprove: Bool) -> [String] {
+        // `--no-leader`: a shared Grok TUI/leader would take permission
+        // prompts instead of this client.
         if autoApprove {
-            return ["agent", "--always-approve", "stdio"]
+            return ["agent", "--always-approve", "--no-leader", "stdio"]
         }
-        return ["agent", "stdio"]
+        return ["agent", "--no-leader", "stdio"]
+    }
+
+    override func environment(_ base: [String: String]) -> [String: String] {
+        var env = base
+        if env["GROK_CLIENT_NAME"] == nil {
+            env["GROK_CLIENT_NAME"] = "aureways"
+        }
+        return env
     }
 
     override func sessionMeta(autoApprove: Bool) -> [String: JSONValue]? {
         autoApprove ? ["yoloMode": .bool(true)] : nil
+    }
+
+    /// Grok's `initialize` still reports `promptCapabilities.image: false`
+    /// (agent 1.0.7) while `session/prompt` accepts standard `{type:"image"}`
+    /// blocks. Trusting the flag disables paste/send in the composer and
+    /// drops clipboard images that have no file path to fall back on.
+    override func normalizeCapabilities(_ capabilities: AgentCapabilities) -> AgentCapabilities {
+        var capabilities = capabilities
+        var prompt = capabilities.promptCapabilities ?? PromptCapabilities()
+        prompt.image = true
+        capabilities.promptCapabilities = prompt
+        return capabilities
     }
 
     /// Grok packs an entire shell line into `terminal/create`'s `command` and

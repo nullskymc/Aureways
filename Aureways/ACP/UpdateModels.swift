@@ -631,6 +631,7 @@ struct PermissionOption: Sendable, Equatable, Identifiable {
     var optionId: String
     var name: String
     var kind: String
+    var description: String?
 
     var id: String { optionId }
 
@@ -639,6 +640,8 @@ struct PermissionOption: Sendable, Equatable, Identifiable {
         self.optionId = optionId
         self.name = json["name"]?.stringValue ?? optionId
         self.kind = json["kind"]?.stringValue ?? "allow_once"
+        let description = json["description"]?.stringValue
+        self.description = description?.isEmpty == false ? description : nil
     }
 
     var isAllow: Bool { kind.contains("allow") }

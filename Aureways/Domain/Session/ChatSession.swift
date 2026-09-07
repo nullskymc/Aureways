@@ -281,6 +281,10 @@ final class ChatSession: Identifiable {
         waiter?.resume(returning: decision)
     }
 
+    func resumeBlockingPrompts() {
+        resumePermission(.cancelled)
+    }
+
     private func isDenial(_ decision: PermissionDecision) -> Bool {
         switch decision {
         case .cancelled:
