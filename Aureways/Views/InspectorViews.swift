@@ -202,8 +202,18 @@ struct InfoInspectorTab: View {
                     get: { option.value?.stringValue ?? "" },
                     set: { model.setSessionConfig(session, configId: option.id, value: .string($0)) }
                 )) {
-                    ForEach(option.options) { choice in
-                        Text(choice.name).tag(choice.id)
+                    ForEach(Array(SessionMode.menuSections(from: option.options).enumerated()), id: \.offset) { _, section in
+                        if let title = section.title {
+                            Section(title) {
+                                ForEach(section.items) { choice in
+                                    Text(choice.name).tag(choice.id)
+                                }
+                            }
+                        } else {
+                            ForEach(section.items) { choice in
+                                Text(choice.labeledName).tag(choice.id)
+                            }
+                        }
                     }
                 }
                 .labelsHidden()

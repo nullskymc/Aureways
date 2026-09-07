@@ -99,6 +99,6 @@ session/cancel（可选，打断当前 turn）
 - mock 在 prompt 中反向 `fs/read_text_file`（`line=2, limit=1`）
 - sqlite 会话缓存 insert/replace/delete
 - 带 `list`/`load`/`delete` 的 mock：prompt 后 `session/list`、`session/load` 回放、`session/delete`
-- `session/new` 的 `configOptions` / `modes` 解码；`config_option_update`
+- `session/new` 的 `configOptions` / `modes` 解码（含分组模型选项的供应商名）；`config_option_update`
 
 未覆盖真实 Codex / Grok / Claude 二进制。

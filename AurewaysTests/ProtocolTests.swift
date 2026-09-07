@@ -612,6 +612,87 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(response.configOptions[2].value?.boolValue, false)
     }
 
+    func testGroupedModelOptionsPreserveProviderNames() throws {
+        let json = """
+        {
+          "sessionId": "sess_1",
+          "configOptions": [
+            {
+              "id": "model",
+              "name": "Model",
+              "category": "model",
+              "type": "select",
+              "currentValue": "openrouter/claude-sonnet",
+              "options": [
+                {
+                  "group": "xai",
+                  "name": "xAI",
+                  "options": [
+                    {"value": "grok-4", "name": "Grok 4"},
+                    {"value": "grok-3", "name": "Grok 3"}
+                  ]
+                },
+                {
+                  "group": "openrouter",
+                  "name": "OpenRouter",
+                  "options": [
+                    {"value": "openrouter/claude-sonnet", "name": "Claude Sonnet"},
+                    {"value": "openrouter/gpt-4", "name": "GPT-4"}
+                  ]
+                },
+                {
+                  "group": "anthropic",
+                  "name": "Anthropic",
+                  "options": [
+                    {"value": "anthropic/claude-sonnet", "name": "Claude Sonnet"}
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder.acp.decode(NewSessionResponse.self, from: Data(json.utf8))
+        let option = try XCTUnwrap(response.configOptions.first)
+        XCTAssertTrue(option.isModel)
+        XCTAssertEqual(option.value?.stringValue, "openrouter/claude-sonnet")
+        XCTAssertEqual(option.options.map(\.id), [
+            "grok-4", "grok-3", "openrouter/claude-sonnet", "openrouter/gpt-4", "anthropic/claude-sonnet"
+        ])
+        XCTAssertEqual(option.options.map(\.group), [
+            "xAI", "xAI", "OpenRouter", "OpenRouter", "Anthropic"
+        ])
+        XCTAssertEqual(option.options.map(\.labeledName), [
+            "xAI · Grok 4", "xAI · Grok 3", "OpenRouter · Claude Sonnet", "OpenRouter · GPT-4", "Anthropic · Claude Sonnet"
+        ])
+        let sections = SessionMode.menuSections(from: option.options)
+        XCTAssertEqual(sections.map(\.title), ["xAI", "OpenRouter", "Anthropic"])
+        XCTAssertEqual(sections[1].items.map(\.name), ["Claude Sonnet", "GPT-4"])
+    }
+
+    func testFlatModelOptionsInferProviderFromSlashId() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "id": "model",
+          "category": "model",
+          "type": "select",
+          "value": "anthropic/claude-sonnet",
+          "options": [
+            {"value": "anthropic/claude-sonnet", "name": "Claude Sonnet"},
+            {"value": "openrouter/claude-sonnet", "name": "Claude Sonnet"},
+            {"value": "grok-4", "name": "Grok 4"}
+          ]
+        }
+        """)
+        let option = try XCTUnwrap(SessionConfigOption(json: json))
+        XCTAssertEqual(option.options.map(\.labeledName), [
+            "anthropic · Claude Sonnet", "openrouter · Claude Sonnet", "Grok 4"
+        ])
+        let sections = SessionMode.menuSections(from: option.options)
+        XCTAssertEqual(sections.map(\.title), [nil, "anthropic", "openrouter"])
+        XCTAssertEqual(sections[0].items.map(\.name), ["Grok 4"])
+    }
+
     func testConfigOptionUpdateDecoding() throws {
         let json = try JSONValue.decode(from: """
         {"sessionId":"s1","update":{"sessionUpdate":"config_option_update","configId":"mode","value":"code"}}

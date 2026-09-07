@@ -154,11 +154,14 @@ struct SessionMode: Sendable, Equatable, Identifiable {
     var id: String
     var name: String
     var description: String?
+    /// Human-readable provider / group label when the agent groups models.
+    var group: String?
 
-    init(id: String, name: String, description: String? = nil) {
+    init(id: String, name: String, description: String? = nil, group: String? = nil) {
         self.id = id
         self.name = name
         self.description = description
+        self.group = group
     }
 
     init?(json: JSONValue) {
@@ -166,6 +169,44 @@ struct SessionMode: Sendable, Equatable, Identifiable {
         self.id = id
         name = json["name"]?.stringValue ?? id
         description = json["description"]?.stringValue
+        group = json["group"]?.stringValue
+        if group?.isEmpty == true { group = nil }
+    }
+
+    /// Provider shown in the picker: explicit group, else the `provider/model` id prefix.
+    var providerLabel: String? {
+        if let group, !group.isEmpty { return group }
+        let parts = id.split(separator: "/", omittingEmptySubsequences: true)
+        guard parts.count >= 2 else { return nil }
+        return String(parts[0])
+    }
+
+    var labeledName: String {
+        guard let provider = providerLabel, !name.localizedCaseInsensitiveContains(provider) else {
+            return name
+        }
+        return "\(provider) · \(name)"
+    }
+
+    /// Preserve JSON order. Untitled items stay in a leading untitled section.
+    static func menuSections(from choices: [SessionMode]) -> [(title: String?, items: [SessionMode])] {
+        var order: [String] = []
+        var ungrouped: [SessionMode] = []
+        var buckets: [String: [SessionMode]] = [:]
+        for choice in choices {
+            if let provider = choice.providerLabel {
+                if buckets[provider] == nil { order.append(provider) }
+                buckets[provider, default: []].append(choice)
+            } else {
+                ungrouped.append(choice)
+            }
+        }
+        var sections: [(String?, [SessionMode])] = []
+        if !ungrouped.isEmpty { sections.append((nil, ungrouped)) }
+        for title in order {
+            sections.append((title, buckets[title] ?? []))
+        }
+        return sections
     }
 }
 
@@ -216,9 +257,40 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         name = json["name"]?.stringValue ?? id
         description = json["description"]?.stringValue
         category = json["category"]?.stringValue
-        type = json["type"]?.stringValue ?? (json["value"]?.boolValue != nil ? "boolean" : "select")
-        value = json["value"]
-        options = json["options"]?.arrayValue?.compactMap(SessionMode.init) ?? []
+        let current = json["value"] ?? json["currentValue"]
+        type = json["type"]?.stringValue ?? (current?.boolValue != nil ? "boolean" : "select")
+        value = current
+        options = Self.parseSelectOptions(json["options"])
+    }
+
+    /// ACP select options are either a flat list or `SessionConfigSelectGroup`
+    /// entries (`group` + nested `options`). Multi-provider harnesses use the
+    /// grouped shape; flattening without the group label collapses to duplicate names.
+    static func parseSelectOptions(_ json: JSONValue?) -> [SessionMode] {
+        guard let items = json?.arrayValue else { return [] }
+        var result: [SessionMode] = []
+        for item in items {
+            let nested = item["options"]?.arrayValue
+            let looksLikeGroup = nested != nil && (
+                item["group"] != nil || (item["value"] == nil && item["id"] == nil)
+            )
+            if looksLikeGroup, let nested {
+                let groupName = nonEmpty(item["name"]?.stringValue) ?? nonEmpty(item["group"]?.stringValue)
+                for child in nested {
+                    guard var mode = SessionMode(json: child) else { continue }
+                    if mode.group == nil { mode.group = groupName }
+                    result.append(mode)
+                }
+            } else if let mode = SessionMode(json: item) {
+                result.append(mode)
+            }
+        }
+        return result
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
     }
 }
 

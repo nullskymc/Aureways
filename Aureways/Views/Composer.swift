@@ -415,7 +415,7 @@ struct ComposerCard: View {
            let option = session.modelOption,
            !option.options.isEmpty {
             sessionSelectChip(
-                title: option.options.first(where: { $0.id == option.value?.stringValue })?.name ?? option.name,
+                title: option.options.first(where: { $0.id == option.value?.stringValue })?.labeledName ?? option.name,
                 help: "切换本会话使用的模型",
                 choices: option.options,
                 selectedId: option.value?.stringValue
@@ -447,16 +447,13 @@ struct ComposerCard: View {
         onPick: @escaping (String) -> Void
     ) -> some View {
         Menu {
-            ForEach(choices) { choice in
-                Button {
-                    onPick(choice.id)
-                } label: {
-                    HStack {
-                        Text(choice.name)
-                        if selectedId == choice.id {
-                            Image(systemName: "checkmark")
-                        }
+            ForEach(Array(SessionMode.menuSections(from: choices).enumerated()), id: \.offset) { _, section in
+                if let title = section.title {
+                    Section(title) {
+                        choiceButtons(section.items, selectedId: selectedId, onPick: onPick)
                     }
+                } else {
+                    choiceButtons(section.items, selectedId: selectedId, onPick: onPick)
                 }
             }
         } label: {
@@ -473,6 +470,26 @@ struct ComposerCard: View {
         .fixedSize()
         .buttonStyle(.glass)
         .help(help)
+    }
+
+    @ViewBuilder
+    private func choiceButtons(
+        _ choices: [SessionMode],
+        selectedId: String?,
+        onPick: @escaping (String) -> Void
+    ) -> some View {
+        ForEach(choices) { choice in
+            Button {
+                onPick(choice.id)
+            } label: {
+                HStack {
+                    Text(choice.name)
+                    if selectedId == choice.id {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
     }
 
     private func pickComposerFiles() {
