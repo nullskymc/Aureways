@@ -29,9 +29,12 @@ final class ComposerTextView: NSTextView {
 
     // ⌘V 不依赖主菜单派发（保险层，模式与文件编辑器的 ⌘S 拦截一致）；
     // paste: 内部自行分流图片/文件/文本。
+    // 只在自己是 first responder 时拦截——performKeyEquivalent 会发给窗口里
+    // 每一块视图，不判断焦点的话终端 / 编辑器的 ⌘V 会被输入框抢走。
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "v" {
+            guard window?.firstResponder === self else { return false }
             paste(nil)
             return true
         }
@@ -137,9 +140,19 @@ struct ComposerTextRepresentable: NSViewRepresentable {
         if !textView.hasMarkedText(), textView.string != draft {
             context.coordinator.setDraft(draft)
         }
-        if isFocused, textView.window?.firstResponder !== textView {
-            textView.window?.makeFirstResponder(textView)
+        if isFocused, let window = textView.window, window.firstResponder !== textView {
+            // 不要从终端 / 文件编辑器手里抢焦点。isFocused 在 SwiftUI 刷新时
+            // 可能仍为 true，硬抢会把后续 ⌘V 送回输入框。
+            if !Self.shouldYieldFocus(to: window.firstResponder) {
+                window.makeFirstResponder(textView)
+            }
         }
+    }
+
+    private static func shouldYieldFocus(to responder: NSResponder?) -> Bool {
+        guard let responder, !(responder is NSWindow) else { return false }
+        if responder is NSTextView { return true }
+        return String(describing: type(of: responder)).contains("TerminalView")
     }
 }
 
@@ -187,11 +200,11 @@ final class ComposerCoordinator: NSObject, NSTextViewDelegate {
         }
     }
 
-    nonisolated func textViewDidBeginEditing(_ notification: Notification) {
+    nonisolated func textDidBeginEditing(_ notification: Notification) {
         MainActor.assumeIsolated { parent.isFocused = true }
     }
 
-    nonisolated func textViewDidEndEditing(_ notification: Notification) {
+    nonisolated func textDidEndEditing(_ notification: Notification) {
         MainActor.assumeIsolated { parent.isFocused = false }
     }
 

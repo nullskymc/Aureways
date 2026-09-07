@@ -87,8 +87,8 @@ extension InteractiveTerminal: LocalProcessTerminalViewDelegate {
     nonisolated func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
 
     nonisolated func processTerminated(source: TerminalView, exitCode: Int32?) {
-        MainActor.assumeIsolated {
-            markExited(exitCode)
+        Task { @MainActor [weak self] in
+            self?.markExited(exitCode)
         }
     }
 }
@@ -141,6 +141,23 @@ private final class TerminalHostView: NSView {
             width: max(0, bounds.width - inset.left - inset.right),
             height: max(0, bounds.height - inset.top - inset.bottom)
         )
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(terminalView)
+        super.mouseDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "v" {
+            let focused = window?.firstResponder
+            if focused === terminalView || focused === self {
+                terminalView.paste(self)
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func viewDidMoveToWindow() {

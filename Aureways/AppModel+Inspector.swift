@@ -86,7 +86,8 @@ extension AppModel {
         terminalTitles[terminal.id] = terminal.title
         terminal.onExited = { [weak self, weak terminal] _ in
             guard let self, let terminal else { return }
-            self.terminalTitles[terminal.id] = terminal.title
+            // 用户在 PTY 里敲 `exit` 后进程已结束；关掉标签才能释放视图、PTY 和下标。
+            self.performClosePaneTab(.terminal(terminal.id))
         }
         terminal.start()
         insertPaneTab(.terminal(terminal.id))

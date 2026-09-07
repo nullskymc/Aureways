@@ -77,7 +77,7 @@
 
 1. **文件浏览器（常驻）**：当前工作区的递归目录树，懒加载；点击文件即在编辑器标签打开；Agent 写文件后自动刷新。
 2. **文本文件标签**：NSTextView 编辑器（等宽字体 + 行号栏），脏标记 ●、`⌘S` 保存。三层冲突处理：保存时按 mtime 校验外部修改（覆盖 / 放弃 / 取消）；关闭未保存文件弹确认（保存 / 不保存 / 取消）；Agent 写已打开文件时，未脏自动重载、已脏显示「重载 / 保留我的」提示条。>2MB、非 UTF-8、含 NUL 的文件拒绝打开。
-3. **终端标签**：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 真实 PTY 交互终端，按登录 shell 启动并继承完整 PATH；背景 / 前景随浅色、深色切换（与检查器画布同色）。进程在 `openTerminalTab()` 创建，关标签即终止，应用退出统一清理。
+3. **终端标签**：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 真实 PTY 交互终端，按登录 shell 启动并继承完整 PATH；背景 / 前景随浅色、深色切换（与检查器画布同色）。进程在 `openTerminalTab()` 创建，关标签即终止，shell 里敲 `exit` 同样关掉标签并回收 PTY，应用退出统一清理。
 4. **信息标签**：协议、Agent、工作区路径、ACP Session ID 与会话配置（`configOptions`）编辑。
 
 > 旧版「审查 / 日志」两个只读标签已移除，但 `fileOps` / `logs` 数据仍在后台按会话记录（`ChatSession`），供后续恢复或做差异审查。

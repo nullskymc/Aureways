@@ -149,6 +149,54 @@ final class ComposerTextViewTests: XCTestCase {
         XCTAssertEqual(box.attachments.first?.first?.mimeType, "image/png")
     }
 
+    private func commandVEvent() throws -> NSEvent {
+        try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: .command,
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "v",
+            charactersIgnoringModifiers: "v",
+            isARepeat: false,
+            keyCode: 9
+        ))
+    }
+
+    func testCmdVIsIgnoredWhenComposerIsNotFirstResponder() throws {
+        let (textView, box) = try makeHostedTextView()
+        XCTAssertTrue(window.makeFirstResponder(nil) || window.firstResponder !== textView)
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString("stolen", forType: .string)
+        defer { pasteboard.clearContents() }
+
+        let handled = textView.performKeyEquivalent(with: try commandVEvent())
+        drainRunloop()
+
+        XCTAssertFalse(handled, "未聚焦时不得把 ⌘V 当成输入框粘贴")
+        XCTAssertEqual(textView.string, "")
+        XCTAssertTrue(box.attachments.isEmpty)
+    }
+
+    func testCmdVPastesWhenComposerIsFirstResponder() throws {
+        let (textView, _) = try makeHostedTextView()
+        XCTAssertTrue(window.makeFirstResponder(textView))
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString("from clipboard", forType: .string)
+        defer { pasteboard.clearContents() }
+
+        let handled = textView.performKeyEquivalent(with: try commandVEvent())
+        drainRunloop()
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(textView.string, "from clipboard")
+    }
+
     func testPasteTextStillInserts() throws {
         let (textView, box) = try makeHostedTextView()
         window.makeFirstResponder(textView)
