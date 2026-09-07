@@ -80,6 +80,13 @@ struct ComposerHeightKey: PreferenceKey {
     }
 }
 
+private struct QuotaOverlayHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ComposerCard: View {
     @Environment(AppModel.self) private var model
     let session: ChatSession?
@@ -89,6 +96,8 @@ struct ComposerCard: View {
     @State private var editor = ComposerEditorBridge()
     @State private var completionMode: CompletionMode = .none
     @State private var completionIndex = 0
+    @State private var isShowingQuotaCard = false
+    @State private var quotaOverlayHeight: CGFloat = 280
     @FocusState private var isFocused: Bool
 
     private let editorMinHeight: CGFloat = 20
@@ -133,11 +142,28 @@ struct ComposerCard: View {
                     .offset(x: 12, y: -(CompletionPopup.height(itemCount: completionItems.count) + 8))
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                if isShowingQuotaCard {
+                    HarnessQuotaFloatingCard(agent: displayedAgent)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(key: QuotaOverlayHeightKey.self, value: geo.size.height)
+                            }
+                        }
+                        .onPreferenceChange(QuotaOverlayHeightKey.self) { quotaOverlayHeight = $0 }
+                        // 配额卡必须挂在整张输入卡上，不能挂在 chip 里：chip 在玻璃
+                        // 内部，溢出被裁掉后检查器会从裁切处透出来。
+                        .offset(y: -(quotaOverlayHeight + 8))
+                        .padding(.trailing, 8)
+                }
+            }
+            .onChange(of: displayedAgent.id) {
+                isShowingQuotaCard = false
+            }
     }
 
     private var cardStack: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HarnessQuotaCriticalBanner(agentId: displayedAgent.id)
 
             ZStack(alignment: .topLeading) {
                 Text(draft.isEmpty ? " " : draft)
@@ -216,7 +242,7 @@ struct ComposerCard: View {
             Spacer(minLength: 8)
 
             harnessChip
-            HarnessQuotaChip(agentId: displayedAgent.id)
+            HarnessQuotaChip(agentId: displayedAgent.id, isShowingCard: $isShowingQuotaCard)
             sessionModelChip
             sessionModeChip
 
@@ -478,6 +504,7 @@ struct ComposerCard: View {
         let pendingAttachments = attachments
         draft = ""
         attachments = []
+        isShowingQuotaCard = false
         model.sendFromComposer(text: text, attachments: pendingAttachments)
     }
 

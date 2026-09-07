@@ -1,48 +1,55 @@
+import AppKit
 import SwiftUI
 
-// MARK: - Harness Quota Chip (for Composer)
+// MARK: - Agent Quota Indicator View
 
 struct HarnessQuotaChip: View {
-    @Environment(AppModel.self) private var model
     let agentId: String
+    @Binding var isShowingCard: Bool
+    @Environment(AppModel.self) private var model
 
-    @State private var showPopover = false
-    @State private var isHovered = false
-
-    private var agent: AgentProfile? {
-        model.agents.first(where: { $0.id == agentId })
+    var body: some View {
+        if let agent = model.agents.first(where: { $0.id == agentId }) ?? (model.selectedAgent.id == agentId ? model.selectedAgent : nil) {
+            HarnessQuotaIndicatorView(agent: agent, isShowingCard: $isShowingCard)
+        }
     }
+}
+
+struct HarnessQuotaIndicatorView: View {
+    let agent: AgentProfile?
+    @Binding var isShowingCard: Bool
+    @Environment(AppModel.self) private var model
 
     private var snapshot: HarnessQuotaSnapshot? {
-        model.quotaService.snapshot(for: agentId)
+        guard let agent = agent else { return nil }
+        return model.quotaService.snapshot(for: agent.id)
     }
 
     private var isRefreshing: Bool {
-        model.quotaService.isRefreshing[agentId] == true
+        guard let agent = agent else { return false }
+        return model.quotaService.isRefreshing[agent.id] == true
     }
 
     var body: some View {
-        if let agent = agent {
+        if let agent = agent, HarnessQuotaFetcher.supportsQuota(for: agent.id) {
             Button {
-                showPopover.toggle()
+                isShowingCard.toggle()
+                if snapshot == nil {
+                    Task {
+                        await model.quotaService.refreshQuota(for: agent, force: true)
+                    }
+                }
             } label: {
                 contentLabel(agent: agent)
             }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showPopover, arrowEdge: .top) {
-                if let snapshot = snapshot {
-                    HarnessQuotaPopoverView(snapshot: snapshot) {
-                        Task {
-                            await model.quotaService.refreshQuota(for: agent, force: true)
-                        }
-                    }
-                } else {
-                    quotaLoadingView(agent: agent)
+            .buttonStyle(.glass)
+            .fixedSize()
+            .help(tooltipText)
+            .background { QuotaChromeAnchorView() }
+            .background {
+                QuotaOutsideDismiss(isActive: isShowingCard) {
+                    isShowingCard = false
                 }
-            }
-            .onHover { isHovered = $0 }
-            .task(id: agentId) {
-                await model.quotaService.refreshQuota(for: agent)
             }
         }
     }
@@ -67,10 +74,6 @@ struct HarnessQuotaChip: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .liquidGlassCapsule(interactive: true)
-        .help(tooltipText)
     }
 
     @ViewBuilder
@@ -107,12 +110,12 @@ struct HarnessQuotaChip: View {
 
     private var tooltipText: String {
         if let snapshot = snapshot {
-            var lines = ["\(snapshot.providerTitle) 配额使用情况"]
+            var lines = ["\(snapshot.providerTitle) 配额情况"]
             if let email = snapshot.accountEmail {
                 lines.append("账号: \(email)")
             }
             if let urgent = snapshot.mostUrgentWindow {
-                lines.append("\(urgent.title): \(Int(round(urgent.usedPercent)))% 已使用")
+                lines.append("\(urgent.title): 剩余 \(Int(round(urgent.remainingPercent)))% (已用 \(Int(round(urgent.usedPercent)))%)")
                 if let reset = urgent.countdownDescription {
                     lines.append(reset)
                 }
@@ -122,9 +125,38 @@ struct HarnessQuotaChip: View {
         }
         return "点击查看并刷新 \(agent?.title ?? "Agent") 配额"
     }
+}
 
-    @ViewBuilder
-    private func quotaLoadingView(agent: AgentProfile) -> some View {
+/// 配额详情卡。必须挂在 ComposerCard 的 overlay 上，不能放进 chip：
+/// chip 在玻璃卡片内部，溢出部分会被裁掉，检查器会从裁切处透出来。
+struct HarnessQuotaFloatingCard: View {
+    let agent: AgentProfile
+    @Environment(AppModel.self) private var model
+
+    private var snapshot: HarnessQuotaSnapshot? {
+        model.quotaService.snapshot(for: agent.id)
+    }
+
+    private var isRefreshing: Bool {
+        model.quotaService.isRefreshing[agent.id] == true
+    }
+
+    var body: some View {
+        Group {
+            if let snapshot {
+                HarnessQuotaPopoverView(snapshot: snapshot, isRefreshing: isRefreshing) {
+                    Task {
+                        await model.quotaService.refreshQuota(for: agent, force: true)
+                    }
+                }
+            } else {
+                loadingView
+            }
+        }
+        .background { QuotaChromeAnchorView() }
+    }
+
+    private var loadingView: some View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.small)
@@ -134,6 +166,7 @@ struct HarnessQuotaChip: View {
         }
         .padding(20)
         .frame(width: 240)
+        .liquidGlassCard(cornerRadius: 14, veil: 0.65)
         .task {
             await model.quotaService.refreshQuota(for: agent, force: true)
         }
@@ -144,31 +177,26 @@ struct HarnessQuotaChip: View {
 
 struct HarnessQuotaPopoverView: View {
     let snapshot: HarnessQuotaSnapshot
+    var isRefreshing = false
     let onRefresh: () -> Void
-
-    @State private var isRefreshing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Header: Monogram, Title, Plan Badge, Email
             headerView
 
             Divider().opacity(0.3)
 
-            // Primary rate window
             if let primary = snapshot.primaryWindow {
                 windowRow(window: primary, isPrimary: true)
             }
 
-            // Secondary rate window
             if let secondary = snapshot.secondaryWindow {
                 windowRow(window: secondary, isPrimary: false)
             }
 
-            // Extra rate windows (e.g. Gemini 5h, Weekly, 3p 5h, 3p Weekly)
             if !snapshot.extraWindows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("模型细分限额")
+                    Text("其他模型限额")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
 
@@ -178,13 +206,11 @@ struct HarnessQuotaPopoverView: View {
                 }
             }
 
-            // Credits and Perks
             if snapshot.creditsRemaining != nil || (snapshot.resetCreditsAvailable ?? 0) > 0 {
                 Divider().opacity(0.3)
                 perksView
             }
 
-            // Error notice if any
             if let error = snapshot.error {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill")
@@ -201,12 +227,11 @@ struct HarnessQuotaPopoverView: View {
 
             Divider().opacity(0.3)
 
-            // Footer: Updated at & Refresh button
             footerView
         }
         .padding(14)
-        .frame(width: 290)
-        .background(.ultraThinMaterial)
+        .frame(width: 300)
+        .liquidGlassCard(cornerRadius: 14, veil: 0.65)
     }
 
     private var headerView: some View {
@@ -249,7 +274,7 @@ struct HarnessQuotaPopoverView: View {
 
     @ViewBuilder
     private func windowRow(window: HarnessQuotaWindow, isPrimary: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(window.title)
                     .font(.system(size: 11.5, weight: isPrimary ? .medium : .regular))
@@ -257,21 +282,59 @@ struct HarnessQuotaPopoverView: View {
 
                 Spacer()
 
-                Text("\(Int(round(window.usedPercent)))%")
+                Text("剩余 \(Int(round(window.remainingPercent)))%")
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(progressBarColor(for: window.usedPercent))
+                    .foregroundStyle(progressBarColor(forRemaining: window.remainingPercent))
             }
 
-            quotaProgressBar(usedPercent: window.usedPercent)
+            if isPrimary && !snapshot.usageBreakdown.isEmpty {
+                segmentedProgressBar(breakdown: snapshot.usageBreakdown)
 
-            if let countdown = window.countdownDescription {
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                    Text(countdown)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                if let countdown = window.countdownDescription {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text(countdown)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(Array(snapshot.usageBreakdown.enumerated()), id: \.element.id) { index, item in
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(breakdownColor(for: index))
+                                .frame(width: 6, height: 6)
+
+                            Text(item.title)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            Text("已用 \(Int(round(item.usedPercent)))%")
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+            } else {
+                quotaProgressBar(remainingPercent: window.remainingPercent)
+
+                if let countdown = window.countdownDescription {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Text(countdown)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -287,12 +350,12 @@ struct HarnessQuotaPopoverView: View {
 
                 Spacer()
 
-                Text("\(Int(round(window.usedPercent)))%")
+                Text("剩余 \(Int(round(window.remainingPercent)))%")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(progressBarColor(for: window.usedPercent))
+                    .foregroundStyle(progressBarColor(forRemaining: window.remainingPercent))
             }
 
-            quotaProgressBar(usedPercent: window.usedPercent, height: 3.5)
+            quotaProgressBar(remainingPercent: window.remainingPercent, height: 3.5)
 
             if let countdown = window.countdownDescription {
                 Text(countdown)
@@ -346,18 +409,16 @@ struct HarnessQuotaPopoverView: View {
             Spacer()
 
             Button {
-                isRefreshing = true
                 onRefresh()
-                Task {
-                    try? await Task.sleep(nanoseconds: 800_000_000)
-                    isRefreshing = false
-                }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
-                        .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                        .animation(isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                    if isRefreshing {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                    }
                     Text("刷新")
                         .font(.system(size: 10.5))
                 }
@@ -366,12 +427,13 @@ struct HarnessQuotaPopoverView: View {
                 .background(Color.primary.opacity(0.06), in: Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(isRefreshing)
         }
     }
 
-    private func quotaProgressBar(usedPercent: Double, height: CGFloat = 4.5) -> some View {
+    private func quotaProgressBar(remainingPercent: Double, height: CGFloat = 4.5) -> some View {
         GeometryReader { geo in
-            let clamped = max(0.0, min(100.0, usedPercent))
+            let clamped = max(0.0, min(100.0, remainingPercent))
             let fillWidth = geo.size.width * (clamped / 100.0)
 
             ZStack(alignment: .leading) {
@@ -380,17 +442,52 @@ struct HarnessQuotaPopoverView: View {
                     .frame(height: height)
 
                 Capsule()
-                    .fill(progressBarColor(for: clamped))
+                    .fill(progressBarColor(forRemaining: clamped))
                     .frame(width: fillWidth, height: height)
             }
         }
         .frame(height: height)
     }
 
-    private func progressBarColor(for usedPercent: Double) -> Color {
-        if usedPercent >= 95.0 {
+    private func segmentedProgressBar(breakdown: [HarnessQuotaBreakdownItem], height: CGFloat = 6.0) -> some View {
+        GeometryReader { geo in
+            let totalWidth = geo.size.width
+            HStack(spacing: 1.5) {
+                ForEach(Array(breakdown.enumerated()), id: \.element.id) { index, item in
+                    let pct = max(0.0, min(100.0, item.usedPercent))
+                    let segWidth = totalWidth * CGFloat(pct / 100.0)
+                    if segWidth > 1.0 {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(breakdownColor(for: index))
+                            .frame(width: max(2.5, segWidth - 1.5))
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(height: height)
+            .background(Color.primary.opacity(0.08))
+            .clipShape(Capsule())
+        }
+        .frame(height: height)
+    }
+
+    private func breakdownColor(for index: Int) -> Color {
+        let colors: [Color] = [
+            Color(nsColor: .systemBlue),
+            Color(nsColor: .systemPurple),
+            Color(nsColor: .systemOrange),
+            Color(nsColor: .systemTeal),
+            Color(nsColor: .systemPink),
+            Color(nsColor: .systemIndigo),
+            Color(nsColor: .systemMint)
+        ]
+        return colors[index % colors.count]
+    }
+
+    private func progressBarColor(forRemaining remainingPercent: Double) -> Color {
+        if remainingPercent <= 5.0 {
             return Color.red
-        } else if usedPercent >= 80.0 {
+        } else if remainingPercent <= 20.0 {
             return Color.orange
         } else {
             return Palette.moss
@@ -411,113 +508,130 @@ struct HarnessQuotaPopoverView: View {
     }
 }
 
-// MARK: - Quota Critical Alert Banner (for Composer top)
-
-struct HarnessQuotaCriticalBanner: View {
-    @Environment(AppModel.self) private var model
-    let agentId: String
-
-    @State private var showPopover = false
-
-    private var snapshot: HarnessQuotaSnapshot? {
-        model.quotaService.snapshot(for: agentId)
-    }
-
-    var body: some View {
-        if let snapshot = snapshot, snapshot.overallSeverity == .critical, let urgent = snapshot.mostUrgentWindow {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.red)
-
-                Text("\(snapshot.providerTitle) 配额即将耗尽（\(Int(round(urgent.usedPercent)))% 已使用）\(urgent.countdownDescription != nil ? " · \(urgent.countdownDescription!)" : "")")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button("查看详情") {
-                    showPopover = true
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.accent)
-                .buttonStyle(.plain)
-                .popover(isPresented: $showPopover, arrowEdge: .bottom) {
-                    HarnessQuotaPopoverView(snapshot: snapshot) {
-                        if let agent = model.agents.first(where: { $0.id == agentId }) {
-                            Task {
-                                await model.quotaService.refreshQuota(for: agent, force: true)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.red.opacity(0.09))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.red.opacity(0.2), lineWidth: 0.5)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal, 10)
-            .padding(.top, 4)
-        }
-    }
-}
-
-// MARK: - Quota Summary Badge (for SettingsView AgentRow)
+// MARK: - Quota Summary Badge (for Settings Agent Row)
 
 struct HarnessQuotaSummaryBadge: View {
-    @Environment(AppModel.self) private var model
     let agentId: String
-
-    @State private var showPopover = false
-
-    private var agent: AgentProfile? {
-        model.agents.first(where: { $0.id == agentId })
-    }
+    @Environment(AppModel.self) private var model
 
     private var snapshot: HarnessQuotaSnapshot? {
         model.quotaService.snapshot(for: agentId)
     }
 
     var body: some View {
-        if let snapshot = snapshot, let agent = agent {
-            Button {
-                showPopover.toggle()
-            } label: {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(badgeColor(snapshot.overallSeverity))
-                        .frame(width: 5.5, height: 5.5)
-
-                    Text(snapshot.shortSummary)
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color.primary.opacity(0.05), in: Capsule())
+        if HarnessQuotaFetcher.supportsQuota(for: agentId), let snapshot = snapshot {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(badgeColor(snapshot.overallSeverity))
+                    .frame(width: 6, height: 6)
+                Text(snapshot.shortSummary)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showPopover, arrowEdge: .leading) {
-                HarnessQuotaPopoverView(snapshot: snapshot) {
-                    Task {
-                        await model.quotaService.refreshQuota(for: agent, force: true)
-                    }
-                }
-            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.primary.opacity(0.04), in: Capsule())
         }
     }
 
     private func badgeColor(_ severity: HarnessQuotaSeverity) -> Color {
         switch severity {
-        case .critical: return Color.red
-        case .warning: return Color.orange
+        case .critical: return .red
+        case .warning: return .orange
         case .healthy: return Palette.moss
-        case .unknown: return Color.secondary.opacity(0.4)
+        case .unknown: return .secondary
+        }
+    }
+}
+
+private final class QuotaChromeAnchor: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var intrinsicContentSize: NSSize { .zero }
+}
+
+private struct QuotaChromeAnchorView: NSViewRepresentable {
+    func makeNSView(context: Context) -> QuotaChromeAnchor {
+        QuotaChromeAnchor()
+    }
+
+    func updateNSView(_ nsView: QuotaChromeAnchor, context: Context) {}
+}
+
+private struct QuotaOutsideDismiss: NSViewRepresentable {
+    var isActive: Bool
+    var onDismiss: @MainActor () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.setAccessibilityHidden(true)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onDismiss = onDismiss
+        context.coordinator.setActive(isActive)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.setActive(false)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: @unchecked Sendable {
+        var onDismiss: @MainActor () -> Void = {}
+        nonisolated(unsafe) private var monitor: Any?
+
+        func setActive(_ active: Bool) {
+            if active {
+                guard monitor == nil else { return }
+                monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+                    guard let self else { return event }
+                    if event.type == .keyDown {
+                        guard event.keyCode == 53 else { return event }
+                        let dismiss = self.onDismiss
+                        Task { @MainActor in dismiss() }
+                        return nil
+                    }
+                    let windowNumber = event.windowNumber
+                    let location = event.locationInWindow
+                    let dismiss = self.onDismiss
+                    Task { @MainActor in
+                        if Self.hitQuotaChrome(windowNumber: windowNumber, location: location) {
+                            return
+                        }
+                        dismiss()
+                    }
+                    return event
+                }
+            } else if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        deinit {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+
+        @MainActor
+        private static func hitQuotaChrome(windowNumber: Int, location: NSPoint) -> Bool {
+            guard let window = NSApp.window(withWindowNumber: windowNumber),
+                  let hit = window.contentView?.hitTest(location)
+            else {
+                return false
+            }
+            var current: NSView? = hit
+            while let view = current {
+                if view is QuotaChromeAnchor { return true }
+                if view.subviews.contains(where: { $0 is QuotaChromeAnchor }) { return true }
+                current = view.superview
+            }
+            return false
         }
     }
 }
