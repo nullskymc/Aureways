@@ -158,7 +158,7 @@ Runner（`macos-26`）上自动选取最新 Xcode，然后：
 
 | 项 | 值 |
 | --- | --- |
-| Marketing version | 0.1.3（build 4） |
+| Marketing version | 0.1.4（build 5） |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
 | 最低系统 | macOS 26 |
