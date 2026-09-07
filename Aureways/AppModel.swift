@@ -20,6 +20,10 @@ final class AppModel {
         didSet {
             if oldValue != selectedAgentId {
                 UserDefaults.standard.set(selectedAgentId, forKey: "selectedAgentId")
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.quotaService.refreshQuota(for: self.selectedAgent)
+                }
             }
         }
     }
@@ -53,6 +57,8 @@ final class AppModel {
     var mcpServers: [McpServerConfig] = [] {
         didSet { persistMcpServers() }
     }
+
+    var quotaService = HarnessQuotaService()
 
     var runtimes: [String: HarnessRuntime] = [:]
     let store: SessionStore?
@@ -142,6 +148,10 @@ final class AppModel {
         refreshAvailability()
         bootstrapWorkspaces(currentPath: initialWorkspace)
         updateWorkspaceBranch()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.quotaService.refreshAll(agents: self.agents)
+        }
         #if DEBUG
         installPerfFixtureIfRequested()
         #endif
@@ -154,6 +164,10 @@ final class AppModel {
             map[agent.id] = HostEnvironment.isAvailable(agent)
         }
         availability = map
+        Task { [weak self] in
+            guard let self else { return }
+            await self.quotaService.refreshAll(agents: self.agents)
+        }
     }
 
     func addCustomAgent() {

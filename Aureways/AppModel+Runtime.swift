@@ -162,6 +162,10 @@ extension AppModel {
         defer {
             flushSessionUpdates()
             session.isStreaming = false
+            Task { [weak self] in
+                guard let self else { return }
+                await self.quotaService.refreshQuota(for: session.agent, force: true)
+            }
         }
         do {
             let caps = runtimes[session.agent.id]?.capabilities.promptCapabilities

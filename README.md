@@ -43,12 +43,30 @@ Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com)
 | Grok Build | `grok agent stdio` |
 | Codex | `npx -y @agentclientprotocol/codex-acp` |
 | Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` |
-| Antigravity | `agy --acp` (falls back to `npx -y agy-acp`) |
+| Antigravity | `agy_acp_server` (official Google ACP zip; not `agy --acp`) |
 | GitHub Copilot | `copilot --acp --stdio` |
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 
 Install and sign in to the matching CLI first. Login and API keys live in each vendor's own tool — they don't go through Aureways. Add custom agents in Settings (`⌘,`).
+
+Antigravity's CLI (`agy`) has no `--acp` mode. Google publishes a separate ACP server (`agy_acp_server.par` + `localharness_external` in the same directory). On Apple Silicon:
+
+```bash
+mkdir -p ~/.local/share/antigravity-acp ~/.local/bin
+curl -fsSL -o /tmp/agy-acp.zip \
+  https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-agy_acp_server_1.1.1-darwin-arm64.zip
+unzip -o /tmp/agy-acp.zip -d ~/.local/share/antigravity-acp
+chmod +x ~/.local/share/antigravity-acp/agy_acp_server.par \
+         ~/.local/share/antigravity-acp/localharness_external
+cat > ~/.local/bin/agy_acp_server <<'EOF'
+#!/bin/sh
+exec "$HOME/.local/share/antigravity-acp/agy_acp_server.par" "$@"
+EOF
+chmod +x ~/.local/bin/agy_acp_server
+```
+
+Do not symlink only the `.par` onto `PATH` — the server looks for `localharness_external` next to the executable. First connect authenticates with Google (`oauth-personal`). Override the binary with `AGY_ACP_BIN`.
 
 ## Getting started
 

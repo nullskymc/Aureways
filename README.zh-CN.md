@@ -43,12 +43,30 @@
 | Grok Build | `grok agent stdio` |
 | Codex | `npx -y @agentclientprotocol/codex-acp` |
 | Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` |
-| Antigravity | `agy --acp`（找不到时回退 `npx -y agy-acp`） |
+| Antigravity | `agy_acp_server`（Google 官方 ACP zip，不是 `agy --acp`） |
 | GitHub Copilot | `copilot --acp --stdio` |
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 
 对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理，不进 Aureways 的设置。自定义 Agent 在偏好设置（`⌘,`）里添加。
+
+Antigravity 的 `agy` CLI **没有** `--acp`。Google 另发一个 ACP 包：`agy_acp_server.par` 和 `localharness_external` 必须放在同一目录。Apple Silicon：
+
+```bash
+mkdir -p ~/.local/share/antigravity-acp ~/.local/bin
+curl -fsSL -o /tmp/agy-acp.zip \
+  https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-agy_acp_server_1.1.1-darwin-arm64.zip
+unzip -o /tmp/agy-acp.zip -d ~/.local/share/antigravity-acp
+chmod +x ~/.local/share/antigravity-acp/agy_acp_server.par \
+         ~/.local/share/antigravity-acp/localharness_external
+cat > ~/.local/bin/agy_acp_server <<'EOF'
+#!/bin/sh
+exec "$HOME/.local/share/antigravity-acp/agy_acp_server.par" "$@"
+EOF
+chmod +x ~/.local/bin/agy_acp_server
+```
+
+不要只把 `.par` 软链到 `PATH`——进程会在可执行文件旁边找 `localharness_external`。首次连接走 Google 登录（`oauth-personal`）。可用 `AGY_ACP_BIN` 指定二进制路径。
 
 ## 运行
 

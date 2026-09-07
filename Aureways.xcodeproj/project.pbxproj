@@ -88,6 +88,10 @@
 		B1010000000000000000002D /* FileBrowserTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002D /* FileBrowserTab.swift */; };
 		B1010000000000000000002E /* FileEditorTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002E /* FileEditorTab.swift */; };
 		B1010000000000000000002F /* TerminalTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002F /* TerminalTab.swift */; };
+		B10100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
+		B20100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
+		B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000051 /* HarnessQuotaViews.swift */; };
+		B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000050 /* HarnessQuotaTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -160,6 +164,9 @@
 		F1010000000000000000002D /* FileBrowserTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserTab.swift; sourceTree = "<group>"; };
 		F1010000000000000000002E /* FileEditorTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileEditorTab.swift; sourceTree = "<group>"; };
 		F1010000000000000000002F /* TerminalTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTab.swift; sourceTree = "<group>"; };
+		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
+		F10100000000000000000051 /* HarnessQuotaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaViews.swift; sourceTree = "<group>"; };
+		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -254,6 +261,7 @@
 				F1010000000000000000001E /* Palette.swift */,
 				F1010000000000000000002A /* Chrome.swift */,
 				F1010000000000000000001F /* PermissionCard.swift */,
+				F10100000000000000000051 /* HarnessQuotaViews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -274,6 +282,7 @@
 				F20100000000000000000041 /* TranscriptPerfTests.swift */,
 				F20100000000000000000042 /* TerminalHostTests.swift */,
 				F20100000000000000000002 /* ComposerTextViewTests.swift */,
+				F20100000000000000000050 /* HarnessQuotaTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -291,6 +300,7 @@
 				F10100000000000000000027 /* Cursor.swift */,
 				F10100000000000000000028 /* OpenCode.swift */,
 				F10100000000000000000029 /* CustomHarness.swift */,
+				F10100000000000000000050 /* HarnessQuota.swift */,
 			);
 			path = Harness;
 			sourceTree = "<group>";
@@ -329,6 +339,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				D10100000000000000000001 /* PBXTargetDependency */,
 			);
 			name = AurewaysTests;
 			productName = AurewaysTests;
@@ -445,6 +456,8 @@
 				B10100000000000000000027 /* Cursor.swift in Sources */,
 				B10100000000000000000028 /* OpenCode.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
+				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,6 +491,8 @@
 				B20100000000000000000027 /* Cursor.swift in Sources */,
 				B20100000000000000000028 /* OpenCode.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
+				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -590,6 +605,7 @@
 		K20100000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
@@ -599,12 +615,14 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aureways.app/Contents/MacOS/Aureways";
 			};
 			name = Debug;
 		};
 		K20100000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 3;
@@ -614,6 +632,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aureways.app/Contents/MacOS/Aureways";
 			};
 			name = Release;
 		};

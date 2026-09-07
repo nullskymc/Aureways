@@ -124,7 +124,12 @@ struct AgentSettingsPage: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { model.refreshAvailability() }
+        .onAppear {
+            model.refreshAvailability()
+            Task {
+                await model.quotaService.refreshAll(agents: model.agents)
+            }
+        }
         .sheet(isPresented: $isShowingCustomSheet) {
             CustomAgentSheet()
                 .environment(model)
@@ -164,6 +169,8 @@ private struct AgentRow: View {
             }
 
             Spacer()
+
+            HarnessQuotaSummaryBadge(agentId: agent.id)
 
             if isDefault {
                 Image(systemName: "checkmark.circle.fill")

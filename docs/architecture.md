@@ -22,7 +22,7 @@ Aureways 是 **ACP Client**，不是 Agent。Agent 是本机已安装的 harness
                            │ stdin / stdout / stderr
 ┌──────────────────────────▼──────────────────────────────┐
 │  Harness 子进程                                         │
-│  grok | npx …codex-acp | agy --acp | …                │
+│  grok | npx …codex-acp | agy_acp_server | …           │
 └─────────────────────────────────────────────────────────┘
 ```
 

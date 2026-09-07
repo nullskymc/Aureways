@@ -137,6 +137,8 @@ struct ComposerCard: View {
 
     private var cardStack: some View {
         VStack(alignment: .leading, spacing: 0) {
+            HarnessQuotaCriticalBanner(agentId: displayedAgent.id)
+
             ZStack(alignment: .topLeading) {
                 Text(draft.isEmpty ? " " : draft)
                     .font(.system(size: 13.5))
@@ -214,6 +216,7 @@ struct ComposerCard: View {
             Spacer(minLength: 8)
 
             harnessChip
+            HarnessQuotaChip(agentId: displayedAgent.id)
             sessionModelChip
             sessionModeChip
 

@@ -270,6 +270,16 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(grok.sessionMeta(autoApprove: true)?["yoloMode"]?.boolValue, true)
         XCTAssertNil(grok.sessionMeta(autoApprove: false))
         XCTAssertNil(CodexHarness().sessionMeta(autoApprove: true))
+
+        let antigravity = AntigravityHarness()
+        XCTAssertEqual(antigravity.profile.command, "agy_acp_server")
+        XCTAssertEqual(antigravity.profile.arguments, [])
+        XCTAssertEqual(antigravity.launchArguments(autoApprove: true), [])
+        let command = antigravity.launchCommand()
+        XCTAssertTrue(
+            command.hasSuffix("agy_acp_server") || command.hasSuffix("agy_acp_server.par"),
+            command
+        )
     }
 
     func testCustomAgentIdsAreUnique() {
