@@ -777,7 +777,140 @@ final class ProtocolTests: XCTestCase {
             XCTFail("expected image-only user item")
         }
     }
+
+    func testTerminalToolCallDetectionAndFormatting() throws {
+        let toolJSON = try JSONValue.decode(from: #"""
+        {
+            "toolCallId": "call_123",
+            "title": "run_command",
+            "kind": "other",
+            "status": "completed",
+            "rawInput": {
+                "working_dir": "/Volumes/app/DevelopProject/Aureways",
+                "command_line": "grep -rn \"WorkspaceTree\" /Volumes/app/DevelopProject/Aureways/Aureways"
+            },
+            "rawOutput": {
+                "exit_code": 0,
+                "output": "Aureways/Views/WorkspaceTree.swift:10:struct WorkspaceTree"
+            }
+        }
+        """#)
+
+        let call = ToolCallView(json: toolJSON)
+        XCTAssertTrue(call.isTerminal)
+        XCTAssertEqual(call.terminalCommand, #"grep -rn "WorkspaceTree" /Volumes/app/DevelopProject/Aureways/Aureways"#)
+        XCTAssertEqual(call.terminalCwd, "/Volumes/app/DevelopProject/Aureways")
+        XCTAssertEqual(call.terminalExitCode, 0)
+        XCTAssertEqual(call.terminalOutput, "Aureways/Views/WorkspaceTree.swift:10:struct WorkspaceTree")
+        XCTAssertEqual(call.kindLabel, "执行命令")
+        XCTAssertEqual(call.displayTitle, #"执行命令 · grep -rn "WorkspaceTree" /Volumes/app/DevelopProject/Aureways/Aureways"#)
+        XCTAssertNil(call.otherRawInput)
+    }
+    func testTerminalNestedMcpToolArguments() throws {
+        let toolJSON = try JSONValue.decode(from: """
+        {
+            "toolCallId": "call_456",
+            "title": "call_mcp_tool",
+            "kind": "other",
+            "status": "completed",
+            "rawInput": {
+                "ServerName": "default_api",
+                "ToolName": "run_command",
+                "Arguments": {
+                    "CommandLine": "swift test",
+                    "Cwd": "/tmp/project"
+                }
+            }
+        }
+        """)
+
+        let call = ToolCallView(json: toolJSON)
+        XCTAssertTrue(call.isTerminal)
+        XCTAssertEqual(call.terminalCommand, "swift test")
+        XCTAssertEqual(call.terminalCwd, "/tmp/project")
+        XCTAssertEqual(call.displayTitle, "执行命令 · swift test")
+    }
+
+    func testPermissionPromptWithTerminalTool() throws {
+        let promptJSON = try JSONValue.decode(from: """
+        {
+            "sessionId": "sess_1",
+            "toolCall": {
+                "toolCallId": "call_789",
+                "title": "run_command",
+                "kind": "execute",
+                "rawInput": {
+                    "command_line": "git status",
+                    "working_dir": "/tmp/repo"
+                }
+            },
+            "options": [
+                {"optionId": "allow_once", "name": "允许一次", "kind": "allow_once"},
+                {"optionId": "deny", "name": "拒绝", "kind": "deny"}
+            ]
+        }
+        """)
+
+        let prompt = PermissionPrompt(json: promptJSON)
+        XCTAssertNotNil(prompt)
+        XCTAssertEqual(prompt?.title, "执行命令 · git status")
+        XCTAssertEqual(prompt?.toolCall?.isTerminal, true)
+        XCTAssertEqual(prompt?.toolCall?.terminalCommand, "git status")
+        XCTAssertEqual(prompt?.toolCall?.terminalCwd, "/tmp/repo")
+    }
+
+    func testGenericScriptIsNotTerminal() throws {
+        let toolJSON = try JSONValue.decode(from: """
+        {
+            "toolCallId": "call_script",
+            "title": "generate_script",
+            "kind": "other",
+            "rawInput": {
+                "script": "print(1)",
+                "directory": "/tmp/notebooks"
+            }
+        }
+        """)
+        let call = ToolCallView(json: toolJSON)
+        XCTAssertFalse(call.isTerminal)
+        XCTAssertNotEqual(call.kindLabel, "执行命令")
+    }
+
+    func testDerivedBriefSkipsEmptyCommand() throws {
+        let toolJSON = try JSONValue.decode(from: """
+        {
+            "toolCallId": "call_empty_cmd",
+            "title": "Tool",
+            "kind": "other",
+            "rawInput": {
+                "command": "  \\n",
+                "path": "/tmp/workspace/Foo.swift"
+            }
+        }
+        """)
+        let call = ToolCallView(json: toolJSON)
+        XCTAssertFalse(call.isTerminal)
+        XCTAssertEqual(call.displayTitle, "工具 · Foo.swift")
+    }
+
+    func testKindLabelUsesTitleTokens() throws {
+        let thread = try JSONValue.decode(from: """
+        {"toolCallId":"t1","title":"thread_list","kind":"other"}
+        """)
+        XCTAssertEqual(ToolCallView(json: thread).kindLabel, "工具")
+
+        let preview = try JSONValue.decode(from: """
+        {"toolCallId":"t2","title":"preview_diff","kind":"other"}
+        """)
+        XCTAssertEqual(ToolCallView(json: preview).kindLabel, "工具")
+
+        let readFile = try JSONValue.decode(from: """
+        {"toolCallId":"t3","title":"read_file","kind":"other"}
+        """)
+        XCTAssertEqual(ToolCallView(json: readFile).kindLabel, "读取文件")
+    }
 }
+
 
 private actor TextBox {
     private var parts: [String] = []

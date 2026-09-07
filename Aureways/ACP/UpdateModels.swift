@@ -277,207 +277,6 @@ struct SessionNotification: Sendable, Equatable {
     }
 }
 
-#if false
-enum MarkdownBlocksRemoved { // homemade parser retired; SwiftStreamingMarkdown owns rendering
-    static func ignore(_ source: String) {
-        let text = source.replacingOccurrences(of: "\r\n", with: "\n")
-        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
-        var blocks: [Block] = []
-        var index = 0
-        while index < lines.count {
-            let line = lines[index]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                index += 1
-                continue
-            }
-            if index + 1 < lines.count, isTableRow(line), isTableSeparator(lines[index + 1]) {
-                let headers = splitTableRow(line)
-                let alignments = splitTableRow(lines[index + 1]).map(tableAlignment)
-                index += 2
-                var rows: [[String]] = []
-                while index < lines.count, isTableRow(lines[index]), !isTableSeparator(lines[index]) {
-                    rows.append(splitTableRow(lines[index]))
-                    index += 1
-                }
-                blocks.append(.table(headers: headers, alignments: alignments, rows: rows))
-                continue
-            }
-            if let fence = fenceHeader(line) {
-                var body: [String] = []
-                index += 1
-                while index < lines.count, !fenceClose(lines[index], marker: fence.marker) {
-                    body.append(lines[index])
-                    index += 1
-                }
-                if index < lines.count { index += 1 }
-                blocks.append(.code(fence.language, body.joined(separator: "\n")))
-                continue
-            }
-            if let heading = heading(line) {
-                blocks.append(.heading(heading.level, heading.text))
-                index += 1
-                continue
-            }
-            if isRule(trimmed) {
-                blocks.append(.rule)
-                index += 1
-                continue
-            }
-            if isQuote(line) {
-                var quoted: [String] = []
-                while index < lines.count {
-                    let current = lines[index]
-                    if current.trimmingCharacters(in: .whitespaces).isEmpty {
-                        if index + 1 < lines.count, isQuote(lines[index + 1]) {
-                            quoted.append("")
-                            index += 1
-                            continue
-                        }
-                        break
-                    }
-                    guard isQuote(current) else { break }
-                    quoted.append(stripQuote(current))
-                    index += 1
-                }
-                blocks.append(.quote(quoted.joined(separator: "\n")))
-                continue
-            }
-            if let item = listItem(line) {
-                var items = [item.text]
-                let ordered = item.ordered
-                index += 1
-                while index < lines.count, let next = listItem(lines[index]), next.ordered == ordered {
-                    items.append(next.text)
-                    index += 1
-                }
-                blocks.append(.list(ordered: ordered, items: items))
-                continue
-            }
-            var paragraph = [line]
-            index += 1
-            while index < lines.count {
-                let next = lines[index]
-                if next.trimmingCharacters(in: .whitespaces).isEmpty { break }
-                if fenceHeader(next) != nil { break }
-                if heading(next) != nil { break }
-                if isRule(next.trimmingCharacters(in: .whitespaces)) { break }
-                if isQuote(next) { break }
-                if listItem(next) != nil { break }
-                if index + 1 < lines.count, isTableRow(next), isTableSeparator(lines[index + 1]) { break }
-                paragraph.append(next)
-                index += 1
-            }
-            blocks.append(.paragraph(paragraph.joined(separator: "\n")))
-        }
-        return blocks
-    }
-
-    private static func fenceHeader(_ line: String) -> (marker: Character, language: String?)? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
-        var count = 0
-        for character in trimmed {
-            if character == first { count += 1 } else { break }
-        }
-        guard count >= 3 else { return nil }
-        let rest = trimmed.dropFirst(count).trimmingCharacters(in: .whitespaces)
-        return (first, rest.isEmpty ? nil : rest)
-    }
-
-    private static func fenceClose(_ line: String, marker: Character) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.first == marker else { return false }
-        var count = 0
-        for character in trimmed {
-            if character == marker { count += 1 } else { return false }
-        }
-        return count >= 3
-    }
-
-    private static func heading(_ line: String) -> (level: Int, text: String)? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.first == "#" else { return nil }
-        var level = 0
-        for character in trimmed {
-            if character == "#" { level += 1 } else { break }
-        }
-        guard (1...6).contains(level) else { return nil }
-        let rest = trimmed.dropFirst(level)
-        guard rest.first == " " || rest.isEmpty else { return nil }
-        return (level, rest.drop(while: { $0 == " " }).trimmingCharacters(in: .whitespaces))
-    }
-
-    private static func isRule(_ trimmed: String) -> Bool {
-        let compact = trimmed.replacingOccurrences(of: " ", with: "")
-        return compact.count >= 3 && (compact.allSatisfy { $0 == "-" } || compact.allSatisfy { $0 == "*" } || compact.allSatisfy { $0 == "_" })
-    }
-
-    private static func isQuote(_ line: String) -> Bool {
-        line.trimmingCharacters(in: .whitespaces).hasPrefix(">")
-    }
-
-    private static func stripQuote(_ line: String) -> String {
-        var rest = Substring(line)
-        while rest.first == " " || rest.first == "\t" { rest = rest.dropFirst() }
-        if rest.first == ">" { rest = rest.dropFirst() }
-        if rest.first == " " { rest = rest.dropFirst() }
-        return String(rest)
-    }
-
-    private static func isTableRow(_ line: String) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.contains("|") else { return false }
-        return splitTableRow(trimmed).count >= 2
-    }
-
-    private static func isTableSeparator(_ line: String) -> Bool {
-        let cells = splitTableRow(line)
-        guard !cells.isEmpty else { return false }
-        return cells.allSatisfy { cell in
-            let compact = cell.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ":", with: "")
-            return !compact.isEmpty && compact.allSatisfy { $0 == "-" }
-        }
-    }
-
-    static func splitTableRow(_ line: String) -> [String] {
-        var body = line.trimmingCharacters(in: .whitespaces)
-        if body.hasPrefix("|") { body.removeFirst() }
-        if body.hasSuffix("|") { body.removeLast() }
-        return body.split(separator: "|", omittingEmptySubsequences: false).map {
-            $0.trimmingCharacters(in: .whitespaces)
-        }
-    }
-
-    private static func tableAlignment(_ cell: String) -> TableAlignment {
-        let trimmed = cell.trimmingCharacters(in: .whitespaces)
-        let leading = trimmed.hasPrefix(":")
-        let trailing = trimmed.hasSuffix(":")
-        switch (leading, trailing) {
-        case (true, true): return .center
-        case (false, true): return .right
-        case (true, false): return .left
-        default: return .none
-        }
-    }
-
-    private static func listItem(_ line: String) -> (ordered: Bool, text: String)? {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
-            return (false, String(trimmed.dropFirst(2)))
-        }
-        var digits = 0
-        for character in trimmed {
-            if character.isNumber { digits += 1 } else { break }
-        }
-        guard digits > 0 else { return nil }
-        let rest = trimmed.dropFirst(digits)
-        guard rest.hasPrefix(". ") || rest.hasPrefix(") ") else { return nil }
-        return (true, String(rest.dropFirst(2)))
-    }
-}
-#endif
-
 struct ToolCallLocation: Sendable, Equatable {
     var path: String
     var line: Int?
@@ -570,50 +369,235 @@ struct ToolCallView: Sendable, Equatable {
         if !other.locations.isEmpty { locations = other.locations }
     }
 
+    private static func extractValue(from json: JSONValue?, keys: [String]) -> JSONValue? {
+        guard let json else { return nil }
+        for key in keys {
+            if let val = json[key] {
+                return val
+            }
+        }
+        for nestedKey in ["Arguments", "arguments", "parameters", "params", "input", "args"] {
+            if let nested = json[nestedKey], case .object = nested {
+                if let val = extractValue(from: nested, keys: keys) {
+                    return val
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func nonEmptyString(from val: JSONValue) -> String? {
+        if let str = val.stringValue {
+            let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : str
+        }
+        if let arr = val.arrayValue {
+            let joined = arr.compactMap(\.stringValue).joined(separator: " ")
+            let trimmed = joined.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : joined
+        }
+        return nil
+    }
+
+    private static func extractNonEmptyString(from json: JSONValue?, keys: [String]) -> String? {
+        guard let json else { return nil }
+        for key in keys {
+            if let val = json[key], let str = nonEmptyString(from: val) {
+                return str
+            }
+        }
+        for nestedKey in ["Arguments", "arguments", "parameters", "params", "input", "args"] {
+            if let nested = json[nestedKey], case .object = nested {
+                if let str = extractNonEmptyString(from: nested, keys: keys) {
+                    return str
+                }
+            }
+        }
+        return nil
+    }
+
+    static func titleHasToken(_ title: String, _ candidates: Set<String>) -> Bool {
+        let lower = title.lowercased()
+        if candidates.contains(lower) { return true }
+        let tokens = lower.split { $0 == "_" || $0 == "-" || $0 == "." || $0.isWhitespace }.map(String.init)
+        return tokens.contains(where: { candidates.contains($0) })
+    }
+
+    var isTerminal: Bool {
+        let k = kind.lowercased()
+        if k == "execute" || k == "terminal" || k == "shell" || k == "bash" || k == "sh" || k == "command" || k == "run" || k == "exec" {
+            return true
+        }
+        let t = title.lowercased()
+        if t == "run_command" || t == "runcommand" || t == "execute_command" || t == "executecommand" || t == "bash" || t == "terminal" || t == "sh" || t == "zsh" || t == "exec" {
+            return true
+        }
+        if let toolName = rawInput?["ToolName"]?.stringValue?.lowercased() {
+            if toolName == "run_command" || toolName == "execute_command" || toolName == "bash" || toolName == "terminal" {
+                return true
+            }
+        }
+        if let input = rawInput {
+            let commandKeys = ["command_line", "commandLine", "CommandLine", "cmd_line", "cmdLine"]
+            if Self.extractNonEmptyString(from: input, keys: commandKeys) != nil {
+                return true
+            }
+            let generalCommandKeys = ["command", "cmd", "script"]
+            let cwdKeys = ["working_dir", "workingDir", "workingDirectory", "cwd", "Cwd"]
+            if Self.extractNonEmptyString(from: input, keys: generalCommandKeys) != nil,
+               Self.extractNonEmptyString(from: input, keys: cwdKeys) != nil {
+                return true
+            }
+        }
+        return false
+    }
+
+    var terminalCommand: String? {
+        guard let input = rawInput else { return nil }
+        let commandKeys = [
+            "command_line", "commandLine", "CommandLine",
+            "cmd_line", "cmdLine",
+            "command", "cmd", "script"
+        ]
+        guard let val = Self.extractValue(from: input, keys: commandKeys) else { return nil }
+        if let str = val.stringValue {
+            let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        } else if let arr = val.arrayValue {
+            let parts = arr.compactMap(\.stringValue).map { part in
+                part.contains(" ") ? "\"\(part)\"" : part
+            }
+            let joined = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !joined.isEmpty { return joined }
+        }
+        return nil
+    }
+
+    var terminalCwd: String? {
+        guard let input = rawInput else { return nil }
+        let cwdKeys = ["working_dir", "workingDir", "workingDirectory", "cwd", "Cwd", "dir", "directory"]
+        if let val = Self.extractValue(from: input, keys: cwdKeys), let str = val.stringValue {
+            let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return nil
+    }
+
+    var terminalOutput: String? {
+        if !contentText.isEmpty {
+            return contentText
+        }
+        guard let output = rawOutput else { return nil }
+        if let str = output.stringValue, !str.isEmpty {
+            return str
+        }
+        if let obj = output.objectValue {
+            let outputKeys = ["output", "stdout", "stderr", "result", "text", "response"]
+            var pieces: [String] = []
+            for key in outputKeys {
+                if let val = obj[key]?.stringValue, !val.isEmpty {
+                    pieces.append(val)
+                }
+            }
+            if !pieces.isEmpty {
+                return pieces.joined(separator: "\n")
+            }
+        }
+        return nil
+    }
+
+    var terminalExitCode: Int? {
+        guard let out = rawOutput else { return nil }
+        if let code = out["exit_code"]?.int64Value ?? out["exitCode"]?.int64Value ?? out["returncode"]?.int64Value ?? out["status"]?.int64Value {
+            return Int(code)
+        }
+        return nil
+    }
+
+    var otherRawInput: JSONValue? {
+        guard isTerminal, let input = rawInput, case .object(let dict) = input else {
+            return rawInput
+        }
+        let knownTerminalKeys: Set<String> = [
+            "command", "cmd", "command_line", "commandLine", "CommandLine",
+            "cmd_line", "cmdLine", "script", "args", "arguments",
+            "working_dir", "workingDir", "workingDirectory", "cwd", "Cwd", "dir", "directory",
+            "ToolName", "ServerName"
+        ]
+        let remaining = dict.filter { !knownTerminalKeys.contains($0.key) }
+        guard !remaining.isEmpty else { return nil }
+        return .object(remaining)
+    }
+
+    var kindLabel: String {
+        if isTerminal { return "执行命令" }
+        let k = kind.lowercased()
+        switch k {
+        case "read": return "读取文件"
+        case "edit": return "编辑文件"
+        case "delete": return "删除文件"
+        case "move": return "移动文件"
+        case "execute", "terminal": return "执行命令"
+        case "search": return "搜索"
+        case "fetch": return "抓取网页"
+        default:
+            if Self.titleHasToken(title, ["read", "view", "readfile", "viewfile"]) { return "读取文件" }
+            if Self.titleHasToken(title, ["edit", "write", "create", "editfile", "writefile"]) { return "编辑文件" }
+            if Self.titleHasToken(title, ["search", "grep", "find"]) { return "搜索" }
+            return "工具"
+        }
+    }
+
+    private static let genericTitles: Set<String> = [
+        "tool", "tools",
+        "execute", "exec", "terminal", "bash", "sh", "zsh", "shell", "run", "command",
+        "run_command", "runcommand", "execute_command", "executecommand",
+        "read", "read_file", "readfile", "view_file", "viewfile", "client_view_file",
+        "edit", "edit_file", "editfile", "write_file", "writefile", "client_edit_file", "client_create_file",
+        "delete", "delete_file", "deletefile",
+        "search", "grep_search", "find_by_name", "glob_search",
+        "fetch", "web_search", "read_url_content", "call_mcp_tool"
+    ]
+
     /// 展示标题：harness 标题有效就直接用；缺失或太泛（不少 harness 只发
     /// "Tool" 或 kind 本身）时，按输入参数推导「动作 · 内容简介」。
     var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty, trimmed != "Tool", trimmed.lowercased() != kind.lowercased() {
+        let isGeneric = trimmed.isEmpty ||
+            Self.genericTitles.contains(trimmed.lowercased()) ||
+            trimmed.lowercased() == kind.lowercased()
+
+        if !isGeneric {
             return trimmed
         }
         guard let brief = derivedBrief else { return kindLabel }
         return "\(kindLabel) · \(brief)"
     }
 
-    var kindLabel: String {
-        switch kind {
-        case "read": return "读取文件"
-        case "edit": return "编辑文件"
-        case "delete": return "删除文件"
-        case "move": return "移动文件"
-        case "execute": return "执行命令"
-        case "search": return "搜索"
-        case "fetch": return "抓取网页"
-        default: return "工具"
-        }
-    }
-
     private var derivedBrief: String? {
-        guard let input = rawInput else { return nil }
-        let orderedKeys: [String]
-        switch kind {
-        case "execute":
-            orderedKeys = ["command", "cmd", "description"]
-        default:
-            orderedKeys = ["file_path", "path", "filePath", "notebook_path", "pattern", "query", "url", "description"]
-        }
-        for key in orderedKeys {
-            guard let raw = input[key]?.stringValue else { continue }
-            let firstLine = raw.split(whereSeparator: \.isNewline).first.map(String.init)?
+        if isTerminal, let cmd = terminalCommand {
+            let firstLine = cmd.split(whereSeparator: \.isNewline).first.map(String.init)?
                 .trimmingCharacters(in: .whitespaces) ?? ""
-            guard !firstLine.isEmpty else { continue }
-            if firstLine.hasPrefix("/") || firstLine.hasPrefix("~"), !firstLine.contains(" ") {
-                return URL(fileURLWithPath: firstLine).lastPathComponent
+            if !firstLine.isEmpty {
+                return firstLine
             }
-            return firstLine
         }
-        return nil
+        guard let input = rawInput else { return nil }
+        let orderedKeys = [
+            "command_line", "commandLine", "CommandLine", "cmd_line", "cmdLine", "command", "cmd", "script",
+            "file_path", "path", "filePath", "target_file", "source_file", "notebook_path",
+            "Pattern", "pattern", "query", "Query", "url", "Url", "description", "Prompt", "prompt"
+        ]
+        guard let raw = Self.extractNonEmptyString(from: input, keys: orderedKeys) else {
+            return nil
+        }
+        let firstLine = raw.split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        guard !firstLine.isEmpty else { return nil }
+        if firstLine.hasPrefix("/") || firstLine.hasPrefix("~"), !firstLine.contains(" ") {
+            return URL(fileURLWithPath: firstLine).lastPathComponent
+        }
+        return firstLine
     }
 }
 

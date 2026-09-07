@@ -63,6 +63,7 @@ struct ToolCompactRow: View {
                     }
                     .padding(.horizontal, 8)
                 }
+
                 ForEach(Array(call.diffs.enumerated()), id: \.offset) { _, diff in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(URL(fileURLWithPath: diff.path).lastPathComponent)
@@ -84,26 +85,114 @@ struct ToolCompactRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 }
-                if let rawInput = call.rawInput, let inputStr = try? String(data: rawInput.encode(), encoding: .utf8) {
-                    Text(Self.clamped(inputStr))
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                }
-                if !call.contentText.isEmpty {
-                    Text(Self.clamped(call.contentText))
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .lineLimit(12)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+                if call.isTerminal, let cmd = call.terminalCommand {
+                    terminalDetailView(command: cmd)
+                } else {
+                    if let rawInput = call.rawInput, let inputStr = try? String(data: rawInput.encode(), encoding: .utf8) {
+                        Text(Self.clamped(inputStr))
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
+                    if !call.contentText.isEmpty {
+                        Text(Self.clamped(call.contentText))
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(12)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
                 }
             }
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func terminalDetailView(command: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let cwd = call.terminalCwd {
+                HStack(spacing: 5) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    Text(cwd)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Palette.badgeBg.opacity(0.40), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
+
+            HStack(alignment: .top, spacing: 6) {
+                Text("$")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Palette.sky)
+                Text(Self.clamped(command))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                Spacer(minLength: 0)
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(command, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("复制命令")
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.badgeBg.opacity(0.60), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            if let output = call.terminalOutput, !output.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("输出")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        if let code = call.terminalExitCode {
+                            Text("退出码 \(code)")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(code == 0 ? Palette.moss : Color.red)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(
+                                    (code == 0 ? Palette.moss : Color.red).opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                )
+                        }
+                    }
+                    Text(Self.clamped(output))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(16)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.badgeBg.opacity(0.40), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+
+            if let extra = call.otherRawInput, let extraStr = try? String(data: extra.encode(), encoding: .utf8), extraStr != "{}" {
+                Text(Self.clamped(extraStr))
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.badgeBg.opacity(0.30), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+        }
     }
 
     /// `lineLimit` 只管显示行数，`Text` 仍会把整个字符串排一遍。工具输入 / 输出
@@ -130,13 +219,18 @@ struct ToolCompactRow: View {
     }
 
     private var icon: String {
+        if call.isTerminal { return "terminal" }
         switch call.kind {
         case "read": return "doc.text"
         case "edit", "delete", "move": return "pencil"
         case "execute": return "terminal"
         case "search": return "magnifyingglass"
         case "fetch": return "globe"
-        default: return "wrench.and.screwdriver"
+        default:
+            if ToolCallView.titleHasToken(call.title, ["read", "view", "readfile", "viewfile"]) { return "doc.text" }
+            if ToolCallView.titleHasToken(call.title, ["edit", "write", "create", "editfile", "writefile"]) { return "pencil" }
+            if ToolCallView.titleHasToken(call.title, ["search", "grep", "find"]) { return "magnifyingglass" }
+            return "wrench.and.screwdriver"
         }
     }
 
@@ -158,4 +252,3 @@ struct ToolCompactRow: View {
         }
     }
 }
-

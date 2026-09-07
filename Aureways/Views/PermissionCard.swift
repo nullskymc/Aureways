@@ -32,7 +32,34 @@ struct PermissionCard: View {
                 }
             }
 
-            if let input = prompt.toolCall?.rawInput {
+            if let toolCall = prompt.toolCall, toolCall.isTerminal, let cmd = toolCall.terminalCommand {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let cwd = toolCall.terminalCwd {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text(cwd)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("$")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Palette.sky)
+                        Text(cmd)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                            .lineLimit(6)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else if let input = prompt.toolCall?.rawInput {
                 Text(stringify(input))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)

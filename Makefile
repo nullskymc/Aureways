@@ -23,7 +23,11 @@ endif
 # command-line builds do not stall on approval. SwiftStreamingMarkdown pulls in
 # ordo-one/equatable, a swift-syntax macro package, which needs the macro
 # equivalent of that flag for the same reason.
-XCBUILD_FLAGS := -skipPackagePluginValidation -skipMacroValidation
+DESTINATION ?= platform=macOS
+XCBUILD_FLAGS := -skipPackagePluginValidation -skipMacroValidation -destination '$(DESTINATION)'
+ifneq ($(QUIET),)
+XCBUILD_FLAGS += -quiet
+endif
 APP := $(DERIVED)/Build/Products/Debug/Aureways.app
 INSTALL_APP := /Applications/Aureways.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
