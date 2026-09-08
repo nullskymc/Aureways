@@ -91,7 +91,7 @@ open Aureways.xcodeproj
 
 | 包 | 用途 |
 | --- | --- |
-| [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown)（revision 固定到 `5f7c04e0`） | Agent 正文 Markdown 渲染（`MarkdownBody.swift`）与解析缓存（`MarkdownDocumentCache.swift`） |
+| [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown)（本地 `Vendor/SwiftStreamingMarkdown`，上游 `5f7c04e0`） | Agent 正文 Markdown 渲染（`MarkdownBody.swift`）与解析缓存（`MarkdownDocumentCache.swift`）。流式 LaTeX 去重补丁见该目录 `PATCHES.md` |
 | [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 | 右侧面板交互终端（真实 PTY + 终端模拟） |
 
 其它库都是随它们传递进来的（`Package.resolved` 里可见 `swift-markdown` / `swift-cmark` 解析、`highlightswift` 代码高亮、`iosMath`、`SwiftUI-Shimmer`、`equatable` 等），精确版本锁在 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。

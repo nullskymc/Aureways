@@ -84,6 +84,7 @@
 		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		BF10100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* SwiftStreamingMarkdown */; };
+		BF20100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = PD10100000000000000000001 /* SwiftStreamingMarkdown */; };
 		BF10200000000000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = PD10200000000000000000001 /* SwiftTerm */; };
 		B1010000000000000000002B /* AppModel+Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002B /* AppModel+Inspector.swift */; };
 		B1010000000000000000002C /* PaneTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002C /* PaneTabBar.swift */; };
@@ -95,6 +96,7 @@
 		B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000051 /* HarnessQuotaViews.swift */; };
 		B10100000000000000000053 /* StatusMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000053 /* StatusMenu.swift */; };
 		B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000050 /* HarnessQuotaTests.swift */; };
+		B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000060 /* MarkdownStreamTests.swift */; };
 		B10100000000000000000099 /* FileTreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000099 /* FileTreeService.swift */; };
 /* End PBXBuildFile section */
 
@@ -173,6 +175,7 @@
 		F10100000000000000000051 /* HarnessQuotaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaViews.swift; sourceTree = "<group>"; };
 		F10100000000000000000053 /* StatusMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenu.swift; sourceTree = "<group>"; };
 		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
+		F20100000000000000000060 /* MarkdownStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStreamTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000099 /* FileTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/FileTreeService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -190,6 +193,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF20100000000000000000001 /* SwiftStreamingMarkdown in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -288,6 +292,7 @@
 				F20100000000000000000042 /* TerminalHostTests.swift */,
 				F20100000000000000000002 /* ComposerTextViewTests.swift */,
 				F20100000000000000000050 /* HarnessQuotaTests.swift */,
+				F20100000000000000000060 /* MarkdownStreamTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -360,6 +365,9 @@
 				D10100000000000000000001 /* PBXTargetDependency */,
 			);
 			name = AurewaysTests;
+			packageProductDependencies = (
+				PD10100000000000000000001 /* SwiftStreamingMarkdown */,
+			);
 			productName = AurewaysTests;
 			productReference = F00000000000000000000002 /* AurewaysTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -393,7 +401,7 @@
 			);
 			mainGroup = G10100000000000000000000;
 			packageReferences = (
-				PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */,
+				PK10100000000000000000001 /* XCLocalSwiftPackageReference "Vendor/SwiftStreamingMarkdown" */,
 				PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			productRefGroup = G10100000000000000000009 /* Products */;
@@ -515,6 +523,7 @@
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,
+				B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -690,15 +699,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/microsoft/SwiftStreamingMarkdown";
-			requirement = {
-				kind = revision;
-				revision = 5f7c04e0558df6146f90d482edb62cb456986bda;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		PK10100000000000000000001 /* XCLocalSwiftPackageReference "Vendor/SwiftStreamingMarkdown" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/SwiftStreamingMarkdown;
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		PK10200000000000000000001 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
@@ -712,7 +720,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		PD10100000000000000000001 /* SwiftStreamingMarkdown */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PK10100000000000000000001 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */;
+			package = PK10100000000000000000001 /* XCLocalSwiftPackageReference "Vendor/SwiftStreamingMarkdown" */;
 			productName = SwiftStreamingMarkdown;
 		};
 		PD10200000000000000000001 /* SwiftTerm */ = {

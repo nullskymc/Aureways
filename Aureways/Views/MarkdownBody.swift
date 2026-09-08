@@ -2,17 +2,22 @@ import AppKit
 import SwiftStreamingMarkdown
 import SwiftUI
 
-/// Agent 正文交给 Microsoft SwiftStreamingMarkdown（cmark-gfm），本仓库不维护解析器。
+/// Agent 正文交给 vendored SwiftStreamingMarkdown（cmark-gfm）。
 /// 字体对齐对话画布 13.5pt；颜色用 Palette / 系统语义色，不走 Copilot 资源。
 ///
 /// 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（自己在视图里解析）：
 /// 解析结果存在 `MarkdownDocumentCache` 里，回收重建时能在 `init` 同步拿到，块一
 /// 放上去就有真实高度——`LazyVStack` 的高度估算依赖这一点。
+///
+/// 流式不能对每个 token 开一次 parse：`.task(id: source)` 取消了旧任务也不会停掉
+/// 已经在跑的 cmark，旧结果仍会写回 `@State`，公式会先退回旧态再跳到新态。
+/// 改成单通道：同一时刻只 parse 最新快照，中间态丢掉。
 struct MarkdownBody: View {
     let source: String
     var isStreaming: Bool
 
     @State private var document: RenderableDocument?
+    @StateObject private var streamParser = MarkdownStreamParser()
 
     init(source: String, isStreaming: Bool = false) {
         self.source = source
@@ -39,13 +44,75 @@ struct MarkdownBody: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .task(id: source) {
-            document = await MarkdownDocumentCache.shared.document(
-                for: source,
-                config: config,
-                // 流式中间态不入缓存：不会被回看，只会把有用的条目挤出去。
-                store: !isStreaming
+        .onChange(of: source, initial: true) {
+            enqueueParse()
+        }
+        .onChange(of: isStreaming) {
+            enqueueParse()
+            if !isStreaming, let document {
+                MarkdownDocumentCache.shared.store(source, document)
+            }
+        }
+        .onChange(of: streamParser.document) { _, parsed in
+            guard let parsed else { return }
+            if document != parsed { document = parsed }
+            if !isStreaming {
+                MarkdownDocumentCache.shared.store(source, parsed)
+            }
+        }
+    }
+
+    private func enqueueParse() {
+        if let cached = MarkdownDocumentCache.shared.cached(source) {
+            if document != cached { document = cached }
+            return
+        }
+        streamParser.request(source: source, config: config, store: !isStreaming)
+    }
+}
+
+/// Serializes streaming parses so CPU tracks parse time, not token rate.
+///
+/// While a parse is in flight, newer snapshots only replace `latest`. When the
+/// in-flight parse finishes, a stale result is discarded and the newest source
+/// is parsed next. One `MarkdownBody` owns one of these, so two visible
+/// messages cannot steal each other's work.
+@MainActor
+final class MarkdownStreamParser: ObservableObject {
+    @Published private(set) var document: RenderableDocument?
+
+    private var latest: (source: String, config: MarkdownRenderConfig, store: Bool, generation: Int)?
+    private var generation = 0
+    private var running = false
+
+    func request(source: String, config: MarkdownRenderConfig, store: Bool) {
+        generation += 1
+        let gen = generation
+        if let cached = MarkdownDocumentCache.shared.cached(source) {
+            latest = nil
+            if document != cached { document = cached }
+            return
+        }
+        latest = (source, config, store, gen)
+        guard !running else { return }
+        running = true
+        Task { await pump() }
+    }
+
+    private func pump() async {
+        defer { running = false }
+        while let work = latest {
+            latest = nil
+            let parsed = await MarkdownDocumentCache.shared.document(
+                for: work.source,
+                config: work.config,
+                store: work.store
             )
+            // A newer request (or a cache hit) landed while we were parsing:
+            // drop this snapshot so a stale document cannot overwrite it.
+            if latest == nil, work.generation == generation, document != parsed {
+                document = parsed
+            }
         }
     }
 }

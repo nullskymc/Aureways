@@ -54,6 +54,13 @@ final class MarkdownDocumentCache {
         documents[source]
     }
 
+    /// Keep a parsed document that was produced with `store: false` (a streaming
+    /// snapshot). Called when the turn ends so the next recycle can load height
+    /// synchronously, without parsing the same source again.
+    func store(_ source: String, _ document: RenderableDocument) {
+        insert(source, document)
+    }
+
     /// Parses `source` off the main actor and returns the result, storing it
     /// unless `store` is false. Streaming messages pass `store: false`: their
     /// intermediate states are never revisited and would only evict useful
@@ -95,6 +102,15 @@ final class MarkdownDocumentCache {
     /// the process footprint this cache can be responsible for.
     var debugFootprint: (entries: Int, sourceKB: Int) {
         (documents.count, cachedBytes / 1024)
+    }
+
+    func removeAllForTests() {
+        documents.removeAll()
+        insertionOrder.removeAll()
+        inFlight.removeAll()
+        cachedBytes = 0
+        warmTask?.cancel()
+        warmTask = nil
     }
     #endif
 
