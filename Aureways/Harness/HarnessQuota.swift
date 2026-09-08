@@ -956,6 +956,11 @@ final class HarnessQuotaService {
     private var lastFetchTimes: [String: Date] = [:]
     private let cacheTTL: TimeInterval = 60.0
     private let fetcher = HarnessQuotaFetcher()
+    private static let persistKey = "harnessQuotaSnapshots"
+
+    init() {
+        loadPersisted()
+    }
 
     func snapshot(for agentId: String) -> HarnessQuotaSnapshot? {
         snapshots[agentId]
@@ -963,6 +968,7 @@ final class HarnessQuotaService {
 
     func updateSnapshot(_ snapshot: HarnessQuotaSnapshot) {
         snapshots[snapshot.harnessId] = snapshot
+        persist()
     }
 
     func refreshQuota(for agent: AgentProfile, force: Bool = false) async {
@@ -981,6 +987,7 @@ final class HarnessQuotaService {
         lastFetchTimes[agentId] = Date()
         if let snapshot {
             snapshots[agentId] = snapshot
+            persist()
         }
     }
 
@@ -988,5 +995,17 @@ final class HarnessQuotaService {
         for agent in agents where HarnessQuotaFetcher.supportsQuota(for: agent.id) {
             await refreshQuota(for: agent, force: force)
         }
+    }
+
+    private func loadPersisted() {
+        guard let data = UserDefaults.standard.data(forKey: Self.persistKey),
+              let decoded = try? JSONDecoder().decode([String: HarnessQuotaSnapshot].self, from: data)
+        else { return }
+        snapshots = decoded
+    }
+
+    private func persist() {
+        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+        UserDefaults.standard.set(data, forKey: Self.persistKey)
     }
 }

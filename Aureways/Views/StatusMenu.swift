@@ -27,186 +27,646 @@ struct MenuBarExtraLabel: View {
     }()
 }
 
-/// 右侧菜单栏点开后的面板。玻璃由 `MenuBarExtra` 的 `.window` 样式提供，
-/// 与控制中心等系统卡片同一套，不要再叠一层 `liquidGlassCard`。
+private enum StatusMenuFocus {
+    static let overview = "overview"
+
+    static func shortTitle(_ agent: AgentProfile) -> String {
+        switch agent.id {
+        case GrokBuildHarness.id: return "Grok"
+        case CopilotHarness.id: return "Copilot"
+        case ClaudeCodeHarness.id: return "Claude"
+        case OhMyPiHarness.id: return "Pi"
+        case CursorHarness.id: return "Cursor"
+        default:
+            return agent.title.split(separator: " ").first.map(String.init) ?? agent.title
+        }
+    }
+}
+
+private enum StatusMenuType {
+    static let title = Font.system(size: 12, weight: .semibold)
+    static let body = Font.system(size: 11)
+    static let bodyMedium = Font.system(size: 11, weight: .medium)
+    static let meta = Font.system(size: 10)
+    static let metaMedium = Font.system(size: 10, weight: .medium)
+    static let tab = Font.system(size: 10, weight: .medium)
+    static let number = Font.system(size: 11, weight: .semibold, design: .rounded)
+}
+
+private enum StatusMenuLayout {
+    static let width: CGFloat = 268
+    static let tabInset: CGFloat = 4
+    static let tabSpacing: CGFloat = 2
+    static let tabCornerRadius: CGFloat = 8
+    static let tabVerticalPadding: CGFloat = 8
+    static let visibleSlots = 5
+    static var tabWidth: CGFloat {
+        let inner = width - tabInset * 2
+        return (inner - tabSpacing * CGFloat(visibleSlots - 1)) / CGFloat(visibleSlots)
+    }
+}
+
+/// 菜单栏 Extra 里 `Button` 套在横向 `ScrollView` 中会先等系统区分点击和拖拽，
+/// 命中区又只包住图标文字，切换会发飘。这里整格可点，位移很小才当点击。
+private struct StatusMenuTapStyle: PrimitiveButtonStyle {
+    var slop: CGFloat = 12
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onEnded { value in
+                        if hypot(value.translation.width, value.translation.height) < slop {
+                            configuration.trigger()
+                        }
+                    }
+            )
+    }
+}
+
+private struct StatusMenuHoverChrome: ViewModifier {
+    var isSelected: Bool
+    var selectedFill: Color
+    var cornerRadius: CGFloat
+    var showsPointer: Bool = true
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .contentShape(shape)
+            .background {
+                shape
+                    .fill(fill)
+                    .shadow(
+                        color: .black.opacity(isHovered ? 0.22 : 0),
+                        radius: isHovered ? 8 : 0,
+                        y: isHovered ? 2 : 0
+                    )
+                    .allowsHitTesting(false)
+            }
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.12)) {
+                    isHovered = hovering
+                }
+                guard showsPointer else { return }
+                if hovering {
+                    NSCursor.pointingHand.set()
+                } else {
+                    NSCursor.arrow.set()
+                }
+            }
+            .onDisappear {
+                if isHovered { NSCursor.arrow.set() }
+            }
+    }
+
+    private var fill: Color {
+        if isSelected { return selectedFill }
+        if isHovered { return Color.primary.opacity(0.08) }
+        return .clear
+    }
+}
+
+private struct StatusMenuMark: View {
+    let agentId: String
+
+    var body: some View {
+        if let name = Self.assetName(for: agentId) {
+            Image(name)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+        } else {
+            Image(systemName: "puzzlepiece.extension")
+                .resizable()
+                .scaledToFit()
+        }
+    }
+
+    private static func assetName(for agentId: String) -> String? {
+        switch agentId {
+        case GrokBuildHarness.id: return "HarnessIcon-grok"
+        case CodexHarness.id: return "HarnessIcon-codex"
+        case ClaudeCodeHarness.id: return "HarnessIcon-claude"
+        case AntigravityHarness.id: return "HarnessIcon-antigravity"
+        case CopilotHarness.id: return "HarnessIcon-copilot"
+        case CursorHarness.id: return "HarnessIcon-cursor"
+        case OpenCodeHarness.id: return "HarnessIcon-opencode"
+        default: return nil
+        }
+    }
+}
+
+private struct StatusMenuQuotaBlock: View {
+    let snapshot: HarnessQuotaSnapshot
+    var isRefreshing = false
+    let onRefresh: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let plan = snapshot.planType, !plan.isEmpty {
+                HStack(spacing: 6) {
+                    Text(plan)
+                        .font(StatusMenuType.metaMedium)
+                        .foregroundStyle(Palette.accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Palette.badgeBg, in: Capsule())
+                    if let email = snapshot.accountEmail, !email.isEmpty {
+                        Text(email)
+                            .font(StatusMenuType.meta)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else if let email = snapshot.accountEmail, !email.isEmpty {
+                Text(email)
+                    .font(StatusMenuType.meta)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let primary = snapshot.primaryWindow {
+                windowRow(primary)
+            }
+            if let secondary = snapshot.secondaryWindow {
+                windowRow(secondary)
+            }
+            ForEach(snapshot.extraWindows.prefix(3)) { extra in
+                windowRow(extra)
+            }
+
+            if snapshot.creditsRemaining != nil || (snapshot.resetCreditsAvailable ?? 0) > 0 {
+                if let credits = snapshot.creditsRemaining {
+                    HStack {
+                        Text("剩余点数")
+                            .font(StatusMenuType.meta)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(String(format: "%.2f", credits)) \(snapshot.creditsUnit ?? "")")
+                            .font(StatusMenuType.bodyMedium)
+                    }
+                }
+                if let resets = snapshot.resetCreditsAvailable, resets > 0 {
+                    HStack {
+                        Text("免费重置")
+                            .font(StatusMenuType.meta)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(resets) 次")
+                            .font(StatusMenuType.bodyMedium)
+                            .foregroundStyle(Palette.moss)
+                    }
+                }
+            }
+
+            HStack {
+                Text(updatedLabel)
+                    .font(StatusMenuType.meta)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: onRefresh) {
+                    if isRefreshing {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Text("刷新")
+                            .font(StatusMenuType.meta)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isRefreshing)
+            }
+        }
+    }
+
+    private func windowRow(_ window: HarnessQuotaWindow) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(window.title)
+                    .font(StatusMenuType.body)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(Int(round(window.remainingPercent)))%")
+                    .font(StatusMenuType.number)
+                    .foregroundStyle(barColor(window.remainingPercent / 100))
+                    .monospacedDigit()
+            }
+            GeometryReader { geo in
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(barColor(window.remainingPercent / 100))
+                            .frame(width: geo.size.width * CGFloat(max(0, min(1, window.remainingPercent / 100))))
+                    }
+            }
+            .frame(height: 3)
+            if let countdown = window.countdownDescription {
+                Text(countdown)
+                    .font(StatusMenuType.meta)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func barColor(_ remaining: Double) -> Color {
+        if remaining <= 0.05 { return .red }
+        if remaining <= 0.20 { return .orange }
+        return Palette.moss
+    }
+
+    private var updatedLabel: String {
+        let interval = Date().timeIntervalSince(snapshot.updatedAt)
+        if interval < 60 { return "刚刚更新" }
+        if interval < 3600 { return "\(Int(interval / 60)) 分钟前更新" }
+        return "\(Int(interval / 3600)) 小时前更新"
+    }
+}
+
+/// 右侧菜单栏点开后的面板。玻璃由 `MenuBarExtra` 的 `.window` 样式提供。
+/// 顶部是「概览 + 各 harness」横向 Tab，配额条画在图标下面。
 struct StatusMenuView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
+    @State private var focusedAgentId = StatusMenuFocus.overview
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-
+        VStack(alignment: .leading, spacing: 0) {
+            tabBar
             Divider()
-
-            harnessSection
-
-            if let session = model.selectedSession {
-                Divider()
-                currentSessionRow(session)
+            Group {
+                if isOverview {
+                    overviewBody
+                } else {
+                    harnessBody
+                }
             }
-
-            if !recentSessions.isEmpty {
-                Divider()
-                recentSection
-            }
-
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             Divider()
-
             footer
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
         }
-        .padding(14)
-        .frame(width: 320)
+        .frame(width: StatusMenuLayout.width)
+        .fixedSize(horizontal: false, vertical: true)
         .task {
             model.refreshAvailability()
+            Task { await model.quotaService.refreshAll(agents: model.selectableAgents) }
         }
+    }
+
+    private var isOverview: Bool { focusedAgentId == StatusMenuFocus.overview }
+
+    private var resolvedAgent: AgentProfile? {
+        model.selectableAgents.first(where: { $0.id == focusedAgentId })
+    }
+
+    private var isAvailable: Bool {
+        guard let agent = resolvedAgent else { return false }
+        return model.availability[agent.id] == true
     }
 
     private var recentSessions: [ChatSession] {
-        model.sessions.filter { $0.id != model.selectedSessionID }.prefix(5).map { $0 }
+        if isOverview {
+            return Array(model.sessions.prefix(6))
+        }
+        guard let agent = resolvedAgent else { return [] }
+        return model.sessions.filter { $0.agent.id == agent.id }.prefix(6).map { $0 }
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Aureways")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(model.currentWorkspaceName)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: StatusMenuLayout.tabSpacing) {
+                overviewTab
+                ForEach(model.selectableAgents) { agent in
+                    harnessTab(agent)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .contentMargins(.horizontal, StatusMenuLayout.tabInset, for: .scrollContent)
+        .contentMargins(.vertical, 4, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
+        .frame(width: StatusMenuLayout.width)
+        .clipped()
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var overviewTab: some View {
+        let selected = isOverview
+        return Button {
+            withAnimation(.snappy(duration: 0.16)) {
+                focusedAgentId = StatusMenuFocus.overview
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: "square.grid.2x2.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 14, height: 14)
+                Text("概览")
+                    .font(StatusMenuType.tab)
                     .lineLimit(1)
+                Color.clear.frame(width: 22, height: 2.5)
             }
-            Spacer(minLength: 8)
-            Button("打开窗口") {
-                revealMainWindow()
+            .foregroundStyle(selected ? .white : .primary)
+            .frame(width: StatusMenuLayout.tabWidth)
+            .padding(.vertical, StatusMenuLayout.tabVerticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StatusMenuTapStyle())
+        .modifier(StatusMenuHoverChrome(
+            isSelected: selected,
+            selectedFill: Palette.accent,
+            cornerRadius: StatusMenuLayout.tabCornerRadius
+        ))
+        .help("概览")
+    }
+
+    private func harnessTab(_ agent: AgentProfile) -> some View {
+        let selected = focusedAgentId == agent.id
+        return Button {
+            withAnimation(.snappy(duration: 0.16)) {
+                focusedAgentId = agent.id
             }
-            .buttonStyle(.glass)
-            .controlSize(.small)
+        } label: {
+            VStack(spacing: 3) {
+                StatusMenuMark(agentId: agent.id)
+                    .frame(width: 14, height: 14)
+                    .foregroundStyle(selected ? Palette.accent : .primary)
+                Text(StatusMenuFocus.shortTitle(agent))
+                    .font(StatusMenuType.tab)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1)
+                tabQuotaBar(for: agent)
+            }
+            .frame(width: StatusMenuLayout.tabWidth)
+            .padding(.vertical, StatusMenuLayout.tabVerticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StatusMenuTapStyle())
+        .modifier(StatusMenuHoverChrome(
+            isSelected: selected,
+            selectedFill: Color.primary.opacity(0.08),
+            cornerRadius: StatusMenuLayout.tabCornerRadius
+        ))
+        .help(agent.title)
+    }
+
+    @ViewBuilder
+    private func tabQuotaBar(for agent: AgentProfile) -> some View {
+        let remaining = remainingFraction(for: agent)
+        Capsule()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 22, height: 2.5)
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(barColor(remaining))
+                    .frame(width: 22 * CGFloat(remaining ?? 0), height: 2.5)
+            }
+            .opacity(remaining == nil ? 0.35 : 1)
+    }
+
+    private func remainingFraction(for agent: AgentProfile) -> Double? {
+        guard HarnessQuotaFetcher.supportsQuota(for: agent.id),
+              let window = model.quotaService.snapshot(for: agent.id)?.mostUrgentWindow
+        else { return nil }
+        return max(0, min(1, window.remainingPercent / 100))
+    }
+
+    private func barColor(_ remaining: Double?) -> Color {
+        guard let remaining else { return Color.primary.opacity(0.2) }
+        if remaining <= 0.05 { return .red }
+        if remaining <= 0.20 { return .orange }
+        return Palette.moss
+    }
+
+    @ViewBuilder
+    private var overviewBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(model.currentWorkspaceName)
+                .font(StatusMenuType.meta)
+                .foregroundStyle(.secondary)
+
+            Text("配额")
+                .font(StatusMenuType.metaMedium)
+                .foregroundStyle(.secondary)
+
+            ForEach(model.selectableAgents) { agent in
+                overviewQuotaRow(agent)
+            }
+
+            recentSection
         }
     }
 
-    private var harnessSection: some View {
-        let agents = model.selectableAgents
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("新对话")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-
-            if agents.isEmpty {
-                Text("没有可用的 Agent")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 6)
-            } else {
-                let row: CGFloat = 40
-                let height = min(CGFloat(agents.count), 7) * row
-                ScrollView {
-                    VStack(spacing: 1) {
-                        ForEach(agents) { agent in
-                            HarnessMenuRow(agent: agent) {
-                                model.startNewSession(agent: agent)
-                                revealMainWindow()
-                            }
-                        }
+    private func overviewQuotaRow(_ agent: AgentProfile) -> some View {
+        let remaining = remainingFraction(for: agent)
+        let snapshot = model.quotaService.snapshot(for: agent.id)
+        return Button {
+            withAnimation(.snappy(duration: 0.16)) {
+                focusedAgentId = agent.id
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    StatusMenuMark(agentId: agent.id)
+                        .frame(width: 12, height: 12)
+                        .foregroundStyle(.primary)
+                    Text(agent.title)
+                        .font(StatusMenuType.bodyMedium)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let remaining {
+                        Text("\(Int(round(remaining * 100)))%")
+                            .font(StatusMenuType.number)
+                            .foregroundStyle(barColor(remaining))
+                            .monospacedDigit()
+                    } else if model.availability[agent.id] != true {
+                        Text("未安装")
+                            .font(StatusMenuType.meta)
+                            .foregroundStyle(.secondary)
+                    } else if !HarnessQuotaFetcher.supportsQuota(for: agent.id) {
+                        Text("—")
+                            .font(StatusMenuType.meta)
+                            .foregroundStyle(.tertiary)
                     }
                 }
-                .frame(height: height)
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(barColor(remaining))
+                                .frame(width: geo.size.width * CGFloat(remaining ?? 0))
+                        }
+                        .opacity(remaining == nil ? 0.2 : 1)
+                }
+                .frame(height: 3)
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .modifier(StatusMenuHoverChrome(
+            isSelected: false,
+            selectedFill: .clear,
+            cornerRadius: 8
+        ))
+        .help(snapshot.flatMap(\.mostUrgentWindow)?.title ?? agent.title)
+    }
+
+    private var harnessBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            quotaSection
+            newConversationButton
+            recentSection
         }
     }
 
-    private func currentSessionRow(_ session: ChatSession) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
-                Text("\(session.agent.title) · \(sessionStatus(session))")
-                    .font(.system(size: 10.5))
+    @ViewBuilder
+    private var quotaSection: some View {
+        if let agent = resolvedAgent {
+            if let snapshot = model.quotaService.snapshot(for: agent.id) {
+                StatusMenuQuotaBlock(
+                    snapshot: snapshot,
+                    isRefreshing: model.quotaService.isRefreshing[agent.id] == true
+                ) {
+                    Task { await refreshFocusedQuota(force: true) }
+                }
+            } else if HarnessQuotaFetcher.supportsQuota(for: agent.id) {
+                Text(model.quotaService.isRefreshing[agent.id] == true
+                     ? "正在更新配额…"
+                     : "还没有配额缓存，稍后自动刷新")
+                    .font(StatusMenuType.meta)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if session.isStreaming {
-                Button("停止") {
-                    model.cancel()
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .tint(.red)
             } else {
-                Button("打开") {
-                    model.select(session)
-                    revealMainWindow()
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                Text("此 Agent 不提供配额查询")
+                    .font(StatusMenuType.meta)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 4)
     }
 
+    @ViewBuilder
+    private var newConversationButton: some View {
+        Button {
+            guard let agent = resolvedAgent else { return }
+            model.startNewSession(agent: agent)
+            revealMainWindow()
+        } label: {
+            Label("新对话", systemImage: "plus")
+                .font(StatusMenuType.bodyMedium)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .disabled(!isAvailable)
+        .help(isAvailable ? "用 \(resolvedAgent?.title ?? "Agent") 开始新对话" : "未安装")
+    }
+
+    @ViewBuilder
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("最近会话")
-                .font(.system(size: 11, weight: .semibold))
+                .font(StatusMenuType.metaMedium)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
 
-            ForEach(recentSessions) { session in
-                Button {
-                    model.select(session)
-                    revealMainWindow()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(session.title)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(session.agent.title)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 5)
-                    .contentShape(Rectangle())
+            if recentSessions.isEmpty {
+                Text("还没有会话")
+                    .font(StatusMenuType.meta)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 2)
+            } else {
+                ForEach(recentSessions) { session in
+                    sessionRow(session, showAgent: isOverview)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 
-    private var footer: some View {
-        HStack {
-            Button("偏好设置…") {
-                openSettings()
+    private func sessionRow(_ session: ChatSession, showAgent: Bool = false) -> some View {
+        let isCurrent = session.id == model.selectedSessionID
+        let subtitle = showAgent
+            ? "\(session.agent.title) · \(sessionStatus(session))"
+            : sessionStatus(session)
+        return Button {
+            model.select(session)
+            revealMainWindow()
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(session.title)
+                        .font(isCurrent ? StatusMenuType.bodyMedium : StatusMenuType.body)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(StatusMenuType.meta)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .font(.system(size: 12))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .modifier(StatusMenuHoverChrome(
+            isSelected: isCurrent,
+            selectedFill: Palette.selection,
+            cornerRadius: 8
+        ))
+    }
+
+    private var footer: some View {
+        HStack(spacing: 0) {
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .help("设置")
+            .modifier(StatusMenuHoverChrome(
+                isSelected: false,
+                selectedFill: .clear,
+                cornerRadius: 7
+            ))
 
             Spacer()
 
-            Button("关闭窗口") {
-                AppActivation.resignToMenuBar()
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .font(.system(size: 12))
-
-            Button("退出") {
+            Button {
                 AppActivation.terminate()
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .font(.system(size: 12))
+            .help("退出")
+            .modifier(StatusMenuHoverChrome(
+                isSelected: false,
+                selectedFill: .clear,
+                cornerRadius: 7
+            ))
         }
-        .padding(.horizontal, 4)
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
     }
 
     private func sessionStatus(_ session: ChatSession) -> String {
@@ -225,114 +685,12 @@ struct StatusMenuView: View {
             openWindow(id: AppActivation.mainWindowID)
         })
     }
-}
 
-private struct HarnessMenuRow: View {
-    @Environment(AppModel.self) private var model
-    let agent: AgentProfile
-    let action: () -> Void
-    @State private var isHovered = false
-
-    private var isAvailable: Bool {
-        model.availability[agent.id] == true
-    }
-
-    private var snapshot: HarnessQuotaSnapshot? {
-        model.quotaService.snapshot(for: agent.id)
-    }
-
-    private var isRefreshing: Bool {
-        model.quotaService.isRefreshing[agent.id] == true
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(String(agent.title.prefix(1)))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(Palette.accent.opacity(isAvailable ? 1 : 0.35)))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(agent.title)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(isAvailable ? .primary : .secondary)
-                    if let detail = quotaDetail {
-                        Text(detail)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else if !isAvailable {
-                        Text("未安装")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: 6)
-
-                trailing
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isAvailable)
-        .help(helpText)
-        .glassRowHighlight(isSelected: false, isHovered: isHovered, cornerRadius: 8)
-        .onHover { isHovered = $0 }
-    }
-
-    @ViewBuilder
-    private var trailing: some View {
-        if isRefreshing && snapshot == nil {
-            ProgressView()
-                .controlSize(.mini)
-        } else if let snapshot, HarnessQuotaFetcher.supportsQuota(for: agent.id) {
-            Text(snapshot.shortSummary)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(severityColor(snapshot.overallSeverity))
-                .monospacedDigit()
-        } else if isAvailable {
-            Image(systemName: "plus")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    private var quotaDetail: String? {
-        guard let snapshot, HarnessQuotaFetcher.supportsQuota(for: agent.id) else { return nil }
-        guard let window = snapshot.mostUrgentWindow else { return nil }
-        if let countdown = window.countdownDescription {
-            return "\(window.title) · \(countdown)"
-        }
-        return window.title
-    }
-
-    private var helpText: String {
-        if !isAvailable {
-            return "\(agent.title) 未安装"
-        }
-        if let snapshot, let window = snapshot.mostUrgentWindow {
-            var lines = ["用 \(agent.title) 开始新对话"]
-            lines.append("\(window.title) 剩余 \(Int(round(window.remainingPercent)))%")
-            if let countdown = window.countdownDescription {
-                lines.append(countdown)
-            }
-            return lines.joined(separator: "\n")
-        }
-        return "用 \(agent.title) 开始新对话"
-    }
-
-    private func severityColor(_ severity: HarnessQuotaSeverity) -> Color {
-        switch severity {
-        case .critical: return .red
-        case .warning: return .orange
-        case .healthy: return Palette.moss
-        case .unknown: return .secondary
-        }
+    private func refreshFocusedQuota(force: Bool = false) async {
+        guard let agent = resolvedAgent,
+              HarnessQuotaFetcher.supportsQuota(for: agent.id)
+        else { return }
+        await model.quotaService.refreshQuota(for: agent, force: force)
     }
 }
 

@@ -178,13 +178,29 @@ struct HarnessQuotaFloatingCard: View {
 struct HarnessQuotaPopoverView: View {
     let snapshot: HarnessQuotaSnapshot
     var isRefreshing = false
+    var showsChrome = true
+    var showsProviderHeader = true
     let onRefresh: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            headerView
+        if showsChrome {
+            detail
+                .padding(14)
+                .frame(width: 300)
+                .liquidGlassCard(cornerRadius: 14, veil: 0.65)
+        } else {
+            detail
+        }
+    }
 
-            Divider().opacity(0.3)
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if showsProviderHeader {
+                headerView
+                Divider().opacity(0.3)
+            } else {
+                compactAccount
+            }
 
             if let primary = snapshot.primaryWindow {
                 windowRow(window: primary, isPrimary: true)
@@ -225,13 +241,34 @@ struct HarnessQuotaPopoverView: View {
                 .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
             }
 
-            Divider().opacity(0.3)
-
             footerView
         }
-        .padding(14)
-        .frame(width: 300)
-        .liquidGlassCard(cornerRadius: 14, veil: 0.65)
+    }
+
+    @ViewBuilder
+    private var compactAccount: some View {
+        if let plan = snapshot.planType, !plan.isEmpty {
+            HStack(spacing: 6) {
+                Text(plan)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Palette.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1.5)
+                    .background(Palette.badgeBg, in: Capsule())
+                if let email = snapshot.accountEmail, !email.isEmpty {
+                    Text(email)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+        } else if let email = snapshot.accountEmail, !email.isEmpty {
+            Text(email)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private var headerView: some View {
