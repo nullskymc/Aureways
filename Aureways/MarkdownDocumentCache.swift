@@ -86,10 +86,14 @@ final class MarkdownDocumentCache {
         let previous = warmTask
         warmTask = Task { [weak self] in
             await previous?.value
+            guard !Task.isCancelled else {
+                self?.inFlight.subtract(pending)
+                return
+            }
             for source in pending {
-                if Task.isCancelled { break }
-                guard let self else { return }
+                guard !Task.isCancelled, let self else { break }
                 let document = await Self.parse(source, config: config)
+                guard !Task.isCancelled else { break }
                 self.insert(source, document)
                 self.inFlight.remove(source)
             }
@@ -114,8 +118,10 @@ final class MarkdownDocumentCache {
     }
     #endif
 
-    private func insert(_ source: String, _ document: RenderableDocument) {
-        guard documents.updateValue(document, forKey: source) == nil else { return }
+    @discardableResult
+    private func insert(_ source: String, _ document: RenderableDocument) -> Bool {
+        guard documents[source] == nil else { return false }
+        documents[source] = document
         insertionOrder.append(source)
         cachedBytes += source.utf8.count
         while cachedBytes > byteLimit, let oldest = insertionOrder.first {
@@ -123,5 +129,6 @@ final class MarkdownDocumentCache {
             documents.removeValue(forKey: oldest)
             cachedBytes -= oldest.utf8.count
         }
+        return true
     }
 }

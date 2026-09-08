@@ -3,12 +3,12 @@ import SwiftUI
 
 struct TranscriptBlockView: View, Equatable {
     let block: TranscriptBlock
+    var version: UInt64 = 0
     var isStreaming = false
 
-    // SwiftUI 的 View 现在是 @MainActor 协议，成员默认跟着隔离；Equatable.== 是
-    // nonisolated 需求。block / isStreaming 都是 Sendable 值，比较两份副本没有竞争。
+    // Projection revisions make this O(1), even when a tool carries megabytes.
     nonisolated static func == (lhs: TranscriptBlockView, rhs: TranscriptBlockView) -> Bool {
-        lhs.isStreaming == rhs.isStreaming && lhs.block == rhs.block
+        lhs.block.id == rhs.block.id && lhs.version == rhs.version && lhs.isStreaming == rhs.isStreaming
     }
 
     var body: some View {
@@ -200,7 +200,7 @@ private struct ActivityCard: View {
     var isLive: Bool
     var run: ActivityRun?
     @State private var userExpanded: Bool?
-    @State private var openCallID: String?
+    @State private var openCallID: UUID?
     @State private var isHeaderHovered = false
 
     // 运行中默认展开，让人看到工作流进展（思考全文与工具详情仍各自收起）；
@@ -209,21 +209,21 @@ private struct ActivityCard: View {
         userExpanded ?? isLive
     }
 
-    private var toolCalls: [ToolCallView] {
-        steps.flatMap { step -> [ToolCallView] in
+    private var toolCalls: [ActivityTool] {
+        steps.flatMap { step -> [ActivityTool] in
             if case .tools(_, let calls) = step { return calls }
             return []
         }
     }
 
     private var isBusy: Bool {
-        isLive || toolCalls.contains { call in
-            !ChatSession.terminalToolStatuses.contains(call.status.lowercased())
+        isLive || toolCalls.contains { tool in
+            !ChatSession.terminalToolStatuses.contains(tool.call.status.lowercased())
         }
     }
 
     private var failedCount: Int {
-        toolCalls.filter { ["failed", "error"].contains($0.status.lowercased()) }.count
+        toolCalls.filter { ["failed", "error"].contains($0.call.status.lowercased()) }.count
     }
 
     private var thoughtCount: Int {
@@ -339,12 +339,12 @@ private struct ActivityCard: View {
         switch step {
         case .thought(_, let text):
             ThoughtStep(text: text)
-        case .tools(_, let calls):
+        case .tools(_, let tools):
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(calls, id: \.toolCallId) { call in
-                    ToolCompactRow(call: call, isOpen: openCallID == call.toolCallId) {
+                ForEach(tools) { tool in
+                    ToolCompactRow(call: tool.call, isOpen: openCallID == tool.id) {
                         withAnimation(.easeInOut(duration: 0.15)) {
-                            openCallID = openCallID == call.toolCallId ? nil : call.toolCallId
+                            openCallID = openCallID == tool.id ? nil : tool.id
                         }
                     }
                 }

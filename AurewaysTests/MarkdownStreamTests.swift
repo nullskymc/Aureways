@@ -51,36 +51,28 @@ final class MarkdownStreamTests: XCTestCase {
     }
 
     func testStreamParserSettlesOnTheLatestSnapshot() async {
-        let parser = MarkdownStreamParser()
+        let gate = MarkdownParseGate()
+        let parser = MarkdownStreamParser(parse: gate.parse)
         let snapshots = [
             #"Let \(a = 1\)"#,
             #"Let \(a = 1\) and \(b = 2\)"#,
             #"Let \(a = 1\) and \(b = 2\) hold."#
         ]
-        for source in snapshots {
-            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
-        }
 
-        let last = snapshots.last!
-        let deadline = Date().addingTimeInterval(2)
-        var settled = false
-        while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 20_000_000)
-            guard parser.document != nil else { continue }
-            // Re-parse immediately before comparing: NSColor catalog identity
-            // is not stable across a long wait, but consecutive parses of the
-            // same source are (see the equality tests above).
-            let expected = await MarkdownDocumentCache.shared.document(
-                for: last,
-                config: AurewaysMarkdown.plain,
-                store: false
-            )
-            if parser.document == expected {
-                settled = true
-                break
-            }
-        }
-        XCTAssertTrue(settled, "parser should publish the latest snapshot")
+        parser.request(source: snapshots[0], config: AurewaysMarkdown.plain, store: false)
+        await gate.waitUntilStarted(snapshots[0])
+        parser.request(source: snapshots[1], config: AurewaysMarkdown.plain, store: false)
+        parser.request(source: snapshots[2], config: AurewaysMarkdown.plain, store: false)
+
+        await gate.release(snapshots[0])
+        await gate.waitUntilStarted(snapshots[2])
+        XCTAssertNil(parser.result)
+        await gate.release(snapshots[2])
+        await parser.waitUntilIdle()
+
+        let startedSources = await gate.startedSources()
+        XCTAssertEqual(parser.result?.source, snapshots[2])
+        XCTAssertEqual(startedSources, [snapshots[0], snapshots[2]])
     }
 
     func testClosedInlineLatexKeepsTextStorageAcrossStreamingChunks() async {
@@ -153,27 +145,81 @@ final class MarkdownStreamTests: XCTestCase {
 
         let parser = MarkdownStreamParser()
         var growing = ""
+        var generation = 0
         for token in tokens {
             growing += token
-            parser.request(source: growing, config: AurewaysMarkdown.plain, store: false)
-        }
-
-        let deadline = Date().addingTimeInterval(2)
-        var settled = false
-        while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 20_000_000)
-            guard parser.document != nil else { continue }
-            let expected = await MarkdownDocumentCache.shared.document(
-                for: markdown,
+            generation = parser.request(
+                source: growing,
                 config: AurewaysMarkdown.plain,
                 store: false
             )
-            if parser.document == expected {
-                settled = true
-                break
-            }
         }
-        XCTAssertTrue(settled)
+
+        await parser.waitUntilIdle()
+        XCTAssertEqual(parser.result?.source, markdown)
+        XCTAssertEqual(parser.result?.generation, generation)
+    }
+
+    func testCancelDropsResultAndRequestAfterCancelRestartsPump() async {
+        let gate = MarkdownParseGate()
+        let parser = MarkdownStreamParser(parse: gate.parse)
+
+        parser.request(source: "cancelled", config: AurewaysMarkdown.plain, store: true)
+        await gate.waitUntilStarted("cancelled")
+        parser.cancel()
+        await gate.release("cancelled")
+        await parser.waitUntilIdle()
+
+        XCTAssertNil(parser.result)
+        XCTAssertNil(MarkdownDocumentCache.shared.cached("cancelled"))
+
+        parser.request(source: "restarted", config: AurewaysMarkdown.plain, store: true)
+        await gate.waitUntilStarted("restarted")
+        await gate.release("restarted")
+        await parser.waitUntilIdle()
+
+        let maximumConcurrentParses = await gate.maximumConcurrentParses()
+        XCTAssertEqual(parser.result?.source, "restarted")
+        XCTAssertNotNil(MarkdownDocumentCache.shared.cached("restarted"))
+        XCTAssertEqual(maximumConcurrentParses, 1)
+    }
+
+    func testFinalRequestStoresOnlyItsSource() async {
+        let gate = MarkdownParseGate()
+        let parser = MarkdownStreamParser(parse: gate.parse)
+
+        parser.request(source: "draft", config: AurewaysMarkdown.plain, store: false)
+        await gate.waitUntilStarted("draft")
+        parser.request(source: "final", config: AurewaysMarkdown.plain, store: true)
+        await gate.release("draft")
+        await gate.waitUntilStarted("final")
+        await gate.release("final")
+        await parser.waitUntilIdle()
+
+        XCTAssertNil(MarkdownDocumentCache.shared.cached("draft"))
+        XCTAssertNotNil(MarkdownDocumentCache.shared.cached("final"))
+    }
+
+    func testDuplicateStoreDoesNotReplaceFirstDocumentOrBookkeeping() async {
+        let source = "duplicate"
+        let first = await MarkdownDocumentCache.shared.document(
+            for: "first",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        let second = await MarkdownDocumentCache.shared.document(
+            for: "second",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+
+        MarkdownDocumentCache.shared.store(source, first)
+        let footprint = MarkdownDocumentCache.shared.debugFootprint
+        MarkdownDocumentCache.shared.store(source, second)
+
+        XCTAssertEqual(MarkdownDocumentCache.shared.cached(source), first)
+        XCTAssertEqual(MarkdownDocumentCache.shared.debugFootprint.entries, footprint.entries)
+        XCTAssertEqual(MarkdownDocumentCache.shared.debugFootprint.sourceKB, footprint.sourceKB)
     }
 
     func testStoreMakesTheNextReadACacheHit() async {
@@ -187,4 +233,45 @@ final class MarkdownStreamTests: XCTestCase {
         MarkdownDocumentCache.shared.store(source, parsed)
         XCTAssertEqual(MarkdownDocumentCache.shared.cached(source), parsed)
     }
+}
+
+private actor MarkdownParseGate {
+    private var started: [String] = []
+    private var startWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+    private var releases: [String: CheckedContinuation<Void, Never>] = [:]
+    private var active = 0
+    private var maxActive = 0
+
+    func parse(
+        source: String,
+        config: MarkdownRenderConfig
+    ) async -> RenderableDocument {
+        active += 1
+        maxActive = max(maxActive, active)
+        started.append(source)
+        startWaiters.removeValue(forKey: source)?.forEach { $0.resume() }
+        await withCheckedContinuation { continuation in
+            releases[source] = continuation
+        }
+        active -= 1
+        return await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: config,
+            store: false
+        )
+    }
+
+    func waitUntilStarted(_ source: String) async {
+        guard !started.contains(source) else { return }
+        await withCheckedContinuation { continuation in
+            startWaiters[source, default: []].append(continuation)
+        }
+    }
+
+    func release(_ source: String) {
+        releases.removeValue(forKey: source)?.resume()
+    }
+
+    func startedSources() -> [String] { started }
+    func maximumConcurrentParses() -> Int { maxActive }
 }

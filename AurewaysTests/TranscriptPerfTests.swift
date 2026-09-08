@@ -51,6 +51,57 @@ final class TranscriptPerfTests: XCTestCase {
         XCTAssertEqual(first, second, "block identity churns between body evaluations")
     }
 
+    @MainActor
+    func testToolProjectionMatchesFullGroupingAndNoOpDoesNotRevise() {
+        let profile = AgentProfile(
+            id: "perf", title: "Perf", subtitle: "", command: "true",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let items = PerfFixture.items(turns: 20)
+        session.replaceTranscript(items, runs: PerfFixture.runs(for: items))
+
+        for step in 0..<100 {
+            session.apply(PerfFixture.toolUpdate(turn: 19, index: 2, step: step))
+            let expected = TranscriptBlock.group(session.items, runs: session.activityRuns)
+            XCTAssertEqual(session.transcriptEntries.map(\.block), expected)
+        }
+
+        let revision = session.transcriptRevision
+        session.apply(PerfFixture.toolUpdate(turn: 19, index: 2, step: 99))
+        XCTAssertEqual(session.transcriptRevision, revision)
+    }
+
+    @MainActor
+    func testDuplicateToolIDsKeepStableRawItemIdentity() {
+        let profile = AgentProfile(
+            id: "perf", title: "Perf", subtitle: "", command: "true",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let first = PerfFixture.toolCall(turn: 0, index: 0)
+        var second = first
+        second.title = "second"
+        let firstID = UUID()
+        let secondID = UUID()
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        session.replaceTranscript([.tool(firstID, first), .tool(secondID, second)], runs: [:])
+
+        var update = second
+        update.status = "completed"
+        session.apply(SessionNotification(sessionId: "s", update: .toolCallUpdate(update)))
+
+        guard case .tool(let id, let call) = session.items.last else {
+            return XCTFail("expected tool")
+        }
+        XCTAssertEqual(id, secondID)
+        XCTAssertEqual(call.status, "completed")
+        guard case .activity(_, let steps, _) = session.transcriptEntries.last?.block,
+              case .tools(_, let tools) = steps.last else {
+            return XCTFail("expected projected tools")
+        }
+        XCTAssertEqual(tools.map(\.id), [firstID, secondID])
+    }
+
     // MARK: - Helpers
 
     private func time(iterations: Int, _ body: () -> Void) -> Double {

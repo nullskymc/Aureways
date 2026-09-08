@@ -7,22 +7,34 @@ struct TranscriptView: View {
     @State private var stickToBottom = true
     @State private var scrollPosition = ScrollPosition(idType: UUID.self)
 
+    private var displayedEntries: [TranscriptEntry] {
+        #if DEBUG
+        if PerfFixture.usesLegacyProjection {
+            return TranscriptBlock.group(session.items, runs: session.activityRuns).map {
+                TranscriptEntry(block: $0)
+            }
+        }
+        #endif
+        return session.transcriptEntries
+    }
+
     var body: some View {
-        let blocks = TranscriptBlock.group(session.items, runs: session.activityRuns)
-        let liveID = session.isStreaming ? blocks.last?.id : nil
+        let entries = displayedEntries
+        let liveID = session.isStreaming ? entries.last?.id : nil
         ScrollView {
             // 一律虚拟化。历史一度走 eager VStack，因为库的 MarkdownView 在解析
             // 落地前高度是 0，LazyVStack 会把整段历史当成空的、进会话一片空白。
             // 现在解析结果由 MarkdownDocumentCache 持有，块在 init 就有真实内容，
             // 前提不再成立——而 eager 的代价是每帧布局开销随转录长度线性增长。
             LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(blocks) { block in
+                ForEach(entries) { entry in
                     TranscriptBlockView(
-                        block: block,
-                        isStreaming: session.isStreaming && block.id == liveID
+                        block: entry.block,
+                        version: entry.version,
+                        isStreaming: session.isStreaming && entry.id == liveID
                     )
                     .equatable()
-                    .id(block.id)
+                    .id(entry.id)
                 }
             }
             .scrollTargetLayout()
@@ -44,30 +56,33 @@ struct TranscriptView: View {
         // 位置跟随只认「最后一块是否可见」，不读 contentOffset / contentSize：
         // 虚拟化下未放置部分的高度是估算值，拿绝对偏移做判断会随估算漂移。
         .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.1) { visible in
-            guard let last = blocks.last?.id else { return }
+            guard let last = entries.last?.id else { return }
             let atBottom = visible.contains(last)
             // 写之前守一下：这样这个布尔只在边界翻转，否则每次可见集变化都会让
             // body 重算一遍，连带整段历史重新分组。
             if stickToBottom != atBottom { stickToBottom = atBottom }
         }
-        .onChange(of: composerHeight) { follow(blocks) }
-        .onChange(of: session.transcriptRevision) { follow(blocks) }
+        .onChange(of: composerHeight) { follow(entries) }
+        .onChange(of: session.transcriptRevision) { follow(entries) }
         .onChange(of: session.isStreaming) {
-            follow(blocks)
+            follow(entries)
             // 回合刚结束：把定稿的正文预解析掉，下次回收上屏能同步拿到高度。
             if !session.isStreaming { warmMarkdown() }
         }
         .onChange(of: session.phase) {
-            if session.phase.isReady { follow(blocks, force: true) }
+            if session.phase.isReady { follow(entries, force: true) }
         }
-        .onAppear { follow(blocks, force: true) }
+        .onAppear {
+            session.ensureTranscriptProjection()
+            follow(session.transcriptEntries, force: true)
+        }
         .task(id: session.id) { warmMarkdown() }
     }
 
     /// Follow the newest content only while the user stays near the bottom;
     /// scrolling up pauses following, and user messages always jump to bottom.
-    private func follow(_ blocks: [TranscriptBlock], force: Bool = false) {
-        guard let last = blocks.last else { return }
+    private func follow(_ entries: [TranscriptEntry], force: Bool = false) {
+        guard let last = entries.last?.block else { return }
         let lastIsUser: Bool
         if case .user = last {
             lastIsUser = true

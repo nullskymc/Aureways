@@ -42,12 +42,16 @@ struct ParagraphView: NSViewRepresentable {
   }
 
   func updateNSView(_ view: ParagraphNSView, context: Context) {
+    synchronize(view)
+    view.setTextContextMenu(config.resolvedTextContextMenu)
+    view.setMarkdownController(markdownController)
+  }
+
+  private func synchronize(_ view: ParagraphNSView) {
     if !view.paragraphContents.hasSameMarkdownIdentity(as: contents) || view.lineSpacing != lineSpacing {
       let shouldAnimate = view.window != nil && config.shouldAnimateText
       view.setParagraphContents(contents, lineSpacing: lineSpacing, animatedByWord: shouldAnimate)
     }
-    view.setTextContextMenu(config.resolvedTextContextMenu)
-    view.setMarkdownController(markdownController)
   }
 
   func sizeThatFits(_ proposal: ProposedViewSize, nsView: ParagraphNSView, context: Context) -> CGSize? {
@@ -55,14 +59,13 @@ struct ParagraphView: NSViewRepresentable {
       return nil
     }
 
-    if context.coordinator.lastContents.map({ !contents.hasSameMarkdownIdentity(as: $0) }) ?? true
-        || lineSpacing != context.coordinator.lastLineSpacing {
+    synchronize(nsView)
+    if context.coordinator.contentRevision != nsView.contentRevision {
       context.coordinator.sizeCache.removeAll()
-      context.coordinator.lastContents = contents
-      context.coordinator.lastLineSpacing = lineSpacing
+      context.coordinator.contentRevision = nsView.contentRevision
     }
 
-    let cacheKey = (width * 10).rounded() / 10
+    let cacheKey = width
 
     if let cachedSize = context.coordinator.sizeCache[cacheKey] {
       return cachedSize
@@ -76,8 +79,7 @@ struct ParagraphView: NSViewRepresentable {
 
   class Coordinator {
     var sizeCache: [CGFloat: CGSize] = [:]
-    var lastContents: NSMutableAttributedString?
-    var lastLineSpacing: CGFloat?
+    var contentRevision: UInt64?
   }
 }
 

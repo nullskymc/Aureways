@@ -358,15 +358,18 @@ struct ToolCallView: Sendable, Equatable {
         locations = json["locations"]?.arrayValue?.compactMap(ToolCallLocation.init) ?? []
     }
 
-    mutating func merge(_ other: ToolCallView) {
-        if !other.title.isEmpty { title = other.title }
-        if !other.kind.isEmpty { kind = other.kind }
-        if !other.status.isEmpty { status = other.status }
-        if other.rawInput != nil { rawInput = other.rawInput }
-        if other.rawOutput != nil { rawOutput = other.rawOutput }
-        if !other.contentText.isEmpty { contentText = other.contentText }
-        if !other.contents.isEmpty { contents = other.contents }
-        if !other.locations.isEmpty { locations = other.locations }
+    @discardableResult
+    mutating func merge(_ other: ToolCallView) -> Bool {
+        let before = self
+        if !other.title.isEmpty, title != other.title { title = other.title }
+        if !other.kind.isEmpty, kind != other.kind { kind = other.kind }
+        if !other.status.isEmpty, status != other.status { status = other.status }
+        if let value = other.rawInput, rawInput != value { rawInput = value }
+        if let value = other.rawOutput, rawOutput != value { rawOutput = value }
+        if !other.contentText.isEmpty, contentText != other.contentText { contentText = other.contentText }
+        if !other.contents.isEmpty, contents != other.contents { contents = other.contents }
+        if !other.locations.isEmpty, locations != other.locations { locations = other.locations }
+        return self != before
     }
 
     private static func extractValue(from json: JSONValue?, keys: [String]) -> JSONValue? {

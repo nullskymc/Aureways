@@ -233,8 +233,8 @@ final class AppModel {
             title: "Perf fixture · \(turns) turns",
             phase: .ready
         )
-        session.items = PerfFixture.items(turns: turns)
-        session.activityRuns = PerfFixture.runs(for: session.items)
+        let items = PerfFixture.items(turns: turns)
+        session.replaceTranscript(items, runs: PerfFixture.runs(for: items))
         sessions.insert(session, at: 0)
         selectedSessionID = session.id
         NSLog("[perf] fixture session: %d turns, %d items", turns, session.items.count)

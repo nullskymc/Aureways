@@ -159,7 +159,7 @@ final class HarnessQuotaTests: XCTestCase {
 
     @MainActor
     func testQuotaServiceSnapshotManagement() async {
-        let service = HarnessQuotaService()
+        let service = HarnessQuotaService(loadPersisted: false)
         let agent = AgentProfile(id: "test-agent", title: "Test Agent", subtitle: "Testing", command: "echo", arguments: [], builtIn: false, notes: "")
         XCTAssertNil(service.snapshot(for: agent.id))
 

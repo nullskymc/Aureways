@@ -49,13 +49,16 @@ final class ScrollProbe {
             NSLog("[perf] scroll probe: no transcript scroll view found")
             return
         }
+        let liveSession = AppModel.shared?.selectedSession
+        let liveTurn = max(0, (PerfFixture.requestedTurns ?? 1) - 1)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
 
         let clip = scrollView.contentView
         let maxY = max(0, document.bounds.height - clip.bounds.height)
         NSLog(
-            "[perf] scroll probe: %d steps × %.0f pt over %.0f pt of content, %.0f pt viewport",
+            "[perf] scroll probe [%@]: %d steps × %.0f pt over %.0f pt of content, %.0f pt viewport",
+            PerfFixture.usesLegacyProjection ? "legacy" : "incremental",
             steps, pixelsPerStep, document.bounds.height, clip.bounds.height
         )
         guard maxY > 0 else {
@@ -83,6 +86,9 @@ final class ScrollProbe {
             // rather than a property of the transcript.
             let start = DispatchTime.now().uptimeNanoseconds
             autoreleasepool {
+                if let liveSession {
+                    liveSession.apply(PerfFixture.toolUpdate(turn: liveTurn, index: 2, step: costs.count))
+                }
                 clip.setBoundsOrigin(CGPoint(x: clip.bounds.origin.x, y: y))
                 scrollView.reflectScrolledClipView(clip)
                 // Force the work this step implies to happen now, inside the
@@ -196,12 +202,14 @@ final class ScrollProbe {
         [perf]   cpu %.2f s over %.2f s wall = %.0f%% of one core
         [perf]   rss %.0f MB -> %.0f MB (delta %+.0f MB)
         [perf]   TranscriptBlock.group() calls: %d (%.2f per step)
+        [perf]   projection rebuilds=%d updates=%d
         """,
         costs.count, wall, costs.reduce(0, +) / Double(costs.count),
         pct(0.5, sorted), pct(0.95, sorted), pct(0.99, sorted), sorted.last ?? 0,
         cpu, wall, cpu / wall * 100,
         rssAtStart, Self.residentMB(), Self.residentMB() - rssAtStart,
-        groupCalls, Double(groupCalls) / Double(costs.count))
+        groupCalls, Double(groupCalls) / Double(costs.count),
+        PerfCounters.projectionRebuilds, PerfCounters.projectionUpdates)
 
         // Chronological thirds: a lazy stack that accumulates views instead of
         // releasing them gets worse over the run; a warming cache gets better.

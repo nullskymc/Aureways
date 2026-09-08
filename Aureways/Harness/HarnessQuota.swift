@@ -958,8 +958,8 @@ final class HarnessQuotaService {
     private let fetcher = HarnessQuotaFetcher()
     private static let persistKey = "harnessQuotaSnapshots"
 
-    init() {
-        loadPersisted()
+    init(loadPersisted: Bool = true) {
+        if loadPersisted { self.loadPersisted() }
     }
 
     func snapshot(for agentId: String) -> HarnessQuotaSnapshot? {

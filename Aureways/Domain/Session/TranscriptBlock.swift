@@ -1,11 +1,19 @@
 import Foundation
+import Observation
 
 // MARK: - Grouped blocks
+
+/// One tool inside an activity card. The raw transcript UUID is the UI identity;
+/// ACP tool-call IDs may be empty or reused by a provider.
+struct ActivityTool: Identifiable, Equatable {
+    let id: UUID
+    var call: ToolCallView
+}
 
 /// One entry inside an activity card: a thought, a run of tool calls, or a plan.
 enum ActivityStep: Identifiable, Equatable {
     case thought(UUID, String)
-    case tools(UUID, [ToolCallView])
+    case tools(UUID, [ActivityTool])
     case plan(UUID, [PlanEntry])
 
     var id: UUID {
@@ -13,6 +21,22 @@ enum ActivityStep: Identifiable, Equatable {
         case .thought(let id, _), .tools(let id, _), .plan(let id, _):
             return id
         }
+    }
+}
+
+/// Stable reference node consumed by SwiftUI. Updating one tool does not copy or
+/// republish the array of all transcript rows.
+@Observable
+@MainActor
+final class TranscriptEntry: Identifiable {
+    let id: UUID
+    var block: TranscriptBlock
+    var version: UInt64
+
+    init(block: TranscriptBlock, version: UInt64 = 0) {
+        id = block.id
+        self.block = block
+        self.version = version
     }
 }
 
@@ -33,14 +57,14 @@ enum TranscriptBlock: Identifiable, Equatable {
 
     /// 思考 / 工具 / 计划收成活动卡。正文（含工作流中间那一段）单独成块，
     /// 把活动卡切开，不再塞进卡片里。
-    static func group(_ items: [TranscriptItem], runs: [UUID: ActivityRun] = [:]) -> [TranscriptBlock] {
+    static func group(_ items: [TranscriptItem], runs: [UUID: ActivityRun] = [:], countPerformance: Bool = true) -> [TranscriptBlock] {
         #if DEBUG
-        PerfCounters.countGroupCall()
+        if countPerformance { PerfCounters.countGroupCall() }
         #endif
         var blocks: [TranscriptBlock] = []
         var steps: [ActivityStep] = []
         var activityID: UUID?
-        var tools: [ToolCallView] = []
+        var tools: [ActivityTool] = []
         var toolsID: UUID?
         var pendingAgents: [(UUID, String)] = []
 
@@ -86,7 +110,7 @@ enum TranscriptBlock: Identifiable, Equatable {
                 emitPendingAgentsAsBody()
                 if activityID == nil { activityID = id }
                 if tools.isEmpty { toolsID = id }
-                tools.append(call)
+                tools.append(ActivityTool(id: id, call: call))
             case .plan(let id, let entries):
                 emitPendingAgentsAsBody()
                 flushTools()

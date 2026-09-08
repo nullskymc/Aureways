@@ -24,6 +24,12 @@ class ParagraphNSView: NSTextView {
   private var activeAnimations: [FadeAnimationData] = []
   private var fadeAnimationDisplayLink: CADisplayLink?
   private var cachedSize: CachedParagraphNSViewSize?
+  private let measuringTextStorage = NSTextStorage()
+  private let measuringLayoutManager = NSLayoutManager()
+  private let measuringContainer = NSTextContainer(
+    size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+  )
+  private(set) var contentRevision: UInt64 = 0
 
   var textContextMenu: TextContextMenu?
   var markdownController: MarkdownController?
@@ -79,26 +85,16 @@ class ParagraphNSView: NSTextView {
     return measuredSize
   }
 
-  /// Measures the size required to lay out the current content within `width`.
-  ///
-  /// Uses a dedicated, throwaway layout stack instead of the view's own text container.
-  /// The display container has `widthTracksTextView = true`, so its width follows the
-  /// view's frame width regardless of any `containerSize` we set. When the view is
-  /// measured before it has been given a frame (e.g. mid navigation transition) that
-  /// tracked width is `0`, which yields a zero height and collapses the paragraph. A
-  /// standalone container whose width we set directly always measures correctly.
+  /// Measures with a persistent, non-displaying TextKit stack. Content edits are
+  /// mirrored incrementally, so repeated streaming measurements do not clone the
+  /// full attributed string or recreate layout objects.
   func measureSize(fittingWidth width: CGFloat) -> CGSize {
-    guard let textStorage, textStorage.length > 0, width > 0, width.isFinite else {
+    guard measuringTextStorage.length > 0, width > 0, width.isFinite else {
       return .zero
     }
-    let measuringTextStorage = NSTextStorage(attributedString: textStorage)
-    let measuringLayoutManager = NSLayoutManager()
-    let measuringContainer = NSTextContainer(size: NSSize(width: width, height: CGFloat.greatestFiniteMagnitude))
-    measuringContainer.lineFragmentPadding = 0
-    measuringContainer.maximumNumberOfLines = 0
-    measuringContainer.lineBreakMode = .byWordWrapping
-    measuringLayoutManager.addTextContainer(measuringContainer)
-    measuringTextStorage.addLayoutManager(measuringLayoutManager)
+    if measuringContainer.containerSize.width != width {
+      measuringContainer.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+    }
     measuringLayoutManager.ensureLayout(for: measuringContainer)
     let usedRect = measuringLayoutManager.usedRect(for: measuringContainer)
     return CGSize(width: usedRect.width.rounded(.up), height: usedRect.height.rounded(.up))
@@ -154,10 +150,14 @@ class ParagraphNSView: NSTextView {
       && (textStorage?.length ?? 0) == previousLength
     if canAppend, let textStorage {
       let suffixRange = NSRange(location: previousLength, length: finalString.length - previousLength)
-      textStorage.append(finalString.attributedSubstring(from: suffixRange))
+      let suffix = finalString.attributedSubstring(from: suffixRange)
+      textStorage.append(suffix)
+      measuringTextStorage.append(suffix)
     } else {
       textStorage?.setAttributedString(finalString)
+      measuringTextStorage.setAttributedString(finalString)
     }
+    contentRevision &+= 1
 
     configureAccessibility(for: finalString)
 
@@ -206,6 +206,14 @@ class ParagraphNSView: NSTextView {
   // MARK: - View Setup
 
   private func setupView() {
+    measuringContainer.lineFragmentPadding = 0
+    measuringContainer.maximumNumberOfLines = 0
+    measuringContainer.lineBreakMode = .byWordWrapping
+    measuringContainer.widthTracksTextView = false
+    measuringContainer.heightTracksTextView = false
+    measuringLayoutManager.addTextContainer(measuringContainer)
+    measuringTextStorage.addLayoutManager(measuringLayoutManager)
+
     if NSTextAttachment.textAttachmentViewProviderClass(forFileType: UTType.data.identifier) == nil {
       NSTextAttachment.registerViewProviderClass(LatexViewProvider.self, forFileType: UTType.data.identifier)
     }

@@ -75,6 +75,41 @@ final class LatexIdentityTests: XCTestCase {
     XCTAssertGreaterThan(full.length, prefix.length)
   }
 
+  func testIdentityRejectsLayoutAndLinkAttributeChanges() {
+    let lhs = NSMutableAttributedString(
+      string: "same",
+      attributes: [.font: NSFont.systemFont(ofSize: 13), .link: URL(string: "https://a.example")!]
+    )
+    let rhs = NSMutableAttributedString(
+      string: "same",
+      attributes: [.font: NSFont.systemFont(ofSize: 17), .link: URL(string: "https://b.example")!]
+    )
+    XCTAssertFalse(lhs.hasSameMarkdownIdentity(as: rhs))
+    XCTAssertFalse(lhs.markdownPrefix(equalTo: rhs))
+  }
+
+  func testPersistentMeasurementMatchesFreshLayoutAfterAppend() {
+    let view = ParagraphNSView()
+    let prefix = NSMutableAttributedString(
+      string: String(repeating: "streaming words ", count: 40),
+      attributes: [.font: NSFont.systemFont(ofSize: 13)]
+    )
+    view.setParagraphContents(prefix, lineSpacing: 5, animatedByWord: false)
+    let initialRevision = view.contentRevision
+    let initial = view.measureSize(fittingWidth: 320)
+
+    let grown = NSMutableAttributedString(attributedString: prefix)
+    grown.append(NSAttributedString(
+      string: String(repeating: "more words ", count: 20),
+      attributes: [.font: NSFont.systemFont(ofSize: 13)]
+    ))
+    view.setParagraphContents(grown, lineSpacing: 5, animatedByWord: false)
+    let measured = view.measureSize(fittingWidth: 320)
+
+    XCTAssertEqual(view.contentRevision, initialRevision + 1)
+    XCTAssertGreaterThan(measured.height, initial.height)
+  }
+
   func testParagraphNSViewAppendsInsteadOfReplacingWhenLatexPrefixIsStable() async {
     let closed = #"Let \(a = 1\)"#
     let grown = #"Let \(a = 1\) and then some."#

@@ -93,8 +93,36 @@ indirect enum MarkdownRenderable: Identifiable, Equatable, @unchecked Sendable {
       return lhsID == rhsID
     case (.image(let lhsID, let lhsData), .image(let rhsID, let rhsData)):
       return lhsID == rhsID && lhsData == rhsData
+    case (.orderedList(let lhsID, let lhsItems), .orderedList(let rhsID, let rhsItems)):
+      return lhsID == rhsID && lhsItems.hasStableRenderedContent(equalTo: rhsItems)
+    case (.unorderedList(let lhsID, let lhsItems, let lhsLevel), .unorderedList(let rhsID, let rhsItems, let rhsLevel)):
+      return lhsID == rhsID && lhsLevel == rhsLevel && lhsItems.hasStableRenderedContent(equalTo: rhsItems)
+    case (.table(let lhsID, let lhsHeaders, let lhsRows, let lhsRaw), .table(let rhsID, let rhsHeaders, let rhsRows, let rhsRaw)):
+      return lhsID == rhsID && lhsRaw == rhsRaw
+        && lhsHeaders.hasStableRenderedContent(equalTo: rhsHeaders)
+        && lhsRows.count == rhsRows.count
+        && zip(lhsRows, rhsRows).allSatisfy { $0.hasStableRenderedContent(equalTo: $1) }
+    case (.blockQuote(let lhsID, let lhsItem), .blockQuote(let rhsID, let rhsItem)):
+      return lhsID == rhsID && lhsItem == rhsItem
     default:
       return self == other
+    }
+  }
+}
+
+private extension Array where Element == NSMutableAttributedString {
+  func hasStableRenderedContent(equalTo other: [NSMutableAttributedString]) -> Bool {
+    count == other.count && zip(self, other).allSatisfy { $0.hasSameMarkdownIdentity(as: $1) }
+  }
+}
+
+private extension Array where Element == MarkdownListItem {
+  func hasStableRenderedContent(equalTo other: [MarkdownListItem]) -> Bool {
+    count == other.count && zip(self, other).allSatisfy { lhs, rhs in
+      lhs.startsWithBold == rhs.startsWithBold
+        && lhs.checkbox == rhs.checkbox
+        && lhs.children.count == rhs.children.count
+        && zip(lhs.children, rhs.children).allSatisfy { $0.hasStableRenderedContent(equalTo: $1) }
     }
   }
 }

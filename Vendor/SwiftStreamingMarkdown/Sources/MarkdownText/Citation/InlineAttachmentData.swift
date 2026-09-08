@@ -14,7 +14,7 @@ enum AttachmentType: String, Codable {
   case citation
 }
 
-struct InlineAttachmentData: Codable {
+struct InlineAttachmentData: Codable, Equatable {
   let type: AttachmentType
   let title: String
   let accessibilityLabel: String

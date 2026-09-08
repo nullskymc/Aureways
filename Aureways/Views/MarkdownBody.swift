@@ -16,13 +16,17 @@ struct MarkdownBody: View {
     let source: String
     var isStreaming: Bool
 
-    @State private var document: RenderableDocument?
+    @State private var document: MarkdownParseResult?
+    @State private var requestedGeneration = 0
     @StateObject private var streamParser = MarkdownStreamParser()
 
     init(source: String, isStreaming: Bool = false) {
         self.source = source
         self.isStreaming = isStreaming
-        _document = State(initialValue: MarkdownDocumentCache.shared.cached(source))
+        let cached = MarkdownDocumentCache.shared.cached(source).map {
+            MarkdownParseResult(source: source, generation: 0, document: $0)
+        }
+        _document = State(initialValue: cached)
     }
 
     private var config: MarkdownRenderConfig {
@@ -32,7 +36,7 @@ struct MarkdownBody: View {
     var body: some View {
         Group {
             if let document {
-                DocumentView(renderableDocument: document, config: config)
+                DocumentView(renderableDocument: document.document, config: config)
             } else {
                 // 解析落地前用同字号明文占位。高度只是近似，但远好过 0——
                 // 高度 0 会让虚拟化的 stack 把这条消息当成不存在。
@@ -44,31 +48,50 @@ struct MarkdownBody: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onChange(of: source, initial: true) {
+        .onAppear {
+            enqueueParse()
+        }
+        .onDisappear {
+            requestedGeneration = streamParser.cancel()
+        }
+        .onChange(of: source) {
             enqueueParse()
         }
         .onChange(of: isStreaming) {
             enqueueParse()
-            if !isStreaming, let document {
-                MarkdownDocumentCache.shared.store(source, document)
-            }
         }
-        .onChange(of: streamParser.document) { _, parsed in
-            guard let parsed else { return }
-            if document != parsed { document = parsed }
-            if !isStreaming {
-                MarkdownDocumentCache.shared.store(source, parsed)
-            }
+        .onChange(of: streamParser.result) { _, result in
+            guard let result,
+                  result.source == source,
+                  result.generation == requestedGeneration
+            else { return }
+            if document?.document != result.document { document = result }
         }
     }
 
     private func enqueueParse() {
         if let cached = MarkdownDocumentCache.shared.cached(source) {
-            if document != cached { document = cached }
+            requestedGeneration = streamParser.cancel()
+            let result = MarkdownParseResult(
+                source: source,
+                generation: requestedGeneration,
+                document: cached
+            )
+            if document?.document != cached { document = result }
             return
         }
-        streamParser.request(source: source, config: config, store: !isStreaming)
+        requestedGeneration = streamParser.request(
+            source: source,
+            config: config,
+            store: !isStreaming
+        )
     }
+}
+
+struct MarkdownParseResult: Equatable {
+    let source: String
+    let generation: Int
+    let document: RenderableDocument
 }
 
 /// Serializes streaming parses so CPU tracks parse time, not token rate.
@@ -79,41 +102,125 @@ struct MarkdownBody: View {
 /// messages cannot steal each other's work.
 @MainActor
 final class MarkdownStreamParser: ObservableObject {
-    @Published private(set) var document: RenderableDocument?
+    typealias Parse = @Sendable (String, MarkdownRenderConfig) async -> RenderableDocument
 
-    private var latest: (source: String, config: MarkdownRenderConfig, store: Bool, generation: Int)?
-    private var generation = 0
-    private var running = false
+    @Published private(set) var result: MarkdownParseResult?
 
-    func request(source: String, config: MarkdownRenderConfig, store: Bool) {
-        generation += 1
-        let gen = generation
-        if let cached = MarkdownDocumentCache.shared.cached(source) {
-            latest = nil
-            if document != cached { document = cached }
-            return
-        }
-        latest = (source, config, store, gen)
-        guard !running else { return }
-        running = true
-        Task { await pump() }
+    private struct Work {
+        let source: String
+        let config: MarkdownRenderConfig
+        let store: Bool
+        let generation: Int
     }
 
-    private func pump() async {
-        defer { running = false }
-        while let work = latest {
+    private let parse: Parse
+    private var latest: Work?
+    private var generation = 0
+    private var pumpTask: Task<Void, Never>?
+    #if DEBUG
+    private var idleWaiters: [CheckedContinuation<Void, Never>] = []
+    #endif
+
+    init(parse: @escaping Parse = MarkdownStreamParser.parse) {
+        self.parse = parse
+    }
+
+    @discardableResult
+    func request(source: String, config: MarkdownRenderConfig, store: Bool) -> Int {
+        generation += 1
+        let requestGeneration = generation
+        if let cached = MarkdownDocumentCache.shared.cached(source) {
             latest = nil
-            let parsed = await MarkdownDocumentCache.shared.document(
-                for: work.source,
-                config: work.config,
-                store: work.store
-            )
-            // A newer request (or a cache hit) landed while we were parsing:
-            // drop this snapshot so a stale document cannot overwrite it.
-            if latest == nil, work.generation == generation, document != parsed {
-                document = parsed
-            }
+            publish(source: source, generation: requestGeneration, document: cached)
+            return requestGeneration
         }
+        latest = Work(
+            source: source,
+            config: config,
+            store: store,
+            generation: requestGeneration
+        )
+        startPumpIfNeeded()
+        return requestGeneration
+    }
+
+    @discardableResult
+    func cancel() -> Int {
+        generation += 1
+        latest = nil
+        pumpTask?.cancel()
+        return generation
+    }
+
+    private func startPumpIfNeeded() {
+        guard pumpTask == nil else { return }
+        let parse = parse
+        pumpTask = Task { [weak self] in
+            while let work = self?.takeLatest() {
+                let document = await parse(work.source, work.config)
+                guard let self else { return }
+                if Task.isCancelled { break }
+                guard work.generation == self.generation,
+                      self.latest == nil
+                else { continue }
+                if work.store {
+                    MarkdownDocumentCache.shared.store(work.source, document)
+                }
+                self.publish(
+                    source: work.source,
+                    generation: work.generation,
+                    document: document
+                )
+            }
+            self?.pumpFinished()
+        }
+    }
+
+    private func takeLatest() -> Work? {
+        defer { latest = nil }
+        return latest
+    }
+
+    private func pumpFinished() {
+        pumpTask = nil
+        if latest != nil {
+            startPumpIfNeeded()
+            return
+        }
+        #if DEBUG
+        let waiters = idleWaiters
+        idleWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        #endif
+    }
+
+    #if DEBUG
+    func waitUntilIdle() async {
+        guard pumpTask != nil || latest != nil else { return }
+        await withCheckedContinuation { continuation in
+            idleWaiters.append(continuation)
+        }
+    }
+    #endif
+
+    private func publish(source: String, generation: Int, document: RenderableDocument) {
+        let value = MarkdownParseResult(
+            source: source,
+            generation: generation,
+            document: document
+        )
+        if result != value { result = value }
+    }
+
+    private nonisolated static func parse(
+        source: String,
+        config: MarkdownRenderConfig
+    ) async -> RenderableDocument {
+        await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: config,
+            store: false
+        )
     }
 }
 

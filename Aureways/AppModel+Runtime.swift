@@ -154,7 +154,7 @@ extension AppModel {
         guard let acpId = session.acpSessionId, session.phase.isReady else { return }
         guard let connection = await liveConnection(for: session.agent) else {
             fail(session, ACPError.transportClosed("连接已断开"))
-            session.items.append(.status(UUID(), "连接已断开，发送消息可重新连接"))
+            session.appendStatus("连接已断开，发送消息可重新连接")
             session.transcriptRevision += 1
             return
         }
@@ -173,15 +173,15 @@ extension AppModel {
             flushSessionUpdates()
             session.finalizeOpenToolCalls("completed")
             if let reason = response.stopReason {
-                session.items.append(.status(UUID(), "Stop: \(reason)"))
+                session.appendStatus("Stop: \(reason)")
             }
             persistIfNeeded(session)
         } catch is CancellationError {
             session.finalizeOpenToolCalls("cancelled")
-            session.items.append(.status(UUID(), "Stop: cancelled"))
+            session.appendStatus("Stop: cancelled")
         } catch {
             session.finalizeOpenToolCalls("cancelled")
-            session.items.append(.status(UUID(), error.localizedDescription))
+            session.appendStatus(error.localizedDescription)
             session.transcriptRevision += 1
         }
     }

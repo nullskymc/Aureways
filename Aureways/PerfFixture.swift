@@ -7,17 +7,29 @@ import Synchronization
 /// an atomic rather than main-actor state.
 enum PerfCounters {
     private static let groupCallCount = Atomic<Int>(0)
+    private static let projectionRebuildCount = Atomic<Int>(0)
+    private static let projectionUpdateCount = Atomic<Int>(0)
 
-    /// Bumped by `TranscriptBlock.group(_:runs:)`, which `TranscriptView.body`
-    /// calls once per evaluation — so this doubles as a body-evaluation count.
     static var groupCalls: Int { groupCallCount.load(ordering: .relaxed) }
+    static var projectionRebuilds: Int { projectionRebuildCount.load(ordering: .relaxed) }
+    static var projectionUpdates: Int { projectionUpdateCount.load(ordering: .relaxed) }
 
     static func countGroupCall() {
         groupCallCount.add(1, ordering: .relaxed)
     }
 
+    static func countProjectionRebuild() {
+        projectionRebuildCount.add(1, ordering: .relaxed)
+    }
+
+    static func countProjectionUpdate() {
+        projectionUpdateCount.add(1, ordering: .relaxed)
+    }
+
     static func reset() {
         groupCallCount.store(0, ordering: .relaxed)
+        projectionRebuildCount.store(0, ordering: .relaxed)
+        projectionUpdateCount.store(0, ordering: .relaxed)
     }
 }
 
@@ -35,17 +47,21 @@ enum PerfFixture {
     /// Items per turn: user, thought, 3 tool calls, plan, agent reply.
     static let itemsPerTurn = 7
 
+    private static func id(_ turn: Int, _ slot: Int) -> UUID {
+        UUID(uuidString: String(format: "A0000000-%04X-4000-8000-%012X", turn & 0xffff, slot))!
+    }
+
     /// A transcript shaped like a real coding session.
     static func items(turns: Int) -> [TranscriptItem] {
         var items: [TranscriptItem] = []
         for turn in 0..<turns {
-            items.append(.user(UUID(), "把 \(turn) 号文件里的重复逻辑收敛一下", []))
-            items.append(.thought(UUID(), String(repeating: "先读一遍现有实现，确认调用点。", count: 4)))
+            items.append(.user(id(turn, 0), "把 \(turn) 号文件里的重复逻辑收敛一下", []))
+            items.append(.thought(id(turn, 1), String(repeating: "先读一遍现有实现，确认调用点。", count: 4)))
             for call in 0..<3 {
-                items.append(.tool(UUID(), toolCall(turn: turn, index: call)))
+                items.append(.tool(id(turn, call + 2), toolCall(turn: turn, index: call)))
             }
-            items.append(.plan(UUID(), plan()))
-            items.append(.agent(UUID(), agentReply(turn)))
+            items.append(.plan(id(turn, 5), plan()))
+            items.append(.agent(id(turn, 6), agentReply(turn)))
         }
         return items
     }
@@ -60,6 +76,19 @@ enum PerfFixture {
             }
         }
         return runs
+    }
+
+    static func toolUpdate(turn: Int, index: Int, step: Int) -> SessionNotification {
+        let path = "/Volumes/app/DevelopProject/Aureways/Aureways/Views/Transcript\(turn).swift"
+        let output = String(repeating: "streamed tool output line \(step)\n", count: max(1, step + 1))
+        let call = ToolCallView(json: .object([
+            "toolCallId": .string("call_\(turn)_\(index)"),
+            "title": .string("Read `\(path)`"),
+            "kind": .string(index == 1 ? "edit" : "read"),
+            "status": .string(step == 599 ? "completed" : "in_progress"),
+            "content": .string(output)
+        ]))
+        return SessionNotification(sessionId: "perf", update: .toolCallUpdate(call))
     }
 
     static func toolCall(turn: Int, index: Int) -> ToolCallView {
@@ -130,6 +159,11 @@ enum PerfFixture {
 
         建议把分组结果缓存到 `ChatSession` 上，`body` 只读数组。
         """
+    }
+
+    /// Runs the pre-optimization view projection from the same Debug binary.
+    static var usesLegacyProjection: Bool {
+        ProcessInfo.processInfo.environment["AUREWAYS_PERF_LEGACY"] == "1"
     }
 
     /// Turn count requested via the environment, or `nil` when unset.

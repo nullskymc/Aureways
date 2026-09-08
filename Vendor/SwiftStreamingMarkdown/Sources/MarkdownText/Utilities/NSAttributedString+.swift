@@ -80,16 +80,64 @@ extension NSAttributedString {
 
   func hasSameMarkdownIdentity(as other: NSAttributedString) -> Bool {
     guard string == other.string, length == other.length else { return false }
-    var matches = true
-    enumerateAttribute(.attachment, in: NSRange(location: 0, length: length)) { value, range, stop in
-      let otherValue = other.attribute(.attachment, at: range.location, effectiveRange: nil)
-      if !Self.attachmentsHaveSamePayload(value, otherValue) {
-        matches = false
-        stop.pointee = true
+    if length == 0 { return true }
+
+    var location = 0
+    while location < length {
+      var lhsRange = NSRange()
+      var rhsRange = NSRange()
+      let lhs = attributes(at: location, effectiveRange: &lhsRange)
+      let rhs = other.attributes(at: location, effectiveRange: &rhsRange)
+      guard Self.attributesHaveSameMarkdownIdentity(lhs, rhs) else { return false }
+      location = min(NSMaxRange(lhsRange), NSMaxRange(rhsRange))
+    }
+    return true
+  }
+
+  private static func attributesHaveSameMarkdownIdentity(
+    _ lhs: [NSAttributedString.Key: Any],
+    _ rhs: [NSAttributedString.Key: Any]
+  ) -> Bool {
+    guard lhs.keys == rhs.keys else { return false }
+    for key in lhs.keys {
+      let left = lhs[key]
+      let right = rhs[key]
+      switch key {
+      case .attachment:
+        guard attachmentsHaveSamePayload(left, right) else { return false }
+      #if canImport(AppKit)
+      case .foregroundColor, .backgroundColor, .underlineColor, .strikethroughColor:
+        guard colorsHaveSameAppearance(left, right) else { return false }
+      case .font:
+        guard let l = left as? NSFont, let r = right as? NSFont,
+              l.fontDescriptor == r.fontDescriptor, l.pointSize == r.pointSize else { return false }
+      #endif
+      default:
+        guard let l = left as? NSObject, let r = right as? NSObject, l.isEqual(r) else { return false }
       }
     }
-    return matches
+    return true
   }
+
+  #if canImport(AppKit)
+  private static func colorsHaveSameAppearance(_ lhs: Any?, _ rhs: Any?) -> Bool {
+    guard let lhs = lhs as? NSColor, let rhs = rhs as? NSColor else { return false }
+    for appearance in [NSAppearance(named: .aqua), NSAppearance(named: .darkAqua)].compactMap({ $0 }) {
+      var left: NSColor?
+      var right: NSColor?
+      appearance.performAsCurrentDrawingAppearance {
+        left = lhs.usingColorSpace(.sRGB)
+        right = rhs.usingColorSpace(.sRGB)
+      }
+      guard let left, let right,
+            abs(left.redComponent - right.redComponent) < 0.0001,
+            abs(left.greenComponent - right.greenComponent) < 0.0001,
+            abs(left.blueComponent - right.blueComponent) < 0.0001,
+            abs(left.alphaComponent - right.alphaComponent) < 0.0001 else { return false }
+    }
+    return true
+  }
+  #endif
 
   private static func attachmentsHaveSamePayload(_ lhs: Any?, _ rhs: Any?) -> Bool {
     switch (lhs, rhs) {
@@ -97,6 +145,11 @@ extension NSAttributedString {
       return true
     case let (left as LatexTextAttachment, right as LatexTextAttachment):
       return left.payload == right.payload
+    case let (left as InlineCitationAttachment, right as InlineCitationAttachment):
+      return left.citationData == right.citationData
+        && left.font == right.font
+        && colorsHaveSameAppearance(left.textColor, right.textColor)
+        && colorsHaveSameAppearance(left.backgroundColor, right.backgroundColor)
     case let (left as NSTextAttachment, right as NSTextAttachment):
       return left.isEqual(right)
     default:
