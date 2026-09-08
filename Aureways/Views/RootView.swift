@@ -3,6 +3,7 @@ import AppKit
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -44,6 +45,12 @@ struct RootView: View {
             InspectorToolbarContent()
         }
         .liquidGlassWindow(appearance: model.colorScheme)
+        .onAppear {
+            AppActivation.openMainWindow = { openWindow(id: AppActivation.mainWindowID) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .aurewaysRevealMainWindow)) { _ in
+            AppActivation.revealMainWindow()
+        }
         .alert("出错了", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }

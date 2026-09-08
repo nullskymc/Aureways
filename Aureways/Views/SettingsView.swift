@@ -23,6 +23,7 @@ struct SettingsView: View {
 
 struct GeneralSettingsPage: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
     var body: some View {
         @Bindable var model = model
@@ -33,6 +34,7 @@ struct GeneralSettingsPage: View {
                     Text("浅色").tag("light")
                     Text("深色").tag("dark")
                 }
+                Toggle("在菜单栏显示图标", isOn: $showMenuBarExtra)
             }
 
             Section("新对话默认") {

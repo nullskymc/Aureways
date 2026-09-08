@@ -93,6 +93,7 @@
 		B10100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
 		B20100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
 		B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000051 /* HarnessQuotaViews.swift */; };
+		B10100000000000000000053 /* StatusMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000053 /* StatusMenu.swift */; };
 		B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000050 /* HarnessQuotaTests.swift */; };
 		B10100000000000000000099 /* FileTreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000099 /* FileTreeService.swift */; };
 /* End PBXBuildFile section */
@@ -170,6 +171,7 @@
 		F1010000000000000000002F /* TerminalTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTab.swift; sourceTree = "<group>"; };
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
 		F10100000000000000000051 /* HarnessQuotaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaViews.swift; sourceTree = "<group>"; };
+		F10100000000000000000053 /* StatusMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenu.swift; sourceTree = "<group>"; };
 		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000099 /* FileTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/FileTreeService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -264,6 +266,7 @@
 				F1010000000000000000002A /* Chrome.swift */,
 				F1010000000000000000001F /* PermissionCard.swift */,
 				F10100000000000000000051 /* HarnessQuotaViews.swift */,
+				F10100000000000000000053 /* StatusMenu.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -475,6 +478,7 @@
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */,
+				B10100000000000000000053 /* StatusMenu.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

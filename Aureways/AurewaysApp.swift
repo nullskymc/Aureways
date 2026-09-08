@@ -8,6 +8,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // 关主窗口或 ⌘Q / Dock 退出：不杀进程，只收到菜单栏。真正退出走菜单栏「退出」。
+    nonisolated func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        DispatchQueue.main.async {
+            AppActivation.hideDockIfNoMainWindow()
+        }
+        return false
+    }
+
+    nonisolated func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated {
+            if AppActivation.allowsTermination {
+                return .terminateNow
+            }
+            AppActivation.resignToMenuBar()
+            return .terminateCancel
+        }
+    }
+
+    nonisolated func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .aurewaysRevealMainWindow, object: nil)
+        }
+        return true
+    }
+
     #if DEBUG
     nonisolated func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
@@ -21,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct AurewaysApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
     init() {
         // Agent 进程退出后向其 stdin 写请求会触发 SIGPIPE，默认行为是杀掉整个 app。
@@ -28,7 +54,7 @@ struct AurewaysApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Aureways", id: AppActivation.mainWindowID) {
             RootView()
                 .environment(model)
                 .preferredColorScheme(model.colorScheme)
@@ -44,6 +70,12 @@ struct AurewaysApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
+            CommandGroup(replacing: .appTermination) {
+                Button("关闭窗口") {
+                    AppActivation.resignToMenuBar()
+                }
+                .keyboardShortcut("q", modifiers: [.command])
+            }
         }
 
         Settings {
@@ -51,5 +83,13 @@ struct AurewaysApp: App {
                 .environment(model)
                 .preferredColorScheme(model.colorScheme)
         }
+
+        MenuBarExtra(isInserted: $showMenuBarExtra) {
+            StatusMenuView()
+                .environment(model)
+        } label: {
+            MenuBarExtraLabel()
+        }
+        .menuBarExtraStyle(.window)
     }
 }

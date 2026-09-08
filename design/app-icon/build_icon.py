@@ -33,6 +33,7 @@ ICON_DIR = REPO / "Aureways" / "AppIcon.icon"
 ICON_ASSETS = ICON_DIR / "Assets"
 ICONSET = REPO / "Aureways" / "Assets.xcassets" / "AppIcon.appiconset"
 MARKSET = REPO / "Aureways" / "Assets.xcassets" / "BrandMark.imageset"
+MENUBAR_SET = REPO / "Aureways" / "Assets.xcassets" / "MenuBarIcon.imageset"
 
 ORBIT_BLUE = (0x00, 0x3D, 0xA5)
 DEEP_NAVY = (0x00, 0x2B, 0x73)
@@ -694,6 +695,62 @@ def write_brand_mark_imageset():
     print("wrote", MARKSET.relative_to(REPO))
 
 
+def write_menu_bar_icon():
+    """18 pt template silhouette of the letter A for MenuBarExtra.
+
+    Status items are ~18×18 pt. Crop the A (no orbit / spark / knockout)
+    into a square, then BOX-downsample so the legs survive at 18 px.
+    Extra side padding keeps the wide stance from reading as a caret.
+    """
+    _, a_polys = a_shape(knockout=False)
+    alpha = rasterize(a_polys, 1024, ss=4)
+    ys, xs = np.where(alpha > 16)
+    minx, maxx = int(xs.min()), int(xs.max())
+    miny, maxy = int(ys.min()), int(ys.max())
+    crop = alpha[miny:maxy + 1, minx:maxx + 1]
+    h, w = crop.shape
+    # Fill height; pad the sides so the A stays a letter, not a wide ∧.
+    vpad = int(round(h * 0.08))
+    canvas = h + 2 * vpad
+    square = np.zeros((canvas, canvas), np.uint8)
+    ox = (canvas - w) // 2
+    oy = vpad
+    if ox < 0:
+        # Wider than tall: scale width into the square instead of clipping.
+        new_w = canvas
+        new_h = int(round(h * (canvas / w)))
+        fitted = Image.fromarray(crop, "L").resize((new_w, new_h), Image.Resampling.BOX)
+        oy = (canvas - new_h) // 2
+        square[max(oy, 0):max(oy, 0) + new_h, 0:new_w] = np.array(fitted)
+    else:
+        square[oy:oy + h, ox:ox + w] = crop
+    src = Image.fromarray(square, "L")
+
+    MENUBAR_SET.mkdir(parents=True, exist_ok=True)
+    stale = MENUBAR_SET / "MenuBarIcon.svg"
+    if stale.exists():
+        stale.unlink()
+
+    # Downsample 72 → 36 → 18 with BOX so thin legs don't vanish.
+    hi = src.resize((72, 72), Image.Resampling.BOX)
+    slots = (("MenuBarIcon.png", 18), ("MenuBarIcon@2x.png", 36))
+    for name, px in slots:
+        resized = hi.resize((px, px), Image.Resampling.BOX)
+        rgba = np.zeros((px, px, 4), np.uint8)
+        rgba[:, :, 3] = np.array(resized)
+        save_png(Image.fromarray(rgba, "RGBA"), MENUBAR_SET / name)
+
+    write_text(MENUBAR_SET / "Contents.json", json.dumps({
+        "images": [
+            {"filename": "MenuBarIcon.png", "idiom": "universal", "scale": "1x"},
+            {"filename": "MenuBarIcon@2x.png", "idiom": "universal", "scale": "2x"},
+        ],
+        "info": {"author": "xcode", "version": 1},
+        "properties": {"template-rendering-intent": "template"},
+    }, indent=2) + "\n")
+    print("wrote", MENUBAR_SET.relative_to(REPO))
+
+
 def build():
     a_ds, a_polys = a_shape(knockout=True)
     o_d, o_poly = orbit_shape()
@@ -718,6 +775,7 @@ def build():
                svg_doc(mark_ds, ICON_WHITE, bg=ORBIT_BLUE))
     write_text(ROOT / "logo_dark.svg", svg_doc(mark_ds, DARK_FG, bg=DEEP_NAVY))
     write_brand_mark_imageset()
+    write_menu_bar_icon()
 
     save_png(flat_png(mark_polys, CANVAS, ICON_WHITE, ORBIT_BLUE),
              ROOT / "logo_default_1024.png")
