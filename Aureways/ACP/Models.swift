@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppInfo {
-    static let version = "0.1.4"
+    static let version = "0.1.5"
 }
 
 enum ACPError: LocalizedError, Sendable {
