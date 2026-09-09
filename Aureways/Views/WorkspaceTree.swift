@@ -175,15 +175,8 @@ struct SessionNavItem: View {
             model.select(session)
         } label: {
             HStack(alignment: .top, spacing: 8) {
-                if session.isStreaming {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .frame(width: 12, height: 12)
-                } else {
-                    Circle()
-                        .fill(sessionDot(session.phase))
-                        .frame(width: 6, height: 6)
-                }
+                sessionHarnessMark
+                    .padding(.top, 2)
 
                 Text(session.title)
                     .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
@@ -203,6 +196,7 @@ struct SessionNavItem: View {
             .glassRowHighlight(isSelected: isSelected, isHovered: isHovered, cornerRadius: 6)
         }
         .buttonStyle(.plain)
+        .help(session.agent.title)
         .onHover { isHovered = $0 }
         .contextMenu {
             Button("关闭会话") {
@@ -224,6 +218,30 @@ struct SessionNavItem: View {
             Button("在 Finder 中查看工作区") {
                 model.openWorkspaceInFinder(session.cwd)
             }
+        }
+    }
+
+    private var sessionHarnessMark: some View {
+        ZStack(alignment: .bottomTrailing) {
+            HarnessIcon(agentId: session.agent.id)
+                .frame(width: 13, height: 13)
+                .foregroundStyle(isSelected || isHovered ? .primary : .secondary)
+            Circle()
+                .fill(session.isStreaming ? Palette.gold : sessionDot(session.phase))
+                .frame(width: 5, height: 5)
+                .overlay(Circle().strokeBorder(.background, lineWidth: 1))
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityLabel("\(session.agent.title)，\(sessionStatus)")
+    }
+
+    private var sessionStatus: String {
+        if session.isStreaming { return "生成中" }
+        switch session.phase {
+        case .ready: return "已连接"
+        case .failed: return "失败"
+        case .connecting: return "连接中"
+        case .idle: return "已断开"
         }
     }
 

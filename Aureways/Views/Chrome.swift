@@ -81,6 +81,37 @@ extension View {
     }
 }
 
+/// Built-in harness marks from Assets; custom / unknown agents get a puzzle piece.
+struct HarnessIcon: View {
+    let agentId: String
+
+    var body: some View {
+        if let name = Self.assetName(for: agentId) {
+            Image(name)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+        } else {
+            Image(systemName: "puzzlepiece.extension")
+                .resizable()
+                .scaledToFit()
+        }
+    }
+
+    static func assetName(for agentId: String) -> String? {
+        switch agentId {
+        case GrokBuildHarness.id: return "HarnessIcon-grok"
+        case CodexHarness.id: return "HarnessIcon-codex"
+        case ClaudeCodeHarness.id: return "HarnessIcon-claude"
+        case AntigravityHarness.id: return "HarnessIcon-antigravity"
+        case CopilotHarness.id: return "HarnessIcon-copilot"
+        case CursorHarness.id: return "HarnessIcon-cursor"
+        case OpenCodeHarness.id: return "HarnessIcon-opencode"
+        default: return nil
+        }
+    }
+}
+
 private struct ChromeCardModifier: ViewModifier {
     var cornerRadius: CGFloat
     var veil: Double
