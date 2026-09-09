@@ -11,5 +11,6 @@ Changes on top of upstream:
 3. **`BlockMathView`** — skip `latex` / color assignment when they have not changed, and cache `sizeThatFits`. iosMath reparses and typesets on every `setLatex:` with no equality check.
 4. **`ParagraphNSView` / `ParagraphUIView`** — if the new attributed string is an extension of the current one, append the suffix instead of `setAttributedString`. Replacing the whole storage destroys attachment subviews and recreates every formula.
 5. **`SingleBlockView`** — `Equatable` + `.equatable()`, so unchanged latex / heading / paragraph blocks do not re-enter `updateNSView` / `sizeThatFits` when a later block grows.
+6. **Final-document text merging** — collapse adjacent headings, paragraphs, and text-only lists into one attributed paragraph after streaming completes, so native TextKit selection crosses those Markdown block boundaries while rich blocks keep their existing views.
 
 When rebasing onto a newer upstream: copy `Sources/` over, re-apply the items above, and keep this file in sync.

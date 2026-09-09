@@ -110,6 +110,67 @@ final class LatexIdentityTests: XCTestCase {
     XCTAssertGreaterThan(measured.height, initial.height)
   }
 
+  func testFinalDocumentMergesAdjacentHeadingsAndParagraphs() async {
+    let source = """
+    # Heading
+
+    First paragraph.
+
+    Second paragraph.
+    """
+    let document = await MarkdownParserImpl().parse(text: source, config: .default)
+    let merged = document.mergingAdjacentTextBlocks
+
+    XCTAssertEqual(document.renderables.count, 3)
+    XCTAssertEqual(merged.renderables.count, 1)
+    guard case .paragraph(_, let content) = merged.renderables.first else {
+      return XCTFail("expected merged paragraph")
+    }
+    XCTAssertEqual(content.string, "Heading\n\nFirst paragraph.\n\nSecond paragraph.")
+  }
+
+  func testFinalDocumentMergesTextOnlyListsWithSurroundingText() async {
+    let source = """
+    Before.
+
+    1. First
+    2. Second
+
+    After.
+    """
+    let document = await MarkdownParserImpl().parse(text: source, config: .default)
+    let merged = document.mergingAdjacentTextBlocks
+
+    XCTAssertEqual(merged.renderables.count, 1)
+    guard case .paragraph(_, let content) = merged.renderables.first else {
+      return XCTFail("expected merged paragraph")
+    }
+    XCTAssertEqual(content.string, "Before.\n\n1.  First\n2.  Second\n\nAfter.")
+  }
+
+  func testFinalDocumentDoesNotMergeAcrossNonTextBlocks() async {
+    let source = """
+    Before.
+
+    ```swift
+    let value = 1
+    ```
+
+    After.
+    """
+    let document = await MarkdownParserImpl().parse(text: source, config: .default)
+    let merged = document.mergingAdjacentTextBlocks
+
+    XCTAssertEqual(merged.renderables.count, 3)
+    guard case .paragraph(_, let before) = merged.renderables[0],
+          case .codeBlock = merged.renderables[1],
+          case .paragraph(_, let after) = merged.renderables[2] else {
+      return XCTFail("expected text blocks around code block")
+    }
+    XCTAssertEqual(before.string, "Before.")
+    XCTAssertEqual(after.string, "After.")
+  }
+
   func testParagraphNSViewAppendsInsteadOfReplacingWhenLatexPrefixIsStable() async {
     let closed = #"Let \(a = 1\)"#
     let grown = #"Let \(a = 1\) and then some."#

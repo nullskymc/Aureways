@@ -80,6 +80,17 @@ struct MarkdownBody: View {
             if document?.document != cached { document = result }
             return
         }
+        if !isStreaming, let currentDocument = document, currentDocument.source == source {
+            requestedGeneration = streamParser.cancel()
+            let finalDocument = MarkdownDocumentCache.shared.store(source, currentDocument.document)
+            let result = MarkdownParseResult(
+                source: source,
+                generation: requestedGeneration,
+                document: finalDocument
+            )
+            if currentDocument.document != finalDocument { document = result }
+            return
+        }
         requestedGeneration = streamParser.request(
             source: source,
             config: config,
@@ -163,13 +174,16 @@ final class MarkdownStreamParser: ObservableObject {
                 guard work.generation == self.generation,
                       self.latest == nil
                 else { continue }
+                let publishedDocument: RenderableDocument
                 if work.store {
-                    MarkdownDocumentCache.shared.store(work.source, document)
+                    publishedDocument = MarkdownDocumentCache.shared.store(work.source, document)
+                } else {
+                    publishedDocument = document
                 }
                 self.publish(
                     source: work.source,
                     generation: work.generation,
-                    document: document
+                    document: publishedDocument
                 )
             }
             self?.pumpFinished()

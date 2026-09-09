@@ -55,10 +55,14 @@ final class MarkdownDocumentCache {
     }
 
     /// Keep a parsed document that was produced with `store: false` (a streaming
-    /// snapshot). Called when the turn ends so the next recycle can load height
-    /// synchronously, without parsing the same source again.
-    func store(_ source: String, _ document: RenderableDocument) {
-        insert(source, document)
+    /// snapshot). Final documents collapse adjacent text blocks once, so recycled
+    /// transcript rows reuse one selectable TextKit storage.
+    @discardableResult
+    func store(_ source: String, _ document: RenderableDocument) -> RenderableDocument {
+        if let hit = documents[source] { return hit }
+        let finalDocument = document.mergingAdjacentTextBlocks
+        insert(source, finalDocument)
+        return finalDocument
     }
 
     /// Parses `source` off the main actor and returns the result, storing it
@@ -72,7 +76,7 @@ final class MarkdownDocumentCache {
     ) async -> RenderableDocument {
         if let hit = documents[source] { return hit }
         let document = await Self.parse(source, config: config)
-        if store { insert(source, document) }
+        if store { return self.store(source, document) }
         return document
     }
 
@@ -94,7 +98,7 @@ final class MarkdownDocumentCache {
                 guard !Task.isCancelled, let self else { break }
                 let document = await Self.parse(source, config: config)
                 guard !Task.isCancelled else { break }
-                self.insert(source, document)
+                self.store(source, document)
                 self.inFlight.remove(source)
             }
             self?.inFlight.subtract(pending)

@@ -222,6 +222,35 @@ final class MarkdownStreamTests: XCTestCase {
         XCTAssertEqual(MarkdownDocumentCache.shared.debugFootprint.sourceKB, footprint.sourceKB)
     }
 
+    func testCacheStoresFinalDocumentAsOneSelectableTextBlock() async {
+        let source = """
+        # Heading
+
+        First paragraph.
+
+        - First item
+        - Second item
+
+        Last paragraph.
+        """
+        let parsed = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        let stored = MarkdownDocumentCache.shared.store(source, parsed)
+
+        XCTAssertEqual(stored.renderables.count, 1)
+        guard case .paragraph(_, let content) = stored.renderables.first else {
+            return XCTFail("expected one selectable text block")
+        }
+        XCTAssertEqual(
+            content.string,
+            "Heading\n\nFirst paragraph.\n\n•  First item\n•  Second item\n\nLast paragraph."
+        )
+        XCTAssertEqual(MarkdownDocumentCache.shared.cached(source), stored)
+    }
+
     func testStoreMakesTheNextReadACacheHit() async {
         let source = #"Cached \(x^2\) formula."#
         let parsed = await MarkdownDocumentCache.shared.document(

@@ -67,6 +67,37 @@ extension RenderableDocument {
     return renderables.flatMap { $0.extractAttributedStrings() }
   }
 
+  /// Adjacent headings, paragraphs, and text-only lists collapsed into one
+  /// TextKit storage. Rich blocks keep their native rendering.
+  public var mergingAdjacentTextBlocks: RenderableDocument {
+    var merged: [MarkdownRenderable] = []
+    var pending: NSMutableAttributedString?
+    var pendingID: String?
+
+    for renderable in renderables {
+      if let text = renderable.mergeableText {
+        if pending == nil {
+          pending = NSMutableAttributedString(attributedString: text.content)
+          pendingID = text.id
+        } else {
+          pending?.append(NSAttributedString(string: "\n\n"))
+          pending?.append(text.content)
+        }
+      } else {
+        if let pending, let pendingID {
+          merged.append(.paragraph(id: pendingID, content: pending))
+        }
+        pending = nil
+        pendingID = nil
+        merged.append(renderable)
+      }
+    }
+    if let pending, let pendingID {
+      merged.append(.paragraph(id: pendingID, content: pending))
+    }
+    return RenderableDocument(renderables: merged)
+  }
+
   /// The full document rendered as plain text, across every block kind
   /// (headings, paragraphs, lists, code blocks, tables, block quotes). Used to
   /// populate the "Select more text" modal.
@@ -78,6 +109,47 @@ extension RenderableDocument {
 }
 
 extension MarkdownRenderable {
+  fileprivate var mergeableText: (id: String, content: NSAttributedString)? {
+    switch self {
+    case .paragraph(let id, let content), .heading(let id, _, let content):
+      return (id, content)
+    case .orderedList(let id, let items):
+      return textList(id: id, items: items, ordered: true)
+    case .unorderedList(let id, let items, _):
+      return textList(id: id, items: items, ordered: false)
+    default:
+      return nil
+    }
+  }
+
+  private func textList(
+    id: String,
+    items: [MarkdownListItem],
+    ordered: Bool
+  ) -> (id: String, content: NSAttributedString)? {
+    let result = NSMutableAttributedString()
+    for (index, item) in items.enumerated() {
+      guard item.children.count == 1,
+            case .paragraph(_, let content) = item.children[0] else { return nil }
+      if index > 0 { result.append(NSAttributedString(string: "\n")) }
+      let marker: String
+      if ordered {
+        marker = "\(index + 1).  "
+      } else {
+        marker = switch item.checkbox {
+        case .checked: "☑  "
+        case .unchecked: "☐  "
+        case nil: "•  "
+        }
+      }
+      var attributes: [NSAttributedString.Key: Any] = [:]
+      if content.length > 0 { attributes = content.attributes(at: 0, effectiveRange: nil) }
+      result.append(NSAttributedString(string: marker, attributes: attributes))
+      result.append(content)
+    }
+    return (id, result)
+  }
+
   /// A plain-text representation of this block, or `nil` for blocks that carry
   /// no selectable text (e.g. thematic breaks).
   var plainText: String? {
