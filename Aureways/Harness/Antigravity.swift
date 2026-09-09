@@ -25,6 +25,16 @@ final class AntigravityHarness: Harness {
         Self.resolvedBinary() != nil
     }
 
+    /// ACP defaults to the macOS Keychain. Quota reads `acp_token.json` instead
+    /// of prompting Aureways for Keychain access, so force the file backend.
+    override func environment(_ base: [String: String]) -> [String: String] {
+        var env = base
+        if env["AGY_ACP_FORCE_FILE_STORAGE"] == nil {
+            env["AGY_ACP_FORCE_FILE_STORAGE"] = "1"
+        }
+        return env
+    }
+
     /// Prefer the real `.par` that sits next to `localharness_external`.
     /// A symlink of only the `.par` onto PATH fails at runtime.
     static func resolvedBinary() -> String? {

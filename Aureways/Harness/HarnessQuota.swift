@@ -251,27 +251,88 @@ actor HarnessQuotaFetcher {
         let requiresCSRF: Bool
     }
 
-    /// ps + lsof: the language server does not publish a stable port file.
+    /// Local HTTPS language server from Antigravity.app / `agy` CLI.
+    /// `agy_acp_server` is stdio-only and talks to CloudCode itself — do not probe it.
     static func isAntigravityProcess(_ commandLine: String) -> Bool {
         let lower = commandLine.lowercased()
+        if lower.contains("agy_acp_server") {
+            return false
+        }
         if lower.contains("--extension_server_port") {
+            return true
+        }
+        if lower.contains("antigravity.app") {
             return true
         }
         let separators = CharacterSet(charactersIn: "/\\ :")
         let tokens = lower.components(separatedBy: separators).filter { !$0.isEmpty }
-        if tokens.contains(where: { $0 == "antigravity" || $0.hasPrefix("antigravity") }) {
+        if tokens.contains(where: { $0 == "agy" }) {
             return true
         }
         if tokens.contains(where: { $0 == "cloudcode" || $0.hasPrefix("cloudcode") }) {
-            return true
-        }
-        if tokens.contains("agy") {
             return true
         }
         if lower.contains("language_server") {
             return lower.contains("gemini") || lower.contains("antigravity") || lower.contains("cloudcode")
         }
         return false
+    }
+
+    /// ACP consumer OAuth from `~/.gemini/antigravity-acp/acp_token.json`.
+    struct AntigravityACPCredentials: Equatable, Sendable {
+        var clientId: String
+        var clientSecret: String
+        var refreshToken: String
+        var tokenURI: String
+        var accessToken: String?
+    }
+
+    static func extractAntigravityACPCredentials(_ json: [String: Any]) -> AntigravityACPCredentials? {
+        let nested = json["token"] as? [String: Any]
+        func string(_ key: String) -> String? {
+            let raw = (json[key] as? String) ?? (nested?[key] as? String)
+            guard let raw, !raw.isEmpty else { return nil }
+            return raw
+        }
+        guard let clientId = string("client_id"),
+              let clientSecret = string("client_secret"),
+              let refreshToken = string("refresh_token")
+        else { return nil }
+        return AntigravityACPCredentials(
+            clientId: clientId,
+            clientSecret: clientSecret,
+            refreshToken: refreshToken,
+            tokenURI: string("token_uri") ?? "https://oauth2.googleapis.com/token",
+            accessToken: string("access_token")
+        )
+    }
+
+    /// Consumer (Free / Google AI Pro / Ultra) → daily; enterprise GCP ToS → prod.
+    static func antigravityCloudCodeEndpoint(usesGcpTos: Bool) -> String {
+        usesGcpTos
+            ? "https://cloudcode-pa.googleapis.com"
+            : "https://daily-cloudcode-pa.googleapis.com"
+    }
+
+    static func parseAntigravityLoadCodeAssist(
+        _ json: [String: Any]
+    ) -> (project: String?, plan: String?, usesGcpTos: Bool) {
+        let project = json["cloudaicompanionProject"] as? String
+        let paid = json["paidTier"] as? [String: Any]
+        let current = json["currentTier"] as? [String: Any]
+        let plan = (paid?["name"] as? String) ?? (current?["name"] as? String)
+        let usesGcpTos = (paid?["usesGcpTos"] as? Bool) ?? false
+        return (project, plan, usesGcpTos)
+    }
+
+    static func antigravityACPUserAgent() -> String {
+        #if arch(x86_64)
+        let arch = "amd64"
+        #else
+        let arch = "arm64"
+        #endif
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.6"
+        return "antigravity/acp/1.1.1 (aidev_client; os_type=darwin; arch=\(arch); host_path=aureways/\(version); proxy_client=antigravity/sdk)"
     }
 
     private func findAntigravityEndpoints() async -> [AntigravityEndpoint] {
@@ -446,6 +507,10 @@ actor HarnessQuotaFetcher {
     }
 
     private func fetchAntigravityNative(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+        if let snapshot = await fetchAntigravityACP(agent: agent) {
+            return snapshot
+        }
+
         let endpoints = await findAntigravityEndpoints()
 
         for endpoint in endpoints {
@@ -494,78 +559,138 @@ actor HarnessQuotaFetcher {
             )
         }
 
-        return await fetchAntigravityCloudCode(agent: agent)
+        return nil
     }
 
-    private func fetchAntigravityCloudCode(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
-        let tokenPath = NSString(string: "~/.gemini/jetski-standalone-oauth-token").expandingTildeInPath
+    private func geminiHomeDirectory() -> String {
+        let env = ProcessInfo.processInfo.environment["GEMINI_HOME"]
+        if let env, !env.isEmpty {
+            return env
+        }
+        return NSString(string: "~/.gemini").expandingTildeInPath
+    }
+
+    private func loadAntigravityACPCredentials() -> AntigravityACPCredentials? {
+        let tokenPath = (geminiHomeDirectory() as NSString).appendingPathComponent("antigravity-acp/acp_token.json")
         guard FileManager.default.fileExists(atPath: tokenPath),
               let tokenData = try? Data(contentsOf: URL(fileURLWithPath: tokenPath)),
               let tokenJSON = try? JSONSerialization.jsonObject(with: tokenData) as? [String: Any],
-              let tokenDict = tokenJSON["token"] as? [String: Any],
-              let accessToken = tokenDict["access_token"] as? String,
-              !accessToken.isEmpty
+              let creds = Self.extractAntigravityACPCredentials(tokenJSON)
         else {
             return nil
         }
+        return creds
+    }
 
-        let authMethod = tokenJSON["auth_method"] as? String
+    private func formEncode(_ pairs: [String: String]) -> Data {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let body = pairs.map { key, value in
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+            return "\(key)=\(encoded)"
+        }.joined(separator: "&")
+        return Data(body.utf8)
+    }
 
-        guard let url = URL(string: "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota") else {
+    private func refreshGoogleAccessToken(_ creds: AntigravityACPCredentials) async -> String? {
+        guard let url = URL(string: creds.tokenURI) else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = formEncode([
+            "grant_type": "refresh_token",
+            "client_id": creds.clientId,
+            "client_secret": creds.clientSecret,
+            "refresh_token": creds.refreshToken,
+        ])
+        request.timeoutInterval = 8.0
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let access = json["access_token"] as? String, !access.isEmpty
+            else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                NSLog("[quota] antigravity: token refresh HTTP %d", code)
+                return nil
+            }
+            return access
+        } catch {
+            NSLog("[quota] antigravity: token refresh error %@", error.localizedDescription)
             return nil
         }
+    }
 
+    private func postCloudCodeJSON(url: URL, accessToken: String, body: [String: Any]) async throws -> (status: Int, data: Data) {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Aureways/1.0", forHTTPHeaderField: "User-Agent")
-        request.httpBody = "{}".data(using: .utf8)
-        request.timeoutInterval = 4.0
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.antigravityACPUserAgent(), forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 8.0
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        return (status, data)
+    }
 
+    /// ACP has its own OAuth (`acp_token.json`) and talks to CloudCode directly.
+    private func fetchAntigravityACP(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+        guard let creds = loadAntigravityACPCredentials() else {
+            NSLog("[quota] antigravity: no ACP credentials at antigravity-acp/acp_token.json")
+            return nil
+        }
+        guard let accessToken = await refreshGoogleAccessToken(creds) else {
+            return nil
+        }
+
+        let bootstrap = {
+            if let override = ProcessInfo.processInfo.environment["AGY_ACP_CCPA_BASE_URL"], !override.isEmpty {
+                return override.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            }
+            return "https://cloudcode-pa.googleapis.com"
+        }()
+
+        guard let loadURL = URL(string: "\(bootstrap)/v1internal:loadCodeAssist") else { return nil }
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let load = try await postCloudCodeJSON(
+                url: loadURL,
+                accessToken: accessToken,
+                body: ["metadata": ["ideType": "ANTIGRAVITY"]]
+            )
+            guard (200...299).contains(load.status),
+                  let loadJSON = try JSONSerialization.jsonObject(with: load.data) as? [String: Any]
             else {
+                NSLog("[quota] antigravity: loadCodeAssist HTTP %d", load.status)
                 return nil
             }
 
-            var primary: HarnessQuotaWindow? = nil
-            var secondary: HarnessQuotaWindow? = nil
-            var extras: [HarnessQuotaWindow] = []
-
-            if let buckets = json["buckets"] as? [[String: Any]] {
-                for (idx, bucket) in buckets.enumerated() {
-                    let title = bucket["modelName"] as? String ?? bucket["title"] as? String ?? "Model Limit"
-                    let used = (bucket["usedPercent"] as? NSNumber)?.doubleValue ?? 0.0
-                    let resetsAt = Self.parseDate(bucket["resetsAt"] ?? bucket["resetTime"])
-                    let win = HarnessQuotaWindow(
-                        id: "agy-window-\(idx)",
-                        title: title,
-                        usedPercent: used,
-                        resetsAt: resetsAt,
-                        resetDescription: nil,
-                        windowMinutes: nil
-                    )
-                    if primary == nil {
-                        primary = win
-                    } else if secondary == nil {
-                        secondary = win
-                    } else {
-                        extras.append(win)
-                    }
-                }
+            let loaded = Self.parseAntigravityLoadCodeAssist(loadJSON)
+            guard let project = loaded.project, !project.isEmpty else {
+                NSLog("[quota] antigravity: loadCodeAssist missing cloudaicompanionProject")
+                return nil
             }
 
-            guard primary != nil || secondary != nil || !extras.isEmpty else {
+            let endpoint = Self.antigravityCloudCodeEndpoint(usesGcpTos: loaded.usesGcpTos)
+            guard let quotaURL = URL(string: "\(endpoint)/v1internal:retrieveUserQuotaSummary") else { return nil }
+            let quota = try await postCloudCodeJSON(
+                url: quotaURL,
+                accessToken: accessToken,
+                body: ["project": project]
+            )
+            guard (200...299).contains(quota.status) else {
+                NSLog("[quota] antigravity: retrieveUserQuotaSummary HTTP %d", quota.status)
+                return nil
+            }
+            guard let (primary, secondary, extras) = Self.parseAntigravityQuotaSummary(quota.data, agentId: agent.id) else {
+                NSLog("[quota] antigravity: quota summary parse failed")
                 return nil
             }
 
             return HarnessQuotaSnapshot(
                 harnessId: agent.id,
                 providerTitle: agent.title,
-                planType: authMethod,
+                planType: loaded.plan,
                 accountEmail: nil,
                 primaryWindow: primary,
                 secondaryWindow: secondary,
@@ -577,6 +702,7 @@ actor HarnessQuotaFetcher {
                 updatedAt: Date()
             )
         } catch {
+            NSLog("[quota] antigravity: ACP CloudCode error %@", error.localizedDescription)
             return nil
         }
     }

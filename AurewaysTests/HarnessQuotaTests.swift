@@ -83,6 +83,62 @@ final class HarnessQuotaTests: XCTestCase {
         XCTAssertFalse(HarnessQuotaFetcher.isAntigravityProcess("55 /usr/local/bin/typescript-language-server --stdio"))
         XCTAssertFalse(HarnessQuotaFetcher.isAntigravityProcess("8 node language_server.js"))
         XCTAssertFalse(HarnessQuotaFetcher.isAntigravityProcess("12 /bin/zsh -c strategy"))
+        XCTAssertFalse(HarnessQuotaFetcher.isAntigravityProcess(
+            "3349 /Users/me/.local/share/antigravity-acp/agy_acp_server.par"
+        ))
+    }
+
+    func testAntigravityACPCredentialExtraction() {
+        let fileBlob: [String: Any] = [
+            "client_id": "client-1",
+            "client_secret": "secret-1",
+            "refresh_token": "refresh-1",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "project_id": "aicode-consumers",
+        ]
+        let creds = HarnessQuotaFetcher.extractAntigravityACPCredentials(fileBlob)
+        XCTAssertEqual(creds?.clientId, "client-1")
+        XCTAssertEqual(creds?.clientSecret, "secret-1")
+        XCTAssertEqual(creds?.refreshToken, "refresh-1")
+        XCTAssertEqual(creds?.tokenURI, "https://oauth2.googleapis.com/token")
+        XCTAssertNil(creds?.accessToken)
+
+        let nested: [String: Any] = [
+            "token": [
+                "client_id": "client-2",
+                "client_secret": "secret-2",
+                "refresh_token": "refresh-2",
+                "access_token": "access-2",
+            ]
+        ]
+        let nestedCreds = HarnessQuotaFetcher.extractAntigravityACPCredentials(nested)
+        XCTAssertEqual(nestedCreds?.clientId, "client-2")
+        XCTAssertEqual(nestedCreds?.refreshToken, "refresh-2")
+        XCTAssertEqual(nestedCreds?.accessToken, "access-2")
+
+        XCTAssertNil(HarnessQuotaFetcher.extractAntigravityACPCredentials(["access_token": "only"]))
+        XCTAssertNil(HarnessQuotaFetcher.extractAntigravityACPCredentials([:]))
+    }
+
+    func testAntigravityCloudCodeEndpointAndLoadAssistParsing() {
+        XCTAssertEqual(
+            HarnessQuotaFetcher.antigravityCloudCodeEndpoint(usesGcpTos: false),
+            "https://daily-cloudcode-pa.googleapis.com"
+        )
+        XCTAssertEqual(
+            HarnessQuotaFetcher.antigravityCloudCodeEndpoint(usesGcpTos: true),
+            "https://cloudcode-pa.googleapis.com"
+        )
+
+        let load: [String: Any] = [
+            "cloudaicompanionProject": "aicode-consumers",
+            "currentTier": ["id": "free-tier", "name": "Antigravity"],
+            "paidTier": ["id": "g1-pro-tier", "name": "Google AI Pro", "usesGcpTos": false],
+        ]
+        let parsed = HarnessQuotaFetcher.parseAntigravityLoadCodeAssist(load)
+        XCTAssertEqual(parsed.project, "aicode-consumers")
+        XCTAssertEqual(parsed.plan, "Google AI Pro")
+        XCTAssertFalse(parsed.usesGcpTos)
     }
 
     func testCodexAuthLayouts() {
@@ -141,6 +197,21 @@ final class HarnessQuotaTests: XCTestCase {
         XCTAssertEqual(extras.count, 2)
         XCTAssertEqual(extras[0].title, "Claude & GPT Weekly")
         XCTAssertEqual(extras[1].title, "Claude & GPT 5-hour")
+    }
+
+    func testCloudCodeQuotaSummaryWithoutResponseWrapper() {
+        let jsonStr = """
+        {"groups":[{"displayName":"Gemini Models","buckets":[{"bucketId":"gemini-weekly","displayName":"Weekly Limit Remaining","window":"weekly","remainingFraction":0.83,"resetTime":"2026-09-14T01:05:37Z"},{"bucketId":"gemini-5h","displayName":"Five Hour Limit Remaining","window":"5h","remainingFraction":0.95,"resetTime":"2026-09-09T02:40:48Z"}]}],"description":"shared limits"}
+        """
+        guard let data = jsonStr.data(using: .utf8) else {
+            XCTFail("Failed to convert JSON to data")
+            return
+        }
+        let parsed = HarnessQuotaFetcher.parseAntigravityQuotaSummary(data, agentId: "antigravity")
+        XCTAssertNotNil(parsed)
+        XCTAssertEqual(parsed?.primary?.title, "Gemini 5-hour")
+        XCTAssertEqual(parsed?.secondary?.title, "Gemini Weekly")
+        XCTAssertEqual(round(parsed!.primary!.usedPercent), 5.0)
     }
 
     func testNativeAntigravityUserStatusParsing() {

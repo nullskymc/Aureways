@@ -29,6 +29,7 @@ extension AppModel {
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
+            await quotaService.refreshQuota(for: session.agent, force: true)
         } catch {
             fail(session, error)
         }
@@ -68,6 +69,7 @@ extension AppModel {
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
+            await quotaService.refreshQuota(for: session.agent, force: true)
         } catch {
             fail(session, error)
         }
@@ -104,6 +106,7 @@ extension AppModel {
                 )
                 flushSessionUpdates()
                 session.phase = .ready
+                await quotaService.refreshQuota(for: session.agent, force: true)
             } else {
                 await prepareWorkspaces(connection, session: session)
                 let created = try await connection.newSession(
@@ -121,6 +124,7 @@ extension AppModel {
                 flushSessionUpdates()
                 session.phase = .ready
                 persistIfNeeded(session)
+                await quotaService.refreshQuota(for: session.agent, force: true)
             }
         } catch {
             fail(session, error)

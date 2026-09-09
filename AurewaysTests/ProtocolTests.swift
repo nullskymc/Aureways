@@ -292,6 +292,8 @@ final class ProtocolTests: XCTestCase {
             command.hasSuffix("agy_acp_server") || command.hasSuffix("agy_acp_server.par"),
             command
         )
+        XCTAssertEqual(antigravity.environment([:])["AGY_ACP_FORCE_FILE_STORAGE"], "1")
+        XCTAssertEqual(antigravity.environment(["AGY_ACP_FORCE_FILE_STORAGE": "0"])["AGY_ACP_FORCE_FILE_STORAGE"], "0")
 
         XCTAssertTrue(ids.contains(OhMyPiHarness.id))
         XCTAssertFalse(ids.contains("pi"))
