@@ -29,7 +29,7 @@ final class TranscriptPerfTests: XCTestCase {
     }
 
     /// What `.equatable()` on `TranscriptBlockView` pays per comparison, times
-    /// the number of rows in an eager `VStack`.
+    /// the number of rows in the transcript.
     func testBlockEqualityCost() {
         let items = PerfFixture.items(turns: 50)
         let runs = PerfFixture.runs(for: items)
@@ -100,6 +100,65 @@ final class TranscriptPerfTests: XCTestCase {
             return XCTFail("expected projected tools")
         }
         XCTAssertEqual(tools.map(\.id), [firstID, secondID])
+    }
+
+    func testVirtualizerWindowCoversViewport() {
+        let heights: [CGFloat] = Array(repeating: 100, count: 20)
+        let window = TranscriptVirtualizer.window(
+            rowHeights: heights,
+            offset: 0,
+            viewport: 250,
+            overscan: 0,
+            spacing: 16
+        )
+        XCTAssertEqual(window.start, 0)
+        XCTAssertGreaterThan(window.end, window.start)
+        XCTAssertEqual(window.topHeight, 0)
+        XCTAssertGreaterThan(window.bottomHeight, 0)
+        XCTAssertLessThan(window.end, heights.count)
+    }
+
+    func testVirtualizerWindowAtBottomIncludesLastRow() {
+        let heights: [CGFloat] = Array(repeating: 100, count: 20)
+        let window = TranscriptVirtualizer.window(
+            rowHeights: heights,
+            offset: .infinity,
+            viewport: 250,
+            overscan: 0,
+            spacing: 16
+        )
+        XCTAssertEqual(window.end, heights.count)
+        XCTAssertGreaterThan(window.start, 0)
+        XCTAssertEqual(window.bottomHeight, 0)
+        XCTAssertGreaterThan(window.topHeight, 0)
+    }
+
+    func testExpandingVisibleRowDoesNotCollapseTopSpacer() {
+        let heights: [CGFloat] = Array(repeating: 100, count: 8)
+        let before = TranscriptVirtualizer.window(
+            rowHeights: heights,
+            offset: 150,
+            viewport: 120,
+            overscan: 0,
+            spacing: 16
+        )
+        XCTAssertGreaterThan(before.start, 0)
+        var expanded = heights
+        expanded[before.start] += 400
+        let after = TranscriptVirtualizer.window(
+            rowHeights: expanded,
+            offset: 150,
+            viewport: 120,
+            overscan: 0,
+            spacing: 16
+        )
+        XCTAssertEqual(after.start, before.start)
+        XCTAssertEqual(after.topHeight, before.topHeight)
+    }
+
+    func testEmptyTranscriptWindow() {
+        let window = TranscriptVirtualizer.window(rowHeights: [], offset: 0, viewport: 400)
+        XCTAssertEqual(window, .empty)
     }
 
     // MARK: - Helpers

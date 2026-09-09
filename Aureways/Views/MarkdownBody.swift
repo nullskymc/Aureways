@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（自己在视图里解析）：
 /// 解析结果存在 `MarkdownDocumentCache` 里，回收重建时能在 `init` 同步拿到，块一
-/// 放上去就有真实高度——`LazyVStack` 的高度估算依赖这一点。
+/// 放上去就有真实高度——窗口化对话流的 spacer 高度依赖这一点。
 ///
 /// 流式不能对每个 token 开一次 parse：`.task(id: source)` 取消了旧任务也不会停掉
 /// 已经在跑的 cmark，旧结果仍会写回 `@State`，公式会先退回旧态再跳到新态。

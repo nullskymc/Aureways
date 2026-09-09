@@ -55,14 +55,16 @@ Aureways/                          # 仓库根
 │   │   ├── UpdateModels.swift     # session/update、tool、permission
 │   │   ├── Connection.swift       # 子进程 + 双向 RPC
 │   │   └── ClientOps.swift        # fs/*、terminal/*
+│   ├── MarkdownDocumentCache.swift # 已解析 Markdown 文档缓存
+│   ├── TranscriptVirtualizer.swift # 对话流可见窗口与行高缓存
 │   └── Views/                     # 前端
 │       ├── Palette.swift          # 色彩、BrandMark、AppIconImage
 │       ├── Chrome.swift           # Liquid Glass 修饰器
 │       ├── RootView.swift         # NavigationSplitView
 │       ├── Sidebar.swift          # 新对话、底栏
 │       ├── WorkspaceTree.swift    # 工作区树
-│       ├── Transcript.swift       # 状态条、消息列表
-│       ├── TranscriptBlocks.swift # 用户/助手/思考块
+│       ├── Transcript.swift       # 窗口化对话流、位置跟随
+│       ├── TranscriptBlocks.swift # 用户/助手/思考块；展开状态不跟视图走
 │       ├── ToolViews.swift        # 工具卡片（命令 / 编辑 / 读取 / 搜索 / 抓取）
 │       ├── MarkdownBody.swift     # vendored SwiftStreamingMarkdown + 流式单通道 parse
 │       ├── Composer.swift         # 输入框

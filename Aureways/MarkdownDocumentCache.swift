@@ -7,8 +7,8 @@ import SwiftStreamingMarkdown
 /// `@StateObject` and parses in `.task(id: text)`. In a virtualized transcript
 /// that means two problems. The reparse on every recycle is the cheap one
 /// (~0.2 ms per message). The expensive one is that the block renders at height
-/// 0 until the parse lands, so a `LazyVStack` measures it as empty and
-/// mis-estimates the transcript's extent — which is why the transcript used to
+/// 0 until the parse lands, so a windowed stack measures it as empty and
+/// collapses the spacer above / below — which is why the transcript used to
 /// fall back to an eager `VStack` for history.
 ///
 /// Holding the parsed `RenderableDocument` outside the view fixes both: a block

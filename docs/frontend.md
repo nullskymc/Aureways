@@ -47,11 +47,11 @@
 
 长会话滚动的成本必须与**可见内容**成正比，不能与转录总长度成正比。这一节的每条约束都是为此存在的，改动前请先读。
 
-- **一律 `LazyVStack`**，配 `.scrollTargetLayout()`。曾经在非流式时退回 eager `VStack`，因为库的 `MarkdownView` 在异步解析落地前高度是 0，虚拟化的 stack 会把整段历史当成空的、进会话一片空白。代价是每帧布局开销随块数线性增长：实测同一 build 下，单步滚动成本从 90 blocks 的 2.25 ms 涨到 300 blocks 的 23.02 ms，单核跑满。
+- **可见窗口 + 高度缓存，不要 eager `VStack`，也不要依赖 `LazyVStack` 的内部估算。** 屏幕内外各用一段 spacer（高度来自 `TranscriptHeightCache`），中间只放真正的行。打开检查器、拖动侧栏 / 检查器分栏都只让**可见** Markdown 按新宽度重排；历史行保持上次测到的高度。曾经一律 `LazyVStack`：解析高度为 0 时进会话空白；卡片展开时未放置行的估算塌掉，视口被拽回底部，于是退回 eager——单步滚动从 90 块 2.25 ms 涨到 300 块 23.02 ms。窗口化同时修这两头。展开状态放在 `TranscriptChromeState` 里，不跟视图走，回收上屏高度才能对得上。
 - **解析结果由 `MarkdownDocumentCache` 持有，不由视图持有。** `MarkdownBody` 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（视图内自己解析），并在 `init` 里同步查缓存，所以块一放上去就有真实高度——上面那条虚拟化的前提就靠这个成立。会话打开和每回合结束时后台预热（300 条约 54 ms）。
 - **流式 parse 单通道。** token 到达只记下最新快照；同一时刻只跑一次 cmark。取消的 `.task(id:)` 不会把过期文档写回视图。公式已经闭合后，vendored 库按 payload 比较 inline attachment、块公式跳过 `setLatex:`，段落只 append 后缀——已画出的 `MTMathUILabel` 不会被拆掉重建。
-- **位置跟随不读绝对偏移。** 用 `ScrollPosition` + `scrollTo(edge: .bottom)`，判据是 `onScrollTargetVisibilityChange` 报告的「最后一块是否可见」。虚拟化下未放置部分的高度是估算值，`contentOffset` / `contentSize` 会随估算漂移，拿它做阈值会不稳（这也是 Apple 在 WWDC26 "Dive into lazy stacks and scrolling with SwiftUI" 里明确点出的反模式）。底部留白用 `.safeAreaPadding`，这样 `scrollTo(edge:)` 认安全区、最后一条消息停在输入卡上方。
-- **写 `@State` 前先比较。** 滚动相关的回调每秒触发多次，无条件写状态会让 `TranscriptView.body` 跟着重算，连带 `TranscriptBlock.group` 重跑一遍整段历史。
+- **位置跟随不读绝对偏移。** 用 `ScrollPosition` + `scrollTo(edge: .bottom)`，判据是 `onScrollTargetVisibilityChange` 报告的「最后一块是否可见」。`contentOffset` 只用来算可见窗口；拿它当「是否在底部」的阈值会随估算漂移（Apple 在 WWDC26 "Dive into lazy stacks and scrolling with SwiftUI" 里点名的反模式）。底部留白用 `.safeAreaPadding`，这样 `scrollTo(edge:)` 认安全区、最后一条消息停在输入卡上方。
+- **写 `@State` 前先比较。** 滚动相关的回调每秒触发多次，无条件写状态会让 `TranscriptView.body` 跟着重算。高度写入 `TranscriptHeightCache`（非 Observable），只有窗口范围真的变了才写 `rowWindow`。
 - **超长文本先在字符串层面截断再交给 `Text`。** `lineLimit` 只限制显示行数，`Text` 仍会把整个字符串排版；工具的输入 / 输出动辄是整个文件（见 `ToolViews.swift` 的 `clamped`）。
 - **回归测量。** `AurewaysTests/TranscriptPerfTests.swift` 是微基准（`make test 2>&1 | grep 'PERF '`）；`ScrollProbe` + `PerfFixture` 提供固定转录下的滚动探针，两者都只编进 Debug：
 
@@ -110,9 +110,10 @@
 | --- | --- |
 | `Aureways/Views/RootView.swift` | 根容器 `NavigationSplitView`、统一工具栏、快捷键路由 |
 | `Aureways/Views/Sidebar.swift` | 新对话、工作区树、会话状态、底栏偏好设置 |
-| `Aureways/Views/Transcript.swift` | 居中对话流容器（虚拟化 + 位置跟随），见 §2.2「转录的渲染与虚拟化」 |
-| `Aureways/Views/TranscriptBlocks.swift` | 消息气泡、活动卡、思考折叠块等行视图 |
-| `Aureways/TranscriptBlock.swift` | `TranscriptItem` → 渲染行的分组（纯数据，无视图依赖，故可进测试目标） |
+| `Aureways/Views/Transcript.swift` | 居中对话流容器（窗口化虚拟化 + 位置跟随），见 §2.2「转录的渲染与虚拟化」 |
+| `Aureways/Views/TranscriptBlocks.swift` | 消息气泡、活动卡、思考折叠块等行视图；展开状态在 `TranscriptChromeState` |
+| `Aureways/TranscriptVirtualizer.swift` | 可见窗口计算与行高缓存 |
+| `Aureways/Domain/Session/TranscriptBlock.swift` | `TranscriptItem` → 渲染行的分组（纯数据，无视图依赖，故可进测试目标） |
 | `Aureways/Views/MarkdownBody.swift` | Agent 正文渲染与画布 Markdown 配置（`AurewaysMarkdown`）；流式单通道 parse |
 | `Vendor/SwiftStreamingMarkdown` | 正文渲染库本地副本：LaTeX attachment 按 payload 相等、块公式跳过重复 typeset、段落增量 append |
 | `Aureways/MarkdownDocumentCache.swift` | 已解析 Markdown 文档缓存与后台预热 |

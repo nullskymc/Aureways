@@ -91,6 +91,10 @@ final class ScrollProbe {
                 }
                 clip.setBoundsOrigin(CGPoint(x: clip.bounds.origin.x, y: y))
                 scrollView.reflectScrolledClipView(clip)
+                // Windowed virtualization updates its visible slice on the run
+                // loop; drain pending sources so this step measures real rows
+                // rather than leftover spacers.
+                _ = CFRunLoopRunInMode(.defaultMode, 0, true)
                 // Force the work this step implies to happen now, inside the
                 // timed region, instead of being deferred to a display cycle we
                 // are not measuring.
@@ -138,10 +142,10 @@ final class ScrollProbe {
         }
     }
 
-    /// A virtualized stack estimates the height of everything it has not placed,
-    /// so the scrollable extent can be wrong and the viewport can come up empty
-    /// — the failure the eager `VStack` was working around. Jump to the bottom,
-    /// force layout, and report what is actually there.
+    /// Off-screen rows are spacers sized from the height cache. If that cache
+    /// is empty or the visible window did not follow this AppKit-driven scroll,
+    /// the viewport can come up empty. Jump to the bottom, force layout, and
+    /// report what is actually there.
     private func checkRendering(
         scrollView: NSScrollView,
         content: NSView,

@@ -5,7 +5,10 @@ struct TranscriptView: View {
 
     @State private var composerHeight: CGFloat = 0
     @State private var stickToBottom = true
-    @State private var scrollPosition = ScrollPosition(edge: .bottom)
+    @State private var scrollPosition = ScrollPosition(idType: UUID.self)
+    @State private var rowWindow = TranscriptWindow.empty
+    @State private var heightCache = TranscriptHeightCache()
+    @State private var chrome = TranscriptChromeState()
 
     private var displayedEntries: [TranscriptEntry] {
         #if DEBUG
@@ -21,25 +24,46 @@ struct TranscriptView: View {
     var body: some View {
         let entries = displayedEntries
         let liveID = session.isStreaming ? entries.last?.id : nil
+        let window = resolvedWindow(for: entries)
         ScrollView {
-            // 使用稳定平滑的 VStack。块由 TranscriptBlockView.equatable() 守护，
-            // 且 Markdown 全部命中 MarkdownDocumentCache，布局开销极低。
-            // 避免 LazyVStack 在动态卡片卸载时高度塌陷（extent collapse）把视口强行拉回底部。
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(entries) { entry in
-                    TranscriptBlockView(
-                        block: entry.block,
-                        version: entry.version,
-                        isStreaming: session.isStreaming && entry.id == liveID
-                    )
-                    .equatable()
-                    .id(entry.id)
+            // Visible rows only. Everything above / below is a spacer sized from
+            // the height cache, so inspector open and split-pane drags re-typeset
+            // on-screen markdown rather than the whole transcript.
+            VStack(spacing: 0) {
+                if window.topHeight > 0 {
+                    Color.clear
+                        .frame(height: window.topHeight)
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: TranscriptVirtualizer.spacing) {
+                    ForEach(entries[window.start..<window.end]) { entry in
+                        TranscriptBlockView(
+                            block: entry.block,
+                            version: entry.version,
+                            isStreaming: session.isStreaming && entry.id == liveID,
+                            chrome: chrome
+                        )
+                        .equatable()
+                        .id(entry.id)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { _, height in
+                            heightCache.set(entry.id, height)
+                        }
+                    }
+                }
+                .scrollTargetLayout()
+                if window.bottomHeight > 0 {
+                    Color.clear
+                        .frame(height: window.bottomHeight)
+                        .accessibilityHidden(true)
                 }
             }
-            .frame(maxWidth: 780)
+            .frame(maxWidth: 780, alignment: .top)
             .padding(.horizontal, 24)
             .padding(.top, 20)
             .frame(maxWidth: .infinity)
+            .transaction { $0.animation = nil }
         }
         // 输入卡是浮在画布上的 overlay，所以留白得由滚动区自己让出来。用
         // safeAreaPadding 而不是塞在 stack 里的 padding：scrollTo(edge:) 认安全区，
@@ -51,21 +75,34 @@ struct TranscriptView: View {
         .scrollEdgeEffectStyle(.hard, for: .bottom)
         .composerBar(session: session)
         .onPreferenceChange(ComposerHeightKey.self) { composerHeight = $0 }
-        // 精确检测是否在底部边缘：当用户主动向上浏览历史时（偏移离底部 > 80pt），
-        // 立即解除跟随锁定，绝不在滚动历史时突然将用户拽回底部。
-        .onScrollGeometryChange(for: Bool.self) { geo in
-            let maxOffset = max(0, geo.contentSize.height - geo.containerSize.height)
-            let distanceFromBottom = maxOffset - geo.contentOffset.y
-            return distanceFromBottom < 80
-        } action: { _, atBottom in
+        // 位置跟随只认「最后一块是否可见」，不读 contentOffset / contentSize：
+        // 未放置部分的高度是缓存值，拿绝对偏移做判断会随估算漂移。
+        .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.1) { visible in
+            guard let last = entries.last?.id else { return }
+            let atBottom = visible.contains(last)
             if stickToBottom != atBottom { stickToBottom = atBottom }
         }
-        .onChange(of: composerHeight) {
-            if stickToBottom {
-                scrollPosition.scrollTo(edge: .bottom)
-            }
+        .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
+            ScrollMetrics(offset: geo.contentOffset.y, viewport: geo.containerSize.height)
+        } action: { _, metrics in
+            heightCache.lastOffset = metrics.offset
+            heightCache.lastViewport = metrics.viewport
+            // First layout reports offset 0 before scrollTo(bottom) lands. Keep
+            // the window pinned to the end so opening a long session does not
+            // flash the top of the transcript.
+            let offset = (stickToBottom && metrics.offset < 8) ? CGFloat.infinity : metrics.offset
+            applyWindow(entries: entries, offset: offset, viewport: metrics.viewport)
         }
-        .onChange(of: session.transcriptRevision) { follow(entries) }
+        .onChange(of: composerHeight) { follow(entries) }
+        .onChange(of: session.transcriptRevision) {
+            heightCache.prune(keeping: Set(entries.map(\.id)))
+            applyWindow(
+                entries: entries,
+                offset: stickToBottom ? .infinity : heightCache.lastOffset,
+                viewport: heightCache.lastViewport
+            )
+            follow(entries)
+        }
         .onChange(of: session.isStreaming) {
             follow(entries)
             // 回合刚结束：把定稿的正文预解析掉，下次回收上屏能同步拿到高度。
@@ -76,6 +113,11 @@ struct TranscriptView: View {
         }
         .onAppear {
             session.ensureTranscriptProjection()
+            applyWindow(
+                entries: session.transcriptEntries,
+                offset: .infinity,
+                viewport: heightCache.lastViewport
+            )
             follow(session.transcriptEntries, force: true)
         }
         .task(id: session.id) { warmMarkdown() }
@@ -98,12 +140,37 @@ struct TranscriptView: View {
         scrollPosition.scrollTo(edge: .bottom)
     }
 
+    private func resolvedWindow(for entries: [TranscriptEntry]) -> TranscriptWindow {
+        if rowWindow == .empty && !entries.isEmpty {
+            return TranscriptVirtualizer.window(
+                rowHeights: heightCache.rowHeights(for: entries),
+                offset: .infinity,
+                viewport: heightCache.lastViewport
+            )
+        }
+        return rowWindow.clamped(to: entries.count)
+    }
+
+    private func applyWindow(entries: [TranscriptEntry], offset: CGFloat, viewport: CGFloat) {
+        let next = TranscriptVirtualizer.window(
+            rowHeights: heightCache.rowHeights(for: entries),
+            offset: offset,
+            viewport: viewport
+        )
+        if next != rowWindow { rowWindow = next }
+    }
+
     /// 后台把还没解析的 agent 正文解析掉。300 条约 54 ms，排成一队跑，换来的是
-    /// 块被放置时高度就是对的。
+    /// 块被放置时高度就是对的——窗口里的 spacer 靠这一点，而不是 LazyVStack 的估算。
     private func warmMarkdown() {
         MarkdownDocumentCache.shared.warm(
             session.markdownSources,
             config: AurewaysMarkdown.plain
         )
     }
+}
+
+private struct ScrollMetrics: Equatable {
+    var offset: CGFloat
+    var viewport: CGFloat
 }

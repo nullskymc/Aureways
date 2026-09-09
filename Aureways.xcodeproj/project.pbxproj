@@ -40,6 +40,8 @@
 		B10100000000000000000043 /* PerfFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000042 /* PerfFixture.swift */; };
 		B10100000000000000000045 /* ScrollProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000044 /* ScrollProbe.swift */; };
 		B10100000000000000000047 /* MarkdownDocumentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000046 /* MarkdownDocumentCache.swift */; };
+		B10100000000000000000049 /* TranscriptVirtualizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000048 /* TranscriptVirtualizer.swift */; };
+		B20100000000000000000049 /* TranscriptVirtualizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000048 /* TranscriptVirtualizer.swift */; };
 		B20100000000000000000043 /* PerfFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000042 /* PerfFixture.swift */; };
 		B10100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
 		B10100000000000000000031 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000031 /* ComposerTextView.swift */; };
@@ -140,6 +142,7 @@
 		F10100000000000000000042 /* PerfFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfFixture.swift; sourceTree = "<group>"; };
 		F10100000000000000000044 /* ScrollProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollProbe.swift; sourceTree = "<group>"; };
 		F10100000000000000000046 /* MarkdownDocumentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocumentCache.swift; sourceTree = "<group>"; };
+		F10100000000000000000048 /* TranscriptVirtualizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptVirtualizer.swift; sourceTree = "<group>"; };
 		F10100000000000000000030 /* ComposerAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachment.swift; sourceTree = "<group>"; };
 		F10100000000000000000031 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		F10100000000000000000032 /* WorkspaceIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/WorkspaceIndex.swift; sourceTree = "<group>"; };
@@ -227,6 +230,7 @@
 				F10100000000000000000042 /* PerfFixture.swift */,
 				F10100000000000000000044 /* ScrollProbe.swift */,
 				F10100000000000000000046 /* MarkdownDocumentCache.swift */,
+				F10100000000000000000048 /* TranscriptVirtualizer.swift */,
 				F10100000000000000000030 /* ComposerAttachment.swift */,
 				G10100000000000000000004 /* Harness */,
 				G10100000000000000000002 /* ACP */,
@@ -457,6 +461,7 @@
 				B10100000000000000000043 /* PerfFixture.swift in Sources */,
 				B10100000000000000000045 /* ScrollProbe.swift in Sources */,
 				B10100000000000000000047 /* MarkdownDocumentCache.swift in Sources */,
+				B10100000000000000000049 /* TranscriptVirtualizer.swift in Sources */,
 				B10100000000000000000030 /* ComposerAttachment.swift in Sources */,
 				B10100000000000000000031 /* ComposerTextView.swift in Sources */,
 				B10100000000000000000032 /* WorkspaceIndex.swift in Sources */,
@@ -515,6 +520,7 @@
 				B2010000000000000000000D /* SessionStore.swift in Sources */,
 				B20100000000000000000012 /* ChatSession.swift in Sources */,
 				B20100000000000000000041 /* TranscriptBlock.swift in Sources */,
+				B20100000000000000000049 /* TranscriptVirtualizer.swift in Sources */,
 				B20100000000000000000043 /* PerfFixture.swift in Sources */,
 				B2010000000000000000001C /* SessionModels.swift in Sources */,
 				B2010000000000000000001D /* UpdateModels.swift in Sources */,

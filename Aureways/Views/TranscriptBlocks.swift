@@ -1,12 +1,27 @@
 import AppKit
+import Observation
 import SwiftUI
+
+/// Expansion state that outlives row recycling. A windowed transcript destroys
+/// off-screen views; `@State` on the card would collapse the measured height
+/// the next time the row is placed.
+@Observable
+@MainActor
+final class TranscriptChromeState {
+    var activityExpanded: [UUID: Bool] = [:]
+    var openToolID: [UUID: UUID] = [:]
+    var thoughtExpanded: Set<UUID> = []
+}
 
 struct TranscriptBlockView: View, Equatable {
     let block: TranscriptBlock
     var version: UInt64 = 0
     var isStreaming = false
+    var chrome: TranscriptChromeState
 
     // Projection revisions make this O(1), even when a tool carries megabytes.
+    // Chrome is a class identity and is not part of equality: expansion updates
+    // flow through the observable store, not through this wrapper.
     nonisolated static func == (lhs: TranscriptBlockView, rhs: TranscriptBlockView) -> Bool {
         lhs.block.id == rhs.block.id && lhs.version == rhs.version && lhs.isStreaming == rhs.isStreaming
     }
@@ -18,7 +33,13 @@ struct TranscriptBlockView: View, Equatable {
         case .agent(_, let text):
             AgentMessage(markdown: text, isStreaming: isStreaming)
         case .activity(_, let steps, let run):
-            ActivityCard(steps: steps, isLive: isStreaming, run: run)
+            ActivityCard(
+                blockID: block.id,
+                steps: steps,
+                isLive: isStreaming,
+                run: run,
+                chrome: chrome
+            )
         case .status(_, let text):
             ErrorNotice(text: text)
         }
@@ -159,9 +180,14 @@ private struct AgentMessage: View {
 /// 思考步骤：默认两行预览，点击展开全文——过程信息不抢正文的视觉主体。
 /// 用点击手势而非 Button，保住 textSelection 的复制能力。
 private struct ThoughtStep: View {
+    let id: UUID
     let text: String
-    @State private var isExpanded = false
+    var chrome: TranscriptChromeState
     @State private var isHovered = false
+
+    private var isExpanded: Bool {
+        chrome.thoughtExpanded.contains(id)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
@@ -182,13 +208,18 @@ private struct ThoughtStep: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.tertiary)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .animation(.easeInOut(duration: 0.15), value: isExpanded)
                 .padding(.top, 4)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .opacity(isHovered ? 0.92 : 1)
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            if isExpanded {
+                chrome.thoughtExpanded.remove(id)
+            } else {
+                chrome.thoughtExpanded.insert(id)
+            }
         }
         .onHover { isHovered = $0 }
         .help(isExpanded ? "收起思考" : "展开完整思考")
@@ -196,17 +227,21 @@ private struct ThoughtStep: View {
 }
 
 private struct ActivityCard: View {
+    let blockID: UUID
     let steps: [ActivityStep]
     var isLive: Bool
     var run: ActivityRun?
-    @State private var userExpanded: Bool?
-    @State private var openCallID: UUID?
+    var chrome: TranscriptChromeState
     @State private var isHeaderHovered = false
 
     // 运行中默认展开，让人看到工作流进展（思考全文与工具详情仍各自收起）；
     // 完成后自动收纳成摘要行，与正文做层次隔离。用户手动切换优先于默认。
     private var isExpanded: Bool {
-        userExpanded ?? isLive
+        chrome.activityExpanded[blockID] ?? isLive
+    }
+
+    private var openCallID: UUID? {
+        chrome.openToolID[blockID]
     }
 
     private var toolCalls: [ActivityTool] {
@@ -236,9 +271,7 @@ private struct ActivityCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    userExpanded = !isExpanded
-                }
+                chrome.activityExpanded[blockID] = !isExpanded
             } label: {
                 HStack(spacing: 8) {
                     if isBusy {
@@ -258,6 +291,7 @@ private struct ActivityCard: View {
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.easeInOut(duration: 0.15), value: isExpanded)
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
@@ -303,10 +337,8 @@ private struct ActivityCard: View {
         .onChange(of: isLive) {
             // 回合结束统一收纳：运行中手动展开过的也一并收起。
             if !isLive {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    userExpanded = nil
-                    openCallID = nil
-                }
+                chrome.activityExpanded[blockID] = nil
+                chrome.openToolID[blockID] = nil
             }
         }
     }
@@ -337,15 +369,13 @@ private struct ActivityCard: View {
     @ViewBuilder
     private func stepView(_ step: ActivityStep) -> some View {
         switch step {
-        case .thought(_, let text):
-            ThoughtStep(text: text)
+        case .thought(let id, let text):
+            ThoughtStep(id: id, text: text, chrome: chrome)
         case .tools(_, let tools):
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(tools) { tool in
                     ToolCompactRow(call: tool.call, isOpen: openCallID == tool.id) {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            openCallID = openCallID == tool.id ? nil : tool.id
-                        }
+                        chrome.openToolID[blockID] = openCallID == tool.id ? nil : tool.id
                     }
                 }
             }
