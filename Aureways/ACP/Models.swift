@@ -7,7 +7,7 @@ enum AppInfo {
 enum ACPError: LocalizedError, Sendable {
     case invalidJSON(String)
     case transportClosed(String)
-    case agent(Int, String)
+    case agent(Int, String, JSONValue? = nil)
     case launch(String)
     case timeout(String)
 
@@ -15,10 +15,24 @@ enum ACPError: LocalizedError, Sendable {
         switch self {
         case .invalidJSON(let message): return message
         case .transportClosed(let message): return message
-        case .agent(let code, let message): return "Agent error \(code): \(message)"
+        case .agent(let code, let message, _): return "Agent error \(code): \(message)"
         case .launch(let message): return message
         case .timeout(let message): return message
         }
+    }
+
+    /// ACP `session/new` / `load` may refuse until `authenticate`. Login and
+    /// provider config stay in the harness; the client only reacts to this.
+    var isAuthRequired: Bool {
+        guard case .agent(_, let message, let data) = self else { return false }
+        let marker = data?["type"]?.stringValue
+            ?? data?["reason"]?.stringValue
+            ?? data?["code"]?.stringValue
+        if let marker, marker.localizedCaseInsensitiveContains("auth") {
+            return true
+        }
+        let lower = message.lowercased()
+        return lower.contains("auth_required") || lower.contains("authentication required")
     }
 }
 

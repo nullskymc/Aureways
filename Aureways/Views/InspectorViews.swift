@@ -199,7 +199,7 @@ struct InfoInspectorTab: View {
                 .labelsHidden()
             } else if !option.options.isEmpty {
                 Picker("", selection: Binding(
-                    get: { option.value?.stringValue ?? "" },
+                    get: { option.selectedString ?? "" },
                     set: { model.setSessionConfig(session, configId: option.id, value: .string($0)) }
                 )) {
                     ForEach(Array(SessionMode.menuSections(from: option.options).enumerated()), id: \.offset) { _, section in

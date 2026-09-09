@@ -201,6 +201,181 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(session.usage?.size, 100)
     }
 
+    @MainActor
+    func testThoughtLevelOptionFollowsConfigUpdates() throws {
+        let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let initial = try JSONValue.decode(from: """
+        {
+          "id": "reasoning_effort",
+          "category": "thought_level",
+          "type": "select",
+          "value": "high",
+          "options": [
+            {"id": "low", "name": "Low"},
+            {"id": "high", "name": "High"}
+          ]
+        }
+        """)
+        session.configOptions = [try XCTUnwrap(SessionConfigOption(json: initial))]
+        XCTAssertEqual(session.thoughtLevelOption?.selectedString, "high")
+
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .configOption("reasoning_effort", .string("low"))
+        ))
+        XCTAssertEqual(session.thoughtLevelOption?.selectedString, "low")
+
+        let refreshed = try JSONValue.decode(from: """
+        {
+          "id": "reasoning_effort",
+          "category": "thought_level",
+          "type": "select",
+          "value": "medium",
+          "options": [
+            {"id": "low", "name": "Low"},
+            {"id": "medium", "name": "Medium"}
+          ]
+        }
+        """)
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .configOptions([try XCTUnwrap(SessionConfigOption(json: refreshed))])
+        ))
+        XCTAssertEqual(session.thoughtLevelOption?.selectedString, "medium")
+        XCTAssertEqual(session.thoughtLevelOption?.options.map(\.id), ["low", "medium"])
+    }
+
+    func testGrokSessionModelsBecomeModelAndThoughtChips() throws {
+        let json = """
+        {
+          "sessionId": "sess_g",
+          "models": {
+            "currentModelId": "grok-4.6",
+            "availableModels": [
+              {
+                "modelId": "grok-4.6",
+                "name": "Grok 4.6",
+                "_meta": {
+                  "supportsReasoningEffort": true,
+                  "reasoningEffort": "high",
+                  "reasoningEfforts": [
+                    {"id": "xhigh", "value": "xhigh", "label": "Extra High Effort"},
+                    {"id": "high", "value": "high", "label": "High Effort", "default": true},
+                    {"id": "medium", "value": "medium", "label": "Medium Effort"},
+                    {"id": "low", "value": "low", "label": "Low Effort"}
+                  ]
+                }
+              },
+              {
+                "modelId": "grok-4.5",
+                "name": "Grok 4.5",
+                "_meta": {
+                  "supportsReasoningEffort": true,
+                  "reasoningEffort": "high",
+                  "reasoningEfforts": [
+                    {"id": "high", "label": "High Effort"},
+                    {"id": "medium", "label": "Medium Effort"},
+                    {"id": "low", "label": "Low Effort"}
+                  ]
+                }
+              }
+            ]
+          }
+        }
+        """
+        let response = try JSONDecoder.acp.decode(NewSessionResponse.self, from: Data(json.utf8))
+        XCTAssertTrue(response.configOptions.isEmpty)
+        XCTAssertEqual(response.models?.currentModelId, "grok-4.6")
+
+        let grok = GrokBuildHarness().normalizeSessionConfig(
+            options: response.configOptions,
+            models: response.models,
+            modes: response.modes
+        )
+        XCTAssertEqual(grok.map(\.id), ["model", "reasoning_effort"])
+        XCTAssertTrue(grok[0].isModel)
+        XCTAssertEqual(grok[0].selectedString, "grok-4.6")
+        XCTAssertTrue(grok[1].isThoughtLevel)
+        XCTAssertEqual(grok[1].selectedString, "high")
+        XCTAssertEqual(grok[1].options.map(\.id), ["xhigh", "high", "medium", "low"])
+        XCTAssertEqual(grok[1].options.map(\.name), [
+            "Extra High Effort", "High Effort", "Medium Effort", "Low Effort"
+        ])
+
+        let generic = CodexHarness().normalizeSessionConfig(
+            options: response.configOptions,
+            models: response.models,
+            modes: response.modes
+        )
+        XCTAssertEqual(generic.map(\.id), ["model"])
+        XCTAssertFalse(generic.contains(where: \.isThoughtLevel))
+        XCTAssertTrue(GrokBuildHarness().usesSetModel(for: grok[1], advertisedConfigOptions: false))
+        XCTAssertFalse(GrokBuildHarness().usesSetModel(for: grok[1], advertisedConfigOptions: true))
+    }
+
+    @MainActor
+    func testSwitchingGrokModelRefreshesEffortMenu() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "currentModelId": "grok-4.6",
+          "availableModels": [
+            {
+              "modelId": "grok-4.6",
+              "name": "Grok 4.6",
+              "_meta": {
+                "reasoningEffort": "xhigh",
+                "reasoningEfforts": [
+                  {"id": "xhigh", "name": "Extra High"},
+                  {"id": "high", "name": "High"}
+                ]
+              }
+            },
+            {
+              "modelId": "grok-4.5",
+              "name": "Grok 4.5",
+              "_meta": {
+                "reasoningEffort": "high",
+                "reasoningEfforts": [
+                  {"id": "high", "name": "High"},
+                  {"id": "low", "name": "Low"}
+                ]
+              }
+            }
+          ]
+        }
+        """)
+        let models = try XCTUnwrap(SessionModelState(json: json))
+        let profile = AgentProfile(id: "grok-build", title: "Grok", subtitle: "", command: "grok", arguments: [], builtIn: true, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let options = GrokBuildHarness().normalizeSessionConfig(options: [], models: models, modes: nil)
+        session.applySetup(
+            sessionId: "s1",
+            modes: nil,
+            configOptions: options,
+            models: models,
+            advertisedConfigOptions: false
+        )
+        XCTAssertEqual(session.thoughtLevelOption?.options.map(\.id), ["xhigh", "high"])
+        session.applyConfigOption(id: "model", value: .string("grok-4.5"))
+        XCTAssertEqual(session.modelOption?.selectedString, "grok-4.5")
+        XCTAssertEqual(session.thoughtLevelOption?.options.map(\.id), ["high", "low"])
+        XCTAssertEqual(session.thoughtLevelOption?.selectedString, "high")
+    }
+
+    func testModelChangedNotificationUpdatesEffort() throws {
+        let json = try JSONValue.decode(from: """
+        {"sessionId":"s1","update":{"sessionUpdate":"model_changed","model_id":"grok-4.6","reasoning_effort":"low"}}
+        """)
+        let note = SessionNotification(json: json)
+        if case .modelChanged(let modelId, let effort) = note?.update {
+            XCTAssertEqual(modelId, "grok-4.6")
+            XCTAssertEqual(effort, "low")
+        } else {
+            XCTFail("expected model_changed")
+        }
+    }
+
     func testSessionUpdateChunkCoalescing() {
         let notes = [
             SessionNotification(sessionId: "s1", update: .agentMessageChunk(.text("Hel"))),
@@ -374,6 +549,47 @@ final class ProtocolTests: XCTestCase {
         try await ops.writeText(path: extraFile, content: "ok")
         let text = try await ops.readText(path: extraFile, line: nil, limit: nil)
         XCTAssertEqual(text, "ok")
+    }
+
+    func testAuthRequiredDetection() {
+        XCTAssertTrue(ACPError.agent(-32000, "Authentication required").isAuthRequired)
+        XCTAssertTrue(ACPError.agent(-32603, "nope", .object(["type": .string("auth_required")])).isAuthRequired)
+        XCTAssertFalse(ACPError.agent(-32603, "CODEX_API_KEY or OPENAI_API_KEY is not set").isAuthRequired)
+        XCTAssertFalse(ACPError.launch("Authentication required (API Key): missing env").isAuthRequired)
+    }
+
+    @MainActor
+    func testHandshakeDoesNotAuthenticateAdvertisedMethods() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("auth_agent.py")
+        try advertisedAuthAgentSource.write(to: file, atomically: true, encoding: .utf8)
+        let harness = Harness(profile: AgentProfile(
+            id: "mock-auth",
+            title: "Mock Auth",
+            subtitle: "",
+            command: "/usr/bin/python3",
+            arguments: [file.path],
+            builtIn: false,
+            notes: ""
+        ))
+        let runtime = harness.makeRuntime()
+        try await runtime.ensureStarted(
+            cwd: directory.path,
+            autoApprove: false,
+            environment: HostEnvironment.augmented(),
+            handlers: ACPHandlers(
+                onUpdate: { _ in },
+                onPermission: { _ in .cancelled },
+                onLog: { _ in }
+            )
+        )
+        XCTAssertEqual(runtime.authMethods.map(\.id), ["api-key"])
+        let session = try await runtime.withAuthentication {
+            try await runtime.connection!.newSession(cwd: directory.path)
+        }
+        XCTAssertEqual(session.sessionId, "sess_auth_ok")
+        await runtime.shutdown()
     }
 
     func testInitializeFlushesLineWithoutTrailingNewline() async throws {
@@ -612,6 +828,65 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(response.configOptions[1].value?.stringValue, "grok-4")
         XCTAssertTrue(response.configOptions[2].isBoolean)
         XCTAssertEqual(response.configOptions[2].value?.boolValue, false)
+        XCTAssertFalse(response.configOptions[0].isThoughtLevel)
+        XCTAssertFalse(response.configOptions[1].isThoughtLevel)
+        XCTAssertFalse(response.configOptions[2].isThoughtLevel)
+    }
+
+    func testThoughtLevelConfigOptionDecoding() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "id": "reasoning_effort",
+          "name": "Reasoning",
+          "category": "thought_level",
+          "type": "select",
+          "currentValue": "high",
+          "options": [
+            {"value": "low", "name": "Low"},
+            {"value": "medium", "name": "Medium"},
+            {"value": "high", "label": "High Effort", "description": "Extensive reasoning"}
+          ]
+        }
+        """)
+        let option = try XCTUnwrap(SessionConfigOption(json: json))
+        XCTAssertTrue(option.isThoughtLevel)
+        XCTAssertFalse(option.isMode)
+        XCTAssertFalse(option.isModel)
+        XCTAssertEqual(option.selectedString, "high")
+        XCTAssertEqual(option.options.map(\.id), ["low", "medium", "high"])
+        XCTAssertEqual(option.options.map(\.name), ["Low", "Medium", "High Effort"])
+    }
+
+    func testThoughtLevelRecognizedFromReasoningEffortId() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "id": "reasoning_effort",
+          "type": "select",
+          "value": {"value": "medium"},
+          "options": [
+            {"id": "low", "name": "Low"},
+            {"id": "medium", "name": "Medium"}
+          ]
+        }
+        """)
+        let option = try XCTUnwrap(SessionConfigOption(json: json))
+        XCTAssertTrue(option.isThoughtLevel)
+        XCTAssertEqual(option.selectedString, "medium")
+    }
+
+    func testThoughtLevelDoesNotStealModeCategory() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "id": "reasoning_effort",
+          "category": "mode",
+          "type": "select",
+          "value": "high",
+          "options": [{"id": "high", "name": "High Effort"}]
+        }
+        """)
+        let option = try XCTUnwrap(SessionConfigOption(json: json))
+        XCTAssertTrue(option.isMode)
+        XCTAssertFalse(option.isThoughtLevel)
     }
 
     func testGroupedModelOptionsPreserveProviderNames() throws {
@@ -705,6 +980,59 @@ final class ProtocolTests: XCTestCase {
             XCTAssertEqual(value.stringValue, "code")
         } else {
             XCTFail("expected config option update")
+        }
+    }
+
+    func testConfigOptionUpdateFullList() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "sessionId": "s1",
+          "update": {
+            "sessionUpdate": "config_option_update",
+            "configId": "reasoning_effort",
+            "value": "low",
+            "configOptions": [
+              {
+                "id": "model",
+                "category": "model",
+                "type": "select",
+                "value": "grok-4",
+                "options": [{"id": "grok-4", "name": "Grok 4"}]
+              },
+              {
+                "id": "reasoning_effort",
+                "category": "thought_level",
+                "type": "select",
+                "value": "low",
+                "options": [
+                  {"id": "low", "name": "Low"},
+                  {"id": "high", "name": "High"}
+                ]
+              }
+            ]
+          }
+        }
+        """)
+        let note = SessionNotification(json: json)
+        if case .configOptions(let options) = note?.update {
+            XCTAssertEqual(options.map(\.id), ["model", "reasoning_effort"])
+            XCTAssertTrue(options[1].isThoughtLevel)
+            XCTAssertEqual(options[1].selectedString, "low")
+        } else {
+            XCTFail("expected full config option list")
+        }
+    }
+
+    func testConfigOptionUpdateUnwrapsNestedValue() throws {
+        let json = try JSONValue.decode(from: """
+        {"sessionId":"s1","update":{"sessionUpdate":"config_option_update","configId":"reasoning_effort","value":{"value":"high"}}}
+        """)
+        let note = SessionNotification(json: json)
+        if case .configOption(let id, let value) = note?.update {
+            XCTAssertEqual(id, "reasoning_effort")
+            XCTAssertEqual(value.stringValue, "high")
+        } else {
+            XCTFail("expected unwrapped config option value")
         }
     }
 
@@ -1058,6 +1386,44 @@ private actor TextBox {
         parts = []
     }
 }
+
+private let advertisedAuthAgentSource = #"""
+#!/usr/bin/env python3
+import json, sys
+
+def send(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+def recv():
+    line = sys.stdin.readline()
+    if not line:
+        return None
+    return json.loads(line)
+
+while True:
+    msg = recv()
+    if msg is None:
+        break
+    method = msg.get("method")
+    mid = msg.get("id")
+    if method == "initialize":
+        send({"jsonrpc": "2.0", "id": mid, "result": {
+            "protocolVersion": 1,
+            "agentCapabilities": {},
+            "agentInfo": {"name": "auth-mock", "version": "0.0.1"},
+            "authMethods": [{"id": "api-key", "name": "API Key"}]
+        }})
+    elif method == "authenticate":
+        send({"jsonrpc": "2.0", "id": mid, "error": {
+            "code": -32603,
+            "message": "CODEX_API_KEY or OPENAI_API_KEY is not set"
+        }})
+    elif method == "session/new":
+        send({"jsonrpc": "2.0", "id": mid, "result": {"sessionId": "sess_auth_ok"}})
+    elif mid is not None:
+        send({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "Method not found"}})
+"""#
 
 private let eofAgentSource = #"""
 #!/usr/bin/env python3

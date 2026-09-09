@@ -168,6 +168,8 @@ enum SessionUpdate: Sendable, Equatable {
     case currentMode(String)
     case sessionInfo(String)
     case configOption(String, JSONValue)
+    case configOptions([SessionConfigOption])
+    case modelChanged(String, String?)
     case usage(SessionUsage)
     case unknown(String, JSONValue)
 
@@ -195,9 +197,20 @@ enum SessionUpdate: Sendable, Equatable {
         case "session_info_update":
             self = .sessionInfo(json["title"]?.stringValue ?? json["sessionTitle"]?.stringValue ?? "")
         case "config_option_update":
+            if let items = json["configOptions"]?.arrayValue {
+                let options = items.compactMap(SessionConfigOption.init(json:))
+                if !options.isEmpty {
+                    self = .configOptions(options)
+                    return
+                }
+            }
             let id = json["configId"]?.stringValue ?? json["id"]?.stringValue ?? json["configOption"]?["id"]?.stringValue ?? ""
-            let value = json["value"] ?? json["configOption"]?["value"] ?? .null
+            let value = SessionConfigOption.scalarValue(json["value"] ?? json["configOption"]?["value"]) ?? .null
             self = .configOption(id, value)
+        case "model_changed":
+            let modelId = json["model_id"]?.stringValue ?? json["modelId"]?.stringValue ?? ""
+            let effort = json["reasoning_effort"]?.stringValue ?? json["reasoningEffort"]?.stringValue
+            self = .modelChanged(modelId, effort)
         case "usage_update":
             if let usage = SessionUsage(json: json) {
                 self = .usage(usage)

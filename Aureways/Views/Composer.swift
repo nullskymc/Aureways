@@ -242,6 +242,7 @@ struct ComposerCard: View {
             harnessChip
             HarnessQuotaChip(agentId: displayedAgent.id, isShowingCard: $isShowingQuotaCard)
             sessionModelChip
+            sessionThoughtChip
             sessionModeChip
 
             if isStreaming {
@@ -415,10 +416,27 @@ struct ComposerCard: View {
            let option = session.modelOption,
            !option.options.isEmpty {
             sessionSelectChip(
-                title: option.options.first(where: { $0.id == option.value?.stringValue })?.labeledName ?? option.name,
+                title: option.options.first(where: { $0.id == option.selectedString })?.labeledName ?? option.name,
                 help: "切换本会话使用的模型",
                 choices: option.options,
-                selectedId: option.value?.stringValue
+                selectedId: option.selectedString
+            ) { id in
+                model.setSessionConfig(session, configId: option.id, value: .string(id))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sessionThoughtChip: some View {
+        if let session = currentSession,
+           session.phase.isReady,
+           let option = session.thoughtLevelOption,
+           !option.options.isEmpty {
+            sessionSelectChip(
+                title: option.options.first(where: { $0.id == option.selectedString })?.name ?? option.name,
+                help: "切换本会话的推理强度",
+                choices: option.options,
+                selectedId: option.selectedString
             ) { id in
                 model.setSessionConfig(session, configId: option.id, value: .string(id))
             }

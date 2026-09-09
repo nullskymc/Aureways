@@ -66,6 +66,27 @@ class Harness: @unchecked Sendable {
         capabilities
     }
 
+    /// Fill in Composer selectors from ACP `models` when the agent omits
+    /// `configOptions`. Grok 1.0.7 is in that boat.
+    func normalizeSessionConfig(
+        options: [SessionConfigOption],
+        models: SessionModelState?,
+        modes: SessionModeState?
+    ) -> [SessionConfigOption] {
+        _ = modes
+        var result = options
+        if !result.contains(where: \.isModel), let models, !models.availableModels.isEmpty {
+            result.append(.fromModels(models))
+        }
+        return result
+    }
+
+    /// Agents that only advertise `models` (no `configOptions`) change model
+    /// and thought level through `session/set_model`, not `set_config_option`.
+    func usesSetModel(for option: SessionConfigOption, advertisedConfigOptions: Bool) -> Bool {
+        !advertisedConfigOptions && (option.isModel || option.isThoughtLevel)
+    }
+
     func isAvailable() -> Bool {
         HostEnvironment.resolveExecutable(launchCommand()) != nil
     }

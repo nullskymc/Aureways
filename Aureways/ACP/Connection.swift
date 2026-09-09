@@ -175,8 +175,20 @@ actor ACPConnection {
         )
     }
 
-    func setConfigOption(sessionId: String, configId: String, value: JSONValue) async throws {
-        _ = try await request(
+    func setModel(sessionId: String, modelId: String, reasoningEffort: String? = nil) async throws {
+        var params: [String: JSONValue] = [
+            "sessionId": .string(sessionId),
+            "modelId": .string(modelId),
+        ]
+        if let reasoningEffort, !reasoningEffort.isEmpty {
+            params["_meta"] = .object(["reasoningEffort": .string(reasoningEffort)])
+        }
+        _ = try await request("session/set_model", params: .object(params))
+    }
+
+    @discardableResult
+    func setConfigOption(sessionId: String, configId: String, value: JSONValue) async throws -> [SessionConfigOption] {
+        let result = try await request(
             "session/set_config_option",
             params: .object([
                 "sessionId": .string(sessionId),
@@ -184,6 +196,7 @@ actor ACPConnection {
                 "value": value,
             ])
         )
+        return result["configOptions"]?.arrayValue?.compactMap(SessionConfigOption.init(json:)) ?? []
     }
 
     func setMode(sessionId: String, modeId: String) async throws {
@@ -290,9 +303,9 @@ actor ACPConnection {
             switch message {
             case .response(let id, let result):
                 finishPending(id: id, .success(result))
-            case .error(let id, let code, let message, _):
+            case .error(let id, let code, let message, let data):
                 if let id {
-                    finishPending(id: id, .failure(ACPError.agent(code, message)))
+                    finishPending(id: id, .failure(ACPError.agent(code, message, data)))
                 } else {
                     await handlers.onLog("agent error \(code): \(message)")
                 }
@@ -310,6 +323,7 @@ actor ACPConnection {
         let isSessionUpdate = method == "session/update"
             || method == "x.ai/session/update"
             || method == "_x.ai/session/update"
+            || method == "_x.ai/session_notification"
         guard isSessionUpdate, let params, let notification = SessionNotification(json: params) else {
             if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
                 await handlers.onLog(method)

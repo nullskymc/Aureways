@@ -167,7 +167,7 @@ struct SessionMode: Sendable, Equatable, Identifiable {
     init?(json: JSONValue) {
         guard let id = json["id"]?.stringValue ?? json["value"]?.stringValue, !id.isEmpty else { return nil }
         self.id = id
-        name = json["name"]?.stringValue ?? id
+        name = json["name"]?.stringValue ?? json["label"]?.stringValue ?? id
         description = json["description"]?.stringValue
         group = json["group"]?.stringValue
         if group?.isEmpty == true { group = nil }
@@ -228,6 +228,58 @@ struct SessionModeState: Sendable, Equatable {
     }
 }
 
+/// ACP `models` on `session/new` / `session/load`. Grok 1.0.7 advertises
+/// reasoning effort on each model's `_meta`, not as `configOptions`.
+struct SessionModelInfo: Sendable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var description: String?
+    var meta: JSONValue?
+
+    init?(json: JSONValue) {
+        guard let id = json["modelId"]?.stringValue ?? json["id"]?.stringValue, !id.isEmpty else { return nil }
+        self.id = id
+        name = json["name"]?.stringValue ?? json["label"]?.stringValue ?? id
+        description = json["description"]?.stringValue
+        meta = json["_meta"]
+    }
+
+    var reasoningEffort: String? {
+        meta?["reasoningEffort"]?.stringValue
+    }
+
+    var reasoningEffortChoices: [SessionMode] {
+        meta?["reasoningEfforts"]?.arrayValue?.compactMap(SessionMode.init) ?? []
+    }
+}
+
+struct SessionModelState: Sendable, Equatable {
+    var currentModelId: String
+    var availableModels: [SessionModelInfo]
+
+    init(currentModelId: String, availableModels: [SessionModelInfo]) {
+        self.currentModelId = currentModelId
+        self.availableModels = availableModels
+    }
+
+    init?(json: JSONValue) {
+        let models = json["availableModels"]?.arrayValue?.compactMap(SessionModelInfo.init) ?? []
+        let current = json["currentModelId"]?.stringValue ?? json["modelId"]?.stringValue ?? models.first?.id ?? ""
+        if current.isEmpty && models.isEmpty { return nil }
+        currentModelId = current
+        availableModels = models
+    }
+
+    var current: SessionModelInfo? {
+        availableModels.first(where: { $0.id == currentModelId }) ?? availableModels.first
+    }
+
+    mutating func select(_ modelId: String) {
+        guard availableModels.contains(where: { $0.id == modelId }) else { return }
+        currentModelId = modelId
+    }
+}
+
 struct SessionConfigOption: Sendable, Equatable, Identifiable {
     var id: String
     var name: String
@@ -251,6 +303,41 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         return key == "model" || key == "models" || id.lowercased() == "modelid"
     }
 
+    /// ACP `thought_level` (Grok: `reasoning_effort`). Category wins over id so a
+    /// mis-tagged `category: "mode"` option does not steal the mode chip.
+    var isThoughtLevel: Bool {
+        let categoryKey = (category ?? "").lowercased()
+        if categoryKey == "thought_level" || categoryKey == "thoughtlevel" {
+            return true
+        }
+        if !categoryKey.isEmpty { return false }
+        let idKey = id.lowercased()
+        return idKey == "thought_level" || idKey == "thoughtlevel"
+            || idKey == "reasoning_effort" || idKey == "effort"
+    }
+
+    var selectedString: String? {
+        Self.scalarValue(value)?.stringValue
+    }
+
+    init(
+        id: String,
+        name: String,
+        description: String? = nil,
+        category: String? = nil,
+        type: String = "select",
+        value: JSONValue? = nil,
+        options: [SessionMode] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.category = category
+        self.type = type
+        self.value = value
+        self.options = options
+    }
+
     init?(json: JSONValue) {
         guard let id = json["id"]?.stringValue ?? json["configId"]?.stringValue, !id.isEmpty else { return nil }
         self.id = id
@@ -259,8 +346,18 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         category = json["category"]?.stringValue
         let current = json["value"] ?? json["currentValue"]
         type = json["type"]?.stringValue ?? (current?.boolValue != nil ? "boolean" : "select")
-        value = current
+        value = Self.scalarValue(current) ?? current
         options = Self.parseSelectOptions(json["options"])
+    }
+
+    /// Select values are strings. Some agents wrap as `{ "value": "high" }`.
+    static func scalarValue(_ value: JSONValue?) -> JSONValue? {
+        guard let value else { return nil }
+        if value.stringValue != nil || value.boolValue != nil { return value }
+        if let inner = value["value"], inner.stringValue != nil || inner.boolValue != nil {
+            return inner
+        }
+        return value
     }
 
     /// ACP select options are either a flat list or `SessionConfigSelectGroup`
@@ -292,11 +389,39 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         guard let value, !value.isEmpty else { return nil }
         return value
     }
+
+    static func fromModels(_ models: SessionModelState) -> SessionConfigOption {
+        SessionConfigOption(
+            id: "model",
+            name: "Model",
+            category: "model",
+            value: .string(models.currentModelId),
+            options: models.availableModels.map {
+                SessionMode(id: $0.id, name: $0.name, description: $0.description)
+            }
+        )
+    }
+
+    static func thoughtLevel(from model: SessionModelInfo, preserving effort: String? = nil) -> SessionConfigOption? {
+        let choices = model.reasoningEffortChoices
+        guard !choices.isEmpty else { return nil }
+        let selected = [effort, model.reasoningEffort].compactMap { $0 }.first { id in
+            choices.contains(where: { $0.id == id })
+        } ?? choices.first?.id
+        return SessionConfigOption(
+            id: "reasoning_effort",
+            name: "推理强度",
+            category: "thought_level",
+            value: selected.map(JSONValue.string),
+            options: choices
+        )
+    }
 }
 
 struct NewSessionResponse: Decodable, Sendable {
     var sessionId: String
     var modes: SessionModeState?
+    var models: SessionModelState?
     var configOptions: [SessionConfigOption]
     var mcpServers: [McpServerConfig]
 
@@ -307,6 +432,7 @@ struct NewSessionResponse: Decodable, Sendable {
         }
         self.sessionId = sessionId
         modes = json["modes"].flatMap { SessionModeState(json: $0) }
+        models = json["models"].flatMap { SessionModelState(json: $0) }
         configOptions = json["configOptions"]?.arrayValue?.compactMap(SessionConfigOption.init(json:)) ?? []
         mcpServers = json["mcpServers"]?.arrayValue?.compactMap(McpServerConfig.init(json:)) ?? []
     }
@@ -344,6 +470,7 @@ struct LoadSessionRequest: Encodable, Sendable {
 struct LoadSessionResponse: Decodable, Sendable {
     var sessionId: String?
     var modes: SessionModeState?
+    var models: SessionModelState?
     var configOptions: [SessionConfigOption]
     var mcpServers: [McpServerConfig]
 
@@ -351,6 +478,7 @@ struct LoadSessionResponse: Decodable, Sendable {
         let json = try JSONValue(from: decoder)
         sessionId = json["sessionId"]?.stringValue
         modes = json["modes"].flatMap { SessionModeState(json: $0) }
+        models = json["models"].flatMap { SessionModelState(json: $0) }
         configOptions = json["configOptions"]?.arrayValue?.compactMap(SessionConfigOption.init(json:)) ?? []
         mcpServers = json["mcpServers"]?.arrayValue?.compactMap(McpServerConfig.init(json:)) ?? []
     }

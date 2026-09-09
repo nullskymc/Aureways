@@ -49,6 +49,23 @@ final class GrokBuildHarness: Harness {
         return capabilities
     }
 
+    /// Grok 1.0.7 has no `configOptions`. Effort lives on the current model's
+    /// `_meta.reasoningEfforts`. Do not read `_meta["x.ai/sessionConfig"]` —
+    /// those rows are tagged `category: "mode"` and would steal the mode chip.
+    override func normalizeSessionConfig(
+        options: [SessionConfigOption],
+        models: SessionModelState?,
+        modes: SessionModeState?
+    ) -> [SessionConfigOption] {
+        var result = super.normalizeSessionConfig(options: options, models: models, modes: modes)
+        if !result.contains(where: \.isThoughtLevel),
+           let model = models?.current,
+           let thought = SessionConfigOption.thoughtLevel(from: model) {
+            result.append(thought)
+        }
+        return result
+    }
+
     /// Grok packs an entire shell line into `terminal/create`'s `command` and
     /// sends no `args` — ACP reserves `command` for the program name, so the
     /// request used to fail with "the file `bash -lc '…'` doesn't exist".

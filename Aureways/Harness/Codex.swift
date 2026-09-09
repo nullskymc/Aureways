@@ -12,7 +12,7 @@ final class CodexHarness: Harness {
                 command: "npx",
                 arguments: ["-y", "@agentclientprotocol/codex-acp"],
                 builtIn: true,
-                notes: "需要 Node.js。使用本机已有的 Codex 登录。")
+                notes: "需要 Node.js。登录、API Key 和三方供应商都在 Codex 自己的配置里（~/.codex），Aureways 不代填。")
         )
     }
 

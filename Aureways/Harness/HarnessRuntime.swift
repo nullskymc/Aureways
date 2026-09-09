@@ -6,6 +6,8 @@ class HarnessRuntime {
     private(set) var connection: ACPConnection?
     private(set) var capabilities = AgentCapabilities()
     private(set) var agentInfo = ""
+    private(set) var authMethods: [AuthMethod] = []
+    private var didAuthenticate = false
     private var startTask: Task<Void, Error>?
     var didSyncList = false
 
@@ -60,6 +62,8 @@ class HarnessRuntime {
         connection = nil
         capabilities = AgentCapabilities()
         agentInfo = ""
+        authMethods = []
+        didAuthenticate = false
         didSyncList = false
         await current?.shutdown()
     }
@@ -68,6 +72,8 @@ class HarnessRuntime {
         connection = nil
         startTask = nil
         didSyncList = false
+        authMethods = []
+        didAuthenticate = false
     }
 
     func launch(
@@ -102,18 +108,43 @@ class HarnessRuntime {
             agentInfo = [info.title ?? info.name, info.version].filter { !$0.isEmpty }.joined(separator: " ")
         }
         capabilities = harness.normalizeCapabilities(initResponse.agentCapabilities ?? AgentCapabilities())
+        authMethods = initResponse.authMethods
+        didAuthenticate = false
         if let version = initResponse.protocolVersion, version != 1 {
             await handlers.onLog("Negotiated protocol version \(version)")
         }
-        if !initResponse.authMethods.isEmpty {
-            let method = initResponse.authMethods[0]
-            let label = method.name ?? method.id
-            await handlers.onLog("Authenticating with \(label)")
-            do {
-                try await connection.authenticate(methodId: method.id)
-            } catch {
-                throw ACPError.launch("Authentication required (\(label)): \(error.localizedDescription)")
-            }
+        if !authMethods.isEmpty {
+            let names = authMethods.map { $0.name ?? $0.id }.joined(separator: ", ")
+            await handlers.onLog("Auth methods advertised (\(names)); using harness login until the agent requires authenticate")
         }
+    }
+
+    /// Keys, ChatGPT login, and custom providers live in the harness home
+    /// directory. Only call `authenticate` if a later method returns `auth_required`.
+    func withAuthentication<T>(_ body: () async throws -> T) async throws -> T {
+        do {
+            return try await body()
+        } catch {
+            guard isAuthRequired(error) else { throw error }
+            try await authenticateIfNeeded()
+            return try await body()
+        }
+    }
+
+    func authenticateIfNeeded() async throws {
+        guard !didAuthenticate else { return }
+        guard let connection else {
+            throw ACPError.launch("Agent process is not running")
+        }
+        guard let method = authMethods.first else {
+            throw ACPError.launch("Authentication required, but the agent advertised no methods")
+        }
+        try await connection.authenticate(methodId: method.id)
+        didAuthenticate = true
+    }
+
+    private func isAuthRequired(_ error: Error) -> Bool {
+        if let acp = error as? ACPError { return acp.isAuthRequired }
+        return false
     }
 }

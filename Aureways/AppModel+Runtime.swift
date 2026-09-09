@@ -13,19 +13,16 @@ extension AppModel {
                 throw ACPError.launch("Agent process is not running")
             }
             await prepareWorkspaces(connection, session: session)
-            let created = try await connection.newSession(
-                cwd: session.cwd,
-                additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                mcpServers: mcpPayload(for: runtime.capabilities),
-                meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-            )
+            let created = try await runtime.withAuthentication {
+                try await connection.newSession(
+                    cwd: session.cwd,
+                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                    mcpServers: mcpPayload(for: runtime.capabilities),
+                    meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                )
+            }
             guard !session.isClosed else { return }
-            session.applySetup(
-                sessionId: created.sessionId,
-                modes: created.modes,
-                configOptions: created.configOptions,
-                mcpServers: created.mcpServers
-            )
+            applyDecodedSetup(session, harness: runtime.harness, from: created)
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
@@ -52,20 +49,17 @@ extension AppModel {
             session.isReplaying = true
             defer { session.isReplaying = false }
             await prepareWorkspaces(connection, session: session)
-            let loaded = try await connection.loadSession(
-                sessionId: acpId,
-                cwd: session.cwd,
-                additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                mcpServers: mcpPayload(for: runtime.capabilities),
-                meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-            )
+            let loaded = try await runtime.withAuthentication {
+                try await connection.loadSession(
+                    sessionId: acpId,
+                    cwd: session.cwd,
+                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                    mcpServers: mcpPayload(for: runtime.capabilities),
+                    meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                )
+            }
             guard !session.isClosed else { return }
-            session.applySetup(
-                sessionId: loaded.sessionId ?? acpId,
-                modes: loaded.modes,
-                configOptions: loaded.configOptions,
-                mcpServers: loaded.mcpServers
-            )
+            applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
@@ -91,36 +85,30 @@ extension AppModel {
                 session.isReplaying = true
                 defer { session.isReplaying = false }
                 await prepareWorkspaces(connection, session: session)
-                let loaded = try await connection.loadSession(
-                    sessionId: acpId,
-                    cwd: session.cwd,
-                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                    mcpServers: mcpPayload(for: runtime.capabilities),
-                    meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-                )
-                session.applySetup(
-                    sessionId: loaded.sessionId ?? acpId,
-                    modes: loaded.modes,
-                    configOptions: loaded.configOptions,
-                    mcpServers: loaded.mcpServers
-                )
+                let loaded = try await runtime.withAuthentication {
+                    try await connection.loadSession(
+                        sessionId: acpId,
+                        cwd: session.cwd,
+                        additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                        mcpServers: mcpPayload(for: runtime.capabilities),
+                        meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                    )
+                }
+                applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
                 flushSessionUpdates()
                 session.phase = .ready
                 await quotaService.refreshQuota(for: session.agent, force: true)
             } else {
                 await prepareWorkspaces(connection, session: session)
-                let created = try await connection.newSession(
-                    cwd: session.cwd,
-                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                    mcpServers: mcpPayload(for: runtime.capabilities),
-                    meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-                )
-                session.applySetup(
-                    sessionId: created.sessionId,
-                    modes: created.modes,
-                    configOptions: created.configOptions,
-                    mcpServers: created.mcpServers
-                )
+                let created = try await runtime.withAuthentication {
+                    try await connection.newSession(
+                        cwd: session.cwd,
+                        additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                        mcpServers: mcpPayload(for: runtime.capabilities),
+                        meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                    )
+                }
+                applyDecodedSetup(session, harness: runtime.harness, from: created)
                 flushSessionUpdates()
                 session.phase = .ready
                 persistIfNeeded(session)
@@ -193,7 +181,9 @@ extension AppModel {
     func pullList(from runtime: HarnessRuntime) async {
         guard runtime.canList, let connection = runtime.connection else { return }
         do {
-            let listed = try await connection.listSessions()
+            let listed = try await runtime.withAuthentication {
+                try await connection.listSessions()
+            }
             let listedById = Dictionary(listed.map { ($0.sessionId, $0) }, uniquingKeysWith: { first, _ in first })
             for session in sessions where session.agent.id == runtime.agent.id {
                 guard let acpId = session.acpSessionId, let remote = listedById[acpId] else { continue }
@@ -253,6 +243,54 @@ extension AppModel {
             return rows.contains { $0.acpSessionId == acpId }
         }
         return false
+    }
+
+    func applyDecodedSetup(
+        _ session: ChatSession,
+        harness: Harness,
+        sessionId: String,
+        modes: SessionModeState?,
+        models: SessionModelState?,
+        configOptions: [SessionConfigOption],
+        mcpServers: [McpServerConfig]
+    ) {
+        session.applySetup(
+            sessionId: sessionId,
+            modes: modes,
+            configOptions: harness.normalizeSessionConfig(options: configOptions, models: models, modes: modes),
+            models: models,
+            advertisedConfigOptions: !configOptions.isEmpty,
+            mcpServers: mcpServers
+        )
+    }
+
+    func applyDecodedSetup(_ session: ChatSession, harness: Harness, from created: NewSessionResponse) {
+        applyDecodedSetup(
+            session,
+            harness: harness,
+            sessionId: created.sessionId,
+            modes: created.modes,
+            models: created.models,
+            configOptions: created.configOptions,
+            mcpServers: created.mcpServers
+        )
+    }
+
+    func applyDecodedSetup(
+        _ session: ChatSession,
+        harness: Harness,
+        from loaded: LoadSessionResponse,
+        fallbackSessionId: String
+    ) {
+        applyDecodedSetup(
+            session,
+            harness: harness,
+            sessionId: loaded.sessionId ?? fallbackSessionId,
+            modes: loaded.modes,
+            models: loaded.models,
+            configOptions: loaded.configOptions,
+            mcpServers: loaded.mcpServers
+        )
     }
 
     func prepareWorkspaces(_ connection: ACPConnection, session: ChatSession) async {

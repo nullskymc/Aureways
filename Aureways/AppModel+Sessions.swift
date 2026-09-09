@@ -213,7 +213,8 @@ extension AppModel {
             guard let connection = await liveConnection(for: session.agent) else { return }
             do {
                 if session.configOptions.contains(where: \.isMode) {
-                    try await connection.setConfigOption(sessionId: acpId, configId: session.configOptions.first(where: \.isMode)?.id ?? "mode", value: .string(modeId))
+                    let options = try await connection.setConfigOption(sessionId: acpId, configId: session.configOptions.first(where: \.isMode)?.id ?? "mode", value: .string(modeId))
+                    session.replaceConfigOptions(options)
                 } else {
                     try await connection.setMode(sessionId: acpId, modeId: modeId)
                 }
@@ -229,7 +230,20 @@ extension AppModel {
         Task {
             guard let connection = await liveConnection(for: session.agent) else { return }
             do {
-                try await connection.setConfigOption(sessionId: acpId, configId: configId, value: value)
+                let option = session.configOptions.first(where: { $0.id == configId })
+                let harness = HarnessRegistry.resolve(session.agent)
+                if let option, harness.usesSetModel(for: option, advertisedConfigOptions: session.advertisedConfigOptions) {
+                    let modelId = session.modelOption?.selectedString ?? session.models?.currentModelId
+                    guard let modelId, !modelId.isEmpty else { return }
+                    try await connection.setModel(
+                        sessionId: acpId,
+                        modelId: modelId,
+                        reasoningEffort: session.thoughtLevelOption?.selectedString
+                    )
+                } else {
+                    let options = try await connection.setConfigOption(sessionId: acpId, configId: configId, value: value)
+                    session.replaceConfigOptions(options)
+                }
             } catch {
                 session.log("Failed to set config \(configId): \(error.localizedDescription)")
             }

@@ -106,6 +106,10 @@ final class ChatSession: Identifiable {
     var isClosed = false
     var isReplaying = false
     var configOptions: [SessionConfigOption] = []
+    var models: SessionModelState?
+    /// Agent actually sent `configOptions`. Synthesized model/effort chips
+    /// from the `models` field still go through `session/set_model`.
+    var advertisedConfigOptions = false
     var modes: SessionModeState?
     var usage: SessionUsage?
     var reportedMcpServers: [McpServerConfig] = []
@@ -135,6 +139,10 @@ final class ChatSession: Identifiable {
 
     var modelOption: SessionConfigOption? {
         configOptions.first(where: \.isModel)
+    }
+
+    var thoughtLevelOption: SessionConfigOption? {
+        configOptions.first(where: \.isThoughtLevel)
     }
 
     /// 走 Markdown 渲染的正文（只有 agent 消息；思考 / 工具输出是明文）。
@@ -300,8 +308,12 @@ final class ChatSession: Identifiable {
                 items.append(.status(UUID(), "Mode: \(mode)"))
                 visual = true
             }
+        case .configOptions(let options) where !options.isEmpty:
+            configOptions = options
         case .configOption(let id, let value) where !id.isEmpty:
             applyConfigOption(id: id, value: value)
+        case .modelChanged(let modelId, let effort):
+            applyModelChange(modelId: modelId.isEmpty ? nil : modelId, effort: effort)
         case .usage(let usage):
             self.usage = usage
         default:
@@ -473,20 +485,61 @@ final class ChatSession: Identifiable {
         sessionId: String,
         modes: SessionModeState?,
         configOptions: [SessionConfigOption],
+        models: SessionModelState? = nil,
+        advertisedConfigOptions: Bool = false,
         mcpServers: [McpServerConfig] = []
     ) {
         acpSessionId = sessionId
         self.modes = modes
         self.configOptions = configOptions
+        self.models = models
+        self.advertisedConfigOptions = advertisedConfigOptions
         if !mcpServers.isEmpty {
             reportedMcpServers = mcpServers
         }
     }
 
     func applyConfigOption(id: String, value: JSONValue) {
-        if let index = configOptions.firstIndex(where: { $0.id == id }) {
-            configOptions[index].value = value
+        guard let index = configOptions.firstIndex(where: { $0.id == id }) else { return }
+        let option = configOptions[index]
+        configOptions[index].value = SessionConfigOption.scalarValue(value) ?? value
+        if option.isModel, let modelId = configOptions[index].selectedString {
+            syncThoughtLevel(to: modelId, preserving: thoughtLevelOption?.selectedString)
         }
+    }
+
+    func applyModelChange(modelId: String?, effort: String?) {
+        if let modelId, !modelId.isEmpty {
+            if let index = configOptions.firstIndex(where: \.isModel) {
+                configOptions[index].value = .string(modelId)
+            }
+            syncThoughtLevel(to: modelId, preserving: effort ?? thoughtLevelOption?.selectedString)
+        } else if let effort, let index = configOptions.firstIndex(where: \.isThoughtLevel) {
+            configOptions[index].value = .string(effort)
+        }
+    }
+
+    func syncThoughtLevel(to modelId: String, preserving effort: String? = nil) {
+        if var models {
+            models.select(modelId)
+            self.models = models
+        }
+        guard let model = models?.availableModels.first(where: { $0.id == modelId })
+                ?? models?.current else { return }
+        if let thought = SessionConfigOption.thoughtLevel(from: model, preserving: effort) {
+            if let index = configOptions.firstIndex(where: \.isThoughtLevel) {
+                configOptions[index] = thought
+            } else {
+                configOptions.append(thought)
+            }
+        } else if let index = configOptions.firstIndex(where: \.isThoughtLevel) {
+            configOptions.remove(at: index)
+        }
+    }
+
+    func replaceConfigOptions(_ options: [SessionConfigOption]) {
+        guard !options.isEmpty else { return }
+        configOptions = options
     }
 
     func resetTranscript() {
