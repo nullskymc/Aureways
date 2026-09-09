@@ -351,6 +351,50 @@ struct ToolCallView: Sendable, Equatable {
         }
     }
 
+    var terminalIds: [String] {
+        contents.compactMap { item in
+            if case .terminal(let id) = item { return id }
+            return nil
+        }
+    }
+
+    /// How the tool card should render. Harness adapters fill spec fields;
+    /// this only looks at those fields plus a few canonical rawInput keys.
+    enum CardLayout: String, Sendable, Equatable {
+        case command
+        case edit
+        case file
+        case search
+        case fetch
+        case other
+    }
+
+    var cardLayout: CardLayout {
+        if !diffs.isEmpty { return .edit }
+        if isTerminal || !terminalIds.isEmpty { return .command }
+        let k = kind.lowercased()
+        if k == "fetch" || fetchURL != nil { return .fetch }
+        if k == "search" || Self.extractNonEmptyString(from: rawInput, keys: ["pattern"]) != nil {
+            return .search
+        }
+        if k == "edit" || k == "delete" || k == "move" { return .edit }
+        if k == "read" || !locations.isEmpty || filePath != nil { return .file }
+        return .other
+    }
+
+    var filePath: String? {
+        if let path = locations.first?.path, !path.isEmpty { return path }
+        return Self.extractNonEmptyString(from: rawInput, keys: ["path"])
+    }
+
+    var searchPattern: String? {
+        Self.extractNonEmptyString(from: rawInput, keys: ["pattern", "query"])
+    }
+
+    var fetchURL: String? {
+        Self.extractNonEmptyString(from: rawInput, keys: ["url"])
+    }
+
     init(json: JSONValue) {
         toolCallId = json["toolCallId"]?.stringValue ?? UUID().uuidString
         title = json["title"]?.stringValue ?? json["kind"]?.stringValue ?? "Tool"
@@ -392,13 +436,6 @@ struct ToolCallView: Sendable, Equatable {
                 return val
             }
         }
-        for nestedKey in ["Arguments", "arguments", "parameters", "params", "input", "args"] {
-            if let nested = json[nestedKey], case .object = nested {
-                if let val = extractValue(from: nested, keys: keys) {
-                    return val
-                }
-            }
-        }
         return nil
     }
 
@@ -422,13 +459,6 @@ struct ToolCallView: Sendable, Equatable {
                 return str
             }
         }
-        for nestedKey in ["Arguments", "arguments", "parameters", "params", "input", "args"] {
-            if let nested = json[nestedKey], case .object = nested {
-                if let str = extractNonEmptyString(from: nested, keys: keys) {
-                    return str
-                }
-            }
-        }
         return nil
     }
 
@@ -444,37 +474,19 @@ struct ToolCallView: Sendable, Equatable {
         if k == "execute" || k == "terminal" || k == "shell" || k == "bash" || k == "sh" || k == "command" || k == "run" || k == "exec" {
             return true
         }
-        let t = title.lowercased()
-        if t == "run_command" || t == "runcommand" || t == "execute_command" || t == "executecommand" || t == "bash" || t == "terminal" || t == "sh" || t == "zsh" || t == "exec" {
+        // Custom / un-normalized agents: a command plus a cwd is a shell call.
+        // A lone `script` key is not — that matches notebook generators.
+        if let input = rawInput,
+           Self.extractNonEmptyString(from: input, keys: ["command", "cmd"]) != nil,
+           Self.extractNonEmptyString(from: input, keys: ["cwd", "working_dir", "workingDir", "workingDirectory"]) != nil {
             return true
         }
-        if let toolName = rawInput?["ToolName"]?.stringValue?.lowercased() {
-            if toolName == "run_command" || toolName == "execute_command" || toolName == "bash" || toolName == "terminal" {
-                return true
-            }
-        }
-        if let input = rawInput {
-            let commandKeys = ["command_line", "commandLine", "CommandLine", "cmd_line", "cmdLine"]
-            if Self.extractNonEmptyString(from: input, keys: commandKeys) != nil {
-                return true
-            }
-            let generalCommandKeys = ["command", "cmd", "script"]
-            let cwdKeys = ["working_dir", "workingDir", "workingDirectory", "cwd", "Cwd"]
-            if Self.extractNonEmptyString(from: input, keys: generalCommandKeys) != nil,
-               Self.extractNonEmptyString(from: input, keys: cwdKeys) != nil {
-                return true
-            }
-        }
-        return false
+        return !terminalIds.isEmpty
     }
 
     var terminalCommand: String? {
         guard let input = rawInput else { return nil }
-        let commandKeys = [
-            "command_line", "commandLine", "CommandLine",
-            "cmd_line", "cmdLine",
-            "command", "cmd", "script"
-        ]
+        let commandKeys = ["command", "cmd", "command_line", "commandLine", "CommandLine"]
         guard let val = Self.extractValue(from: input, keys: commandKeys) else { return nil }
         if let str = val.stringValue {
             let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -491,7 +503,7 @@ struct ToolCallView: Sendable, Equatable {
 
     var terminalCwd: String? {
         guard let input = rawInput else { return nil }
-        let cwdKeys = ["working_dir", "workingDir", "workingDirectory", "cwd", "Cwd", "dir", "directory"]
+        let cwdKeys = ["cwd", "working_dir", "workingDir", "workingDirectory", "Cwd", "workdir"]
         if let val = Self.extractValue(from: input, keys: cwdKeys), let str = val.stringValue {
             let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { return trimmed }
@@ -508,9 +520,13 @@ struct ToolCallView: Sendable, Equatable {
             return str
         }
         if let obj = output.objectValue {
-            let outputKeys = ["output", "stdout", "stderr", "result", "text", "response"]
+            for key in ["output", "formatted_output", "combinedOutput"] {
+                if let val = obj[key]?.stringValue, !val.isEmpty {
+                    return val
+                }
+            }
             var pieces: [String] = []
-            for key in outputKeys {
+            for key in ["stdout", "stderr"] {
                 if let val = obj[key]?.stringValue, !val.isEmpty {
                     pieces.append(val)
                 }
@@ -524,23 +540,27 @@ struct ToolCallView: Sendable, Equatable {
 
     var terminalExitCode: Int? {
         guard let out = rawOutput else { return nil }
-        if let code = out["exit_code"]?.int64Value ?? out["exitCode"]?.int64Value ?? out["returncode"]?.int64Value ?? out["status"]?.int64Value {
+        if let code = out["exitCode"]?.int64Value ?? out["exit_code"]?.int64Value ?? out["returncode"]?.int64Value {
             return Int(code)
         }
         return nil
     }
 
     var otherRawInput: JSONValue? {
-        guard isTerminal, let input = rawInput, case .object(let dict) = input else {
+        guard let input = rawInput, case .object(let dict) = input else {
             return rawInput
         }
-        let knownTerminalKeys: Set<String> = [
+        let knownKeys: Set<String> = [
             "command", "cmd", "command_line", "commandLine", "CommandLine",
             "cmd_line", "cmdLine", "script", "args", "arguments",
-            "working_dir", "workingDir", "workingDirectory", "cwd", "Cwd", "dir", "directory",
-            "ToolName", "ServerName"
+            "working_dir", "workingDir", "workingDirectory", "cwd", "Cwd", "dir", "directory", "workdir",
+            "path", "file_path", "filePath", "filepath", "target_file", "target_directory", "source_file",
+            "ToolName", "ServerName", "toolName", "serverName", "variant",
+            "offset", "limit", "line",
+            "old_string", "new_string", "oldString", "newString", "content",
+            "pattern", "Pattern", "query", "Query", "url", "Url",
         ]
-        let remaining = dict.filter { !knownTerminalKeys.contains($0.key) }
+        let remaining = dict.filter { !knownKeys.contains($0.key) }
         guard !remaining.isEmpty else { return nil }
         return .object(remaining)
     }
@@ -569,10 +589,11 @@ struct ToolCallView: Sendable, Equatable {
         "execute", "exec", "terminal", "bash", "sh", "zsh", "shell", "run", "command",
         "run_command", "runcommand", "execute_command", "executecommand",
         "read", "read_file", "readfile", "view_file", "viewfile", "client_view_file",
-        "edit", "edit_file", "editfile", "write_file", "writefile", "client_edit_file", "client_create_file",
+        "edit", "edit_file", "editfile", "write", "write_file", "writefile",
+        "client_edit_file", "client_create_file",
         "delete", "delete_file", "deletefile",
-        "search", "grep_search", "find_by_name", "glob_search",
-        "fetch", "web_search", "read_url_content", "call_mcp_tool"
+        "search", "grep", "grep_search", "find_by_name", "glob", "glob_search",
+        "fetch", "web_search", "read_url_content", "call_mcp_tool", "webfetch",
     ]
 
     /// 展示标题：harness 标题有效就直接用；缺失或太泛（不少 harness 只发
@@ -600,9 +621,8 @@ struct ToolCallView: Sendable, Equatable {
         }
         guard let input = rawInput else { return nil }
         let orderedKeys = [
-            "command_line", "commandLine", "CommandLine", "cmd_line", "cmdLine", "command", "cmd", "script",
-            "file_path", "path", "filePath", "target_file", "source_file", "notebook_path",
-            "Pattern", "pattern", "query", "Query", "url", "Url", "description", "Prompt", "prompt"
+            "command", "path", "pattern", "query", "url",
+            "file_path", "filePath", "target_file", "target_directory",
         ]
         guard let raw = Self.extractNonEmptyString(from: input, keys: orderedKeys) else {
             return nil

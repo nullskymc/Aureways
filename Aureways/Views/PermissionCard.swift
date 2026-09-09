@@ -47,43 +47,8 @@ struct PermissionCard: View {
 
     @ViewBuilder
     private var details: some View {
-        if let toolCall = prompt.toolCall, toolCall.isTerminal, let cmd = toolCall.terminalCommand {
-            VStack(alignment: .leading, spacing: 6) {
-                if let cwd = toolCall.terminalCwd {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Text(cwd)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                HStack(alignment: .top, spacing: 6) {
-                    Text("$")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Palette.sky)
-                    Text(cmd)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .lineLimit(6)
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        } else if let input = usefulRawInput {
-            Text(stringify(input))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .lineLimit(6)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-                .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        if let toolCall = prompt.toolCall {
+            ToolCallDetail(call: toolCall, lineLimit: 6)
         }
     }
 
@@ -157,20 +122,4 @@ struct PermissionCard: View {
         prompt.options.firstIndex(where: \.isAllow)
     }
 
-    /// Empty `{}` / `[]` payloads (common on questionnaire-style permissions)
-    /// add a gray bar with no information — skip them.
-    private var usefulRawInput: JSONValue? {
-        guard let input = prompt.toolCall?.rawInput else { return nil }
-        switch input {
-        case .object(let object) where object.isEmpty: return nil
-        case .array(let array) where array.isEmpty: return nil
-        case .string(let text) where text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty: return nil
-        case .null: return nil
-        default: return input
-        }
-    }
-
-    private func stringify(_ json: JSONValue) -> String {
-        (try? String(data: json.encode(), encoding: .utf8)) ?? ""
-    }
 }

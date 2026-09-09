@@ -93,4 +93,41 @@ final class GrokBuildHarness: Harness {
     private static var loginShell: String {
         ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
     }
+
+    /// Grok's ACP `rawInput` is the internally tagged `ToolInput` enum
+    /// (`variant` + `target_file` / `file_path` / `target_directory`). List-dir
+    /// is sent as `kind: other`. Grep's title is the bare pattern.
+    override func normalizeToolCall(_ json: JSONValue) -> JSONValue {
+        ToolCallPatch.apply(json) { patch in
+            patch.flattenTaggedInput()
+            patch.setKind(fromVariant: Self.kindByVariant)
+            patch.aliasInput(from: ["target_file", "file_path", "target_directory"], as: "path")
+            patch.fillLocationsFromPath(lineKeys: ["offset", "line"])
+            patch.fillLocationsFromDiffs()
+            patch.preferCommandTitle()
+            patch.preferPathTitle()
+            patch.canonicalizeOutput()
+        }
+    }
+
+    private static let kindByVariant: [String: String] = [
+        "ReadFile": "read",
+        "CodexReadFile": "read",
+        "MemoryGet": "read",
+        "ListDir": "read",
+        "CodexListDir": "read",
+        "SearchReplace": "edit",
+        "Write": "edit",
+        "HashlineEdit": "edit",
+        "ApplyPatch": "edit",
+        "Bash": "execute",
+        "Grep": "search",
+        "CodexGrepFiles": "search",
+        "WebSearch": "search",
+        "WebFetch": "fetch",
+        "TodoWrite": "think",
+        "EnterPlanMode": "think",
+        "ExitPlanMode": "think",
+        "AskUserQuestion": "other",
+    ]
 }

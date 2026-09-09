@@ -1237,19 +1237,19 @@ final class ProtocolTests: XCTestCase {
         }
     }
 
-    func testTerminalToolCallDetectionAndFormatting() throws {
+    func testSpecShapedExecuteToolCall() throws {
         let toolJSON = try JSONValue.decode(from: #"""
         {
             "toolCallId": "call_123",
-            "title": "run_command",
-            "kind": "other",
+            "title": "grep WorkspaceTree",
+            "kind": "execute",
             "status": "completed",
             "rawInput": {
-                "working_dir": "/Volumes/app/DevelopProject/Aureways",
-                "command_line": "grep -rn \"WorkspaceTree\" /Volumes/app/DevelopProject/Aureways/Aureways"
+                "cwd": "/Volumes/app/DevelopProject/Aureways",
+                "command": "grep -rn \"WorkspaceTree\" /Volumes/app/DevelopProject/Aureways/Aureways"
             },
             "rawOutput": {
-                "exit_code": 0,
+                "exitCode": 0,
                 "output": "Aureways/Views/WorkspaceTree.swift:10:struct WorkspaceTree"
             }
         }
@@ -1262,60 +1262,8 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(call.terminalExitCode, 0)
         XCTAssertEqual(call.terminalOutput, "Aureways/Views/WorkspaceTree.swift:10:struct WorkspaceTree")
         XCTAssertEqual(call.kindLabel, "执行命令")
-        XCTAssertEqual(call.displayTitle, #"执行命令 · grep -rn "WorkspaceTree" /Volumes/app/DevelopProject/Aureways/Aureways"#)
+        XCTAssertEqual(call.displayTitle, "grep WorkspaceTree")
         XCTAssertNil(call.otherRawInput)
-    }
-    func testTerminalNestedMcpToolArguments() throws {
-        let toolJSON = try JSONValue.decode(from: """
-        {
-            "toolCallId": "call_456",
-            "title": "call_mcp_tool",
-            "kind": "other",
-            "status": "completed",
-            "rawInput": {
-                "ServerName": "default_api",
-                "ToolName": "run_command",
-                "Arguments": {
-                    "CommandLine": "swift test",
-                    "Cwd": "/tmp/project"
-                }
-            }
-        }
-        """)
-
-        let call = ToolCallView(json: toolJSON)
-        XCTAssertTrue(call.isTerminal)
-        XCTAssertEqual(call.terminalCommand, "swift test")
-        XCTAssertEqual(call.terminalCwd, "/tmp/project")
-        XCTAssertEqual(call.displayTitle, "执行命令 · swift test")
-    }
-
-    func testPermissionPromptWithTerminalTool() throws {
-        let promptJSON = try JSONValue.decode(from: """
-        {
-            "sessionId": "sess_1",
-            "toolCall": {
-                "toolCallId": "call_789",
-                "title": "run_command",
-                "kind": "execute",
-                "rawInput": {
-                    "command_line": "git status",
-                    "working_dir": "/tmp/repo"
-                }
-            },
-            "options": [
-                {"optionId": "allow_once", "name": "允许一次", "kind": "allow_once"},
-                {"optionId": "deny", "name": "拒绝", "kind": "deny"}
-            ]
-        }
-        """)
-
-        let prompt = PermissionPrompt(json: promptJSON)
-        XCTAssertNotNil(prompt)
-        XCTAssertEqual(prompt?.title, "执行命令 · git status")
-        XCTAssertEqual(prompt?.toolCall?.isTerminal, true)
-        XCTAssertEqual(prompt?.toolCall?.terminalCommand, "git status")
-        XCTAssertEqual(prompt?.toolCall?.terminalCwd, "/tmp/repo")
     }
 
     func testGenericScriptIsNotTerminal() throws {
@@ -1367,6 +1315,47 @@ final class ProtocolTests: XCTestCase {
         {"toolCallId":"t3","title":"read_file","kind":"other"}
         """)
         XCTAssertEqual(ToolCallView(json: readFile).kindLabel, "读取文件")
+    }
+
+    func testCardLayoutPriority() throws {
+        let edit = try JSONValue.decode(from: """
+        {"toolCallId":"e","title":"Edit","kind":"edit","content":[{"type":"diff","path":"/tmp/a.swift","oldText":"a","newText":"b"}]}
+        """)
+        XCTAssertEqual(ToolCallView(json: edit).cardLayout, .edit)
+
+        let command = try JSONValue.decode(from: """
+        {"toolCallId":"c","title":"ls","kind":"execute","rawInput":{"command":"ls","cwd":"/tmp"}}
+        """)
+        XCTAssertEqual(ToolCallView(json: command).cardLayout, .command)
+
+        let live = try JSONValue.decode(from: """
+        {"toolCallId":"t","title":"Terminal","kind":"other","content":[{"type":"terminal","terminalId":"term_1"}]}
+        """)
+        XCTAssertEqual(ToolCallView(json: live).cardLayout, .command)
+        XCTAssertEqual(ToolCallView(json: live).terminalIds, ["term_1"])
+
+        let search = try JSONValue.decode(from: """
+        {"toolCallId":"s","title":"grep","kind":"search","rawInput":{"pattern":"ToolCall","path":"Aureways"}}
+        """)
+        XCTAssertEqual(ToolCallView(json: search).cardLayout, .search)
+        XCTAssertEqual(ToolCallView(json: search).searchPattern, "ToolCall")
+
+        let fetch = try JSONValue.decode(from: """
+        {"toolCallId":"f","title":"Fetch","kind":"fetch","rawInput":{"url":"https://example.com"}}
+        """)
+        XCTAssertEqual(ToolCallView(json: fetch).cardLayout, .fetch)
+        XCTAssertEqual(ToolCallView(json: fetch).fetchURL, "https://example.com")
+
+        let read = try JSONValue.decode(from: """
+        {"toolCallId":"r","title":"Read a.swift","kind":"read","locations":[{"path":"/tmp/a.swift","line":3}]}
+        """)
+        XCTAssertEqual(ToolCallView(json: read).cardLayout, .file)
+        XCTAssertEqual(ToolCallView(json: read).filePath, "/tmp/a.swift")
+
+        let other = try JSONValue.decode(from: """
+        {"toolCallId":"o","title":"thread_list","kind":"other"}
+        """)
+        XCTAssertEqual(ToolCallView(json: other).cardLayout, .other)
     }
 }
 

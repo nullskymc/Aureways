@@ -19,4 +19,15 @@ final class ClaudeCodeHarness: Harness {
     override func isAvailable() -> Bool {
         HostEnvironment.resolveExecutable("npx") != nil
     }
+
+    /// Claude already sends spec `kind` / `title` / `locations` / diffs.
+    /// `rawInput` uses `file_path` rather than `path`.
+    override func normalizeToolCall(_ json: JSONValue) -> JSONValue {
+        ToolCallPatch.apply(json) { patch in
+            patch.aliasInput(from: ["file_path"], as: "path")
+            patch.fillLocationsFromPath(lineKeys: ["offset", "line"])
+            patch.fillLocationsFromDiffs()
+            patch.canonicalizeOutput()
+        }
+    }
 }

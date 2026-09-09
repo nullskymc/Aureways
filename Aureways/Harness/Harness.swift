@@ -59,6 +59,44 @@ class Harness: @unchecked Sendable {
         return params
     }
 
+    /// Rewrite a `tool_call` / `tool_call_update` object (and the same shape
+    /// nested in `session/request_permission`) into spec fields the tool card
+    /// can read without vendor key guessing: `kind`, `title`, `locations`,
+    /// `rawInput.path` / `rawInput.command` / `rawInput.cwd`, `rawOutput.output`.
+    ///
+    /// Default is a no-op. Put each agent's mapping on that agent.
+    func normalizeToolCall(_ json: JSONValue) -> JSONValue {
+        json
+    }
+
+    /// Walk ACP envelopes that carry a tool call and run `normalizeToolCall`.
+    /// Connection calls this for `session/update` and `session/request_permission`.
+    func normalizeNotification(method: String, params: JSONValue) -> JSONValue {
+        if Self.isSessionUpdate(method) {
+            return params.mapObject { object in
+                guard let update = object["update"],
+                      let kind = update["sessionUpdate"]?.stringValue,
+                      kind == "tool_call" || kind == "tool_call_update"
+                else { return }
+                object["update"] = normalizeToolCall(update)
+            }
+        }
+        if method == "session/request_permission" {
+            return params.mapObject { object in
+                guard let toolCall = object["toolCall"] else { return }
+                object["toolCall"] = normalizeToolCall(toolCall)
+            }
+        }
+        return params
+    }
+
+    private static func isSessionUpdate(_ method: String) -> Bool {
+        method == "session/update"
+            || method == "x.ai/session/update"
+            || method == "_x.ai/session/update"
+            || method == "_x.ai/session_notification"
+    }
+
     /// Rewrite advertised `initialize` capabilities. Same reason as
     /// `normalizeClientRequest`: some agents lie or omit fields, and the
     /// correction belongs on the harness, not in the protocol layer.

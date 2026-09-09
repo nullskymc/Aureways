@@ -20,4 +20,39 @@ final class OhMyPiHarness: Harness {
     override func launchArguments(autoApprove: Bool) -> [String] {
         autoApprove ? ["acp", "--yolo"] : ["acp"]
     }
+
+    /// Oh My Pi already maps `read`/`write`/`bash` onto ACP kinds. File tools
+    /// use `path` (not `file_path`); move uses `oldPath`/`newPath`. Completed
+    /// edits nest diffs under `rawOutput.details.perFileResults`.
+    override func normalizeToolCall(_ json: JSONValue) -> JSONValue {
+        ToolCallPatch.apply(json) { patch in
+            patch.inferKind(from: Self.kindByName)
+            patch.inferExecuteIfCommand()
+            patch.aliasInput(from: ["cmd"], as: "command")
+            patch.fillLocationsFromPath()
+            patch.fillLocations(fromKeys: ["oldPath", "newPath"])
+            patch.fillLocationsFromDiffs()
+            patch.preferCommandTitle()
+            patch.preferPathTitle()
+            patch.promoteNestedDiffs()
+            patch.canonicalizeOutput()
+        }
+    }
+
+    private static let kindByName: [String: String] = [
+        "read": "read",
+        "write": "edit",
+        "edit": "edit",
+        "delete": "delete",
+        "move": "move",
+        "bash": "execute",
+        "shell": "execute",
+        "exec": "execute",
+        "eval": "execute",
+        "grep": "search",
+        "glob": "search",
+        "ast_grep": "search",
+        "web_search": "fetch",
+        "todo": "think",
+    ]
 }

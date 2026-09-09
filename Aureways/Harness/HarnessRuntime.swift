@@ -89,6 +89,9 @@ class HarnessRuntime {
         handlers.normalizeRequest = { [harness] method, params in
             harness.normalizeClientRequest(method: method, params: params)
         }
+        handlers.normalizeNotification = { [harness] method, params in
+            harness.normalizeNotification(method: method, params: params)
+        }
         let launched = try ACPConnection.launch(
             ACPLaunch(
                 command: harness.launchCommand(),

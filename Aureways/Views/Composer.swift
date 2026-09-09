@@ -78,6 +78,13 @@ struct ComposerHeightKey: PreferenceKey {
     }
 }
 
+private struct ComposerCardTextHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 20
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct QuotaOverlayHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -136,7 +143,7 @@ struct ComposerCard: View {
                         }
                     )
                     // 弹层在 overlay 里不参与布局：开合不影响 dock 高度与 transcript。
-                    // 顶部对齐后上移（自身高度 + 8pt 间隙），出现在卡片上方。
+                    // 顶部对齐后上移（自身高度 + 8pt 间隔），出现在卡片上方。
                     .offset(x: 12, y: -(CompletionPopup.height(itemCount: completionItems.count) + 8))
                 }
             }
@@ -171,7 +178,7 @@ struct ComposerCard: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background {
                         GeometryReader { geo in
-                            Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
+                            Color.clear.preference(key: ComposerCardTextHeightKey.self, value: geo.size.height)
                         }
                     }
 
@@ -191,7 +198,7 @@ struct ComposerCard: View {
                 )
                 .frame(height: editorHeight)
             }
-            .onPreferenceChange(ComposerHeightKey.self) { measuredHeight = $0 }
+            .onPreferenceChange(ComposerCardTextHeightKey.self) { measuredHeight = $0 }
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)

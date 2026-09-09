@@ -5,7 +5,7 @@ struct TranscriptView: View {
 
     @State private var composerHeight: CGFloat = 0
     @State private var stickToBottom = true
-    @State private var scrollPosition = ScrollPosition(idType: UUID.self)
+    @State private var scrollPosition = ScrollPosition(edge: .bottom)
 
     private var displayedEntries: [TranscriptEntry] {
         #if DEBUG
@@ -22,11 +22,10 @@ struct TranscriptView: View {
         let entries = displayedEntries
         let liveID = session.isStreaming ? entries.last?.id : nil
         ScrollView {
-            // 一律虚拟化。历史一度走 eager VStack，因为库的 MarkdownView 在解析
-            // 落地前高度是 0，LazyVStack 会把整段历史当成空的、进会话一片空白。
-            // 现在解析结果由 MarkdownDocumentCache 持有，块在 init 就有真实内容，
-            // 前提不再成立——而 eager 的代价是每帧布局开销随转录长度线性增长。
-            LazyVStack(alignment: .leading, spacing: 16) {
+            // 使用稳定平滑的 VStack。块由 TranscriptBlockView.equatable() 守护，
+            // 且 Markdown 全部命中 MarkdownDocumentCache，布局开销极低。
+            // 避免 LazyVStack 在动态卡片卸载时高度塌陷（extent collapse）把视口强行拉回底部。
+            VStack(alignment: .leading, spacing: 16) {
                 ForEach(entries) { entry in
                     TranscriptBlockView(
                         block: entry.block,
@@ -37,7 +36,6 @@ struct TranscriptView: View {
                     .id(entry.id)
                 }
             }
-            .scrollTargetLayout()
             .frame(maxWidth: 780)
             .padding(.horizontal, 24)
             .padding(.top, 20)
@@ -53,16 +51,20 @@ struct TranscriptView: View {
         .scrollEdgeEffectStyle(.hard, for: .bottom)
         .composerBar(session: session)
         .onPreferenceChange(ComposerHeightKey.self) { composerHeight = $0 }
-        // 位置跟随只认「最后一块是否可见」，不读 contentOffset / contentSize：
-        // 虚拟化下未放置部分的高度是估算值，拿绝对偏移做判断会随估算漂移。
-        .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.1) { visible in
-            guard let last = entries.last?.id else { return }
-            let atBottom = visible.contains(last)
-            // 写之前守一下：这样这个布尔只在边界翻转，否则每次可见集变化都会让
-            // body 重算一遍，连带整段历史重新分组。
+        // 精确检测是否在底部边缘：当用户主动向上浏览历史时（偏移离底部 > 80pt），
+        // 立即解除跟随锁定，绝不在滚动历史时突然将用户拽回底部。
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            let maxOffset = max(0, geo.contentSize.height - geo.containerSize.height)
+            let distanceFromBottom = maxOffset - geo.contentOffset.y
+            return distanceFromBottom < 80
+        } action: { _, atBottom in
             if stickToBottom != atBottom { stickToBottom = atBottom }
         }
-        .onChange(of: composerHeight) { follow(entries) }
+        .onChange(of: composerHeight) {
+            if stickToBottom {
+                scrollPosition.scrollTo(edge: .bottom)
+            }
+        }
         .onChange(of: session.transcriptRevision) { follow(entries) }
         .onChange(of: session.isStreaming) {
             follow(entries)
@@ -89,7 +91,7 @@ struct TranscriptView: View {
         } else {
             lastIsUser = false
         }
-        if lastIsUser || session.isReplaying || force {
+        if session.isReplaying || force || lastIsUser {
             stickToBottom = true
         }
         guard stickToBottom else { return }
@@ -97,7 +99,7 @@ struct TranscriptView: View {
     }
 
     /// 后台把还没解析的 agent 正文解析掉。300 条约 54 ms，排成一队跑，换来的是
-    /// 块被放置时高度就是对的——LazyVStack 的估算依赖这一点。
+    /// 块被放置时高度就是对的。
     private func warmMarkdown() {
         MarkdownDocumentCache.shared.warm(
             session.markdownSources,

@@ -39,7 +39,7 @@
   - **用户消息**：右侧对齐的现代连续曲率气泡（`cornerRadius: 16`），自适应包裹文字。
   - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧由 [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown) 渲染标题、列表、围栏代码和表格。
   - **思考过程**：默认折叠成一行「思考」。
-  - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起，点开才是短文件名列表，再点一行才看参数/输出。不再每条一张 COMPLETED 大卡片。
+  - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起，点开才是短文件名列表。展开区按 `ToolCallView.cardLayout` 分流：命令（`$` + cwd + 输出）、编辑（diff）、读取（路径 + 内容）、搜索（模式 + 结果）、抓取（URL + 内容）、其它（截断 rawInput）。权限卡复用同一套 `ToolCallDetail`。
   - **计划**：一行摘要 + 可展开步骤。
 - **空白落地页 (`EmptyWorkspaceLanding`)**：A 轨道平面标志（浅色蓝标 / 深色白标，`BrandMark`）叠在 Orbit Blue 液态漫射光斑上，居中引导用户输入。Dock 用的分层 squircle 图标不进这块画布。
 

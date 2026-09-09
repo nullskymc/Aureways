@@ -68,4 +68,39 @@ final class AntigravityHarness: Harness {
             .path
         return FileManager.default.isExecutableFile(atPath: sibling)
     }
+
+    /// Antigravity infers ACP `kind` from tool-name sets, but MCP dispatch
+    /// (`call_mcp_tool`) is forced to `other` with a PascalCase envelope
+    /// `{ServerName, ToolName, Arguments:{CommandLine, Cwd}}`. File tools use
+    /// `TargetFile` / `target_file`. Exec output is `combinedOutput` + `exitCode`.
+    override func normalizeToolCall(_ json: JSONValue) -> JSONValue {
+        ToolCallPatch.apply(json) { patch in
+            patch.applyCommonCodingAgentAliases(kindByName: Self.kindByName)
+            patch.fillLocations(fromKeys: ["DirectoryPath", "directory_path", "SearchDirectory", "search_directory"])
+        }
+    }
+
+    private static let kindByName: [String: String] = [
+        "run_command": "execute",
+        "shell": "execute",
+        "client_view_file": "read",
+        "view_file": "read",
+        "read_file": "read",
+        "client_create_file": "edit",
+        "client_edit_file": "edit",
+        "create_file": "edit",
+        "edit_file": "edit",
+        "write_file": "edit",
+        "replace_file_content": "edit",
+        "multi_replace_file_content": "edit",
+        "write_to_file": "edit",
+        "grep_search": "search",
+        "find_by_name": "search",
+        "list_dir": "search",
+        "search_directory": "search",
+        "list_directory": "search",
+        "find_file": "search",
+        "search_web": "search",
+        "read_url_content": "fetch",
+    ]
 }

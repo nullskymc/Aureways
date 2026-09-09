@@ -7,7 +7,8 @@
 | 文件 | 作用 |
 | --- | --- |
 | `Harness/Harness.swift` | 基类 `Harness`、`AgentProfile`、`HarnessRegistry`、`HostEnvironment` |
-| `Harness/*.swift` | 各家启动命令、可用性、`session/_meta` |
+| `Harness/*.swift` | 各家启动命令、可用性、`session/_meta`、`normalizeToolCall` |
+| `Harness/ToolCallNormalization.swift` | 工具卡片 JSON 改写的共用操作（各 Harness 自己决定改什么） |
 | `Harness/HarnessRuntime.swift` | 一 harness 一 ACP 进程 |
 | `JSONRPC.swift` | `JSONValue`、`JSONRPCMessage`（request / notification / response / error） |
 | `Models.swift` | ACP 载荷：initialize、session、content、tool call、permission |

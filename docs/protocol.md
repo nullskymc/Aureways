@@ -36,14 +36,23 @@
 
 Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.normalizeClientRequest(method:params:)`
 （`ACPConnection.perform` 里先跑一遍）；握手能力挂在 `Harness.normalizeCapabilities`
-（`HarnessRuntime.handshake` 写入 runtime 之前）。默认都是空实现。这样每条偏差都归属到
-需要它的那个 agent，`ACP/` 目录保持按规范直读。新增偏差请加在对应 Harness 里，不要写进
-`ACPConnection`。
+（`HarnessRuntime.handshake` 写入 runtime 之前）；工具卡片形状挂在
+`Harness.normalizeToolCall`（`session/update` 的 `tool_call` / `tool_call_update`，以及
+`session/request_permission` 里的 `toolCall`，由 `normalizeNotification` 走进去）。
+默认都是空实现。这样每条偏差都归属到需要它的那个 agent，`ACP/` 目录保持按规范直读。
+新增偏差请加在对应 Harness 里，不要写进 `ACPConnection` 或 `ToolCallView`。
 
 | Agent | 偏差 | 客户端怎么处理 |
 | --- | --- | --- |
 | Grok Build | `terminal/create` 把整条 shell 行塞进 `command`，不发 `args`（规范里 `command` 是程序名） | `GrokBuild.swift` 的 `normalizeClientRequest`：`args` 为空时改写成 `$SHELL -lc "<原 command>"`。对这个 agent 一律走 shell，builtin / 管道 / 重定向的行为才一致 |
 | Grok Build | `initialize` 声明 `promptCapabilities.image: false`，但 `session/prompt` 实际接受 `{type:"image"}` | `normalizeCapabilities` 把 `image` 改成 `true`。不改的话 Composer 会给图片贴「不支持」角标并禁发，剪贴板图片（没有文件路径可降级）会被丢掉 |
+| Grok Build | `rawInput` 是带 `variant` 的 `ToolInput`（`target_file` / `file_path` / `target_directory`）；`list_dir` 的 `kind` 是 `other` | `normalizeToolCall`：拍平 tag、补 `path` / `locations`，ListDir → `kind: read` |
+| Claude Code | `rawInput` 用 `file_path` 而不是 `path` | `normalizeToolCall`：别名为 `path`，缺 `locations` 时从 path/offset 补 |
+| Codex | 文件编辑标题固定 `Editing files`，只有 `content[].diff`、没有 `locations`；命令完成用 `formatted_output`/`exit_code`；MCP 包一层 `{server,tool,arguments}` | `normalizeToolCall`：从 diff 补 locations 和标题，输出字段别名，解开 MCP 信封 |
+| OpenCode | camelCase（`filePath`/`workdir`）；pending 标题是工具名 `read`/`write`/`bash`；write 完成后 title 变成相对路径 | `normalizeToolCall`：别名 `path`/`cwd`，从工具名推断 `kind`，路径标题改成 `Edit foo.ts`，必要时从 `content` 合成 diff |
+| Oh My Pi | 文件工具用 `path`；move 用 `oldPath`/`newPath`；完成后的 diff 在 `rawOutput.details` | `normalizeToolCall`：补 locations，把 nested diff 提升到 `content` |
+| Antigravity | MCP 信封 `{ServerName,ToolName,Arguments:{CommandLine,Cwd}}` 且 `kind: other`；文件键是 `TargetFile`；输出是 `combinedOutput`/`exitCode` | `normalizeToolCall`：拆信封、Pascal/snake 别名、按工具名表填 `kind` |
+| Copilot / Cursor | ACP 适配器闭源，键名未核实 | 保守地走同一套常见别名；不要把猜测写进 `ToolCallView` |
 
 `ACP/` 层不做任何猜测：`TerminalHost.create` 里 `command` 解析不到就报
 `terminal command not found on PATH: …`，不会替 agent 改写成 shell 调用。想让某个 agent
@@ -100,5 +109,7 @@ session/cancel（可选，打断当前 turn）
 - sqlite 会话缓存 insert/replace/delete
 - 带 `list`/`load`/`delete` 的 mock：prompt 后 `session/list`、`session/load` 回放、`session/delete`
 - `session/new` 的 `configOptions` / `modes` 解码（含分组模型选项的供应商名）；`config_option_update`
+
+`AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff）。规范形状的 execute 卡片仍在 `ProtocolTests`。
 
 未覆盖真实 Codex / Grok / Claude 二进制。

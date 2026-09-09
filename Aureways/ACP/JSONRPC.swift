@@ -59,6 +59,13 @@ enum JSONValue: Sendable, Equatable {
         objectValue?[key]
     }
 
+    /// Copy-on-write object update. Non-objects are returned unchanged.
+    func mapObject(_ body: (inout [String: JSONValue]) -> Void) -> JSONValue {
+        guard case .object(var object) = self else { return self }
+        body(&object)
+        return .object(object)
+    }
+
     func encode() throws -> Data {
         try JSONSerialization.data(withJSONObject: jsonObject())
     }

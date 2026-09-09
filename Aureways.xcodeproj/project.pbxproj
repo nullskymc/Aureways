@@ -95,7 +95,10 @@
 		B20100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
 		B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000051 /* HarnessQuotaViews.swift */; };
 		B10100000000000000000053 /* StatusMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000053 /* StatusMenu.swift */; };
+		B10100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
+		B20100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
 		B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000050 /* HarnessQuotaTests.swift */; };
+		B20100000000000000000061 /* ToolCallNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000061 /* ToolCallNormalizationTests.swift */; };
 		B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000060 /* MarkdownStreamTests.swift */; };
 		B10100000000000000000099 /* FileTreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000099 /* FileTreeService.swift */; };
 /* End PBXBuildFile section */
@@ -174,8 +177,10 @@
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
 		F10100000000000000000051 /* HarnessQuotaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaViews.swift; sourceTree = "<group>"; };
 		F10100000000000000000053 /* StatusMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenu.swift; sourceTree = "<group>"; };
+		F10100000000000000000054 /* ToolCallNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalization.swift; sourceTree = "<group>"; };
 		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000060 /* MarkdownStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStreamTests.swift; sourceTree = "<group>"; };
+		F20100000000000000000061 /* ToolCallNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalizationTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000099 /* FileTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/FileTreeService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -293,6 +298,7 @@
 				F20100000000000000000002 /* ComposerTextViewTests.swift */,
 				F20100000000000000000050 /* HarnessQuotaTests.swift */,
 				F20100000000000000000060 /* MarkdownStreamTests.swift */,
+				F20100000000000000000061 /* ToolCallNormalizationTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -312,6 +318,7 @@
 				F10100000000000000000052 /* OhMyPi.swift */,
 				F10100000000000000000029 /* CustomHarness.swift */,
 				F10100000000000000000050 /* HarnessQuota.swift */,
+				F10100000000000000000054 /* ToolCallNormalization.swift */,
 			);
 			path = Harness;
 			sourceTree = "<group>";
@@ -485,6 +492,7 @@
 				B10100000000000000000052 /* OhMyPi.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B10100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 				B10100000000000000000051 /* HarnessQuotaViews.swift in Sources */,
 				B10100000000000000000053 /* StatusMenu.swift in Sources */,
 			);
@@ -522,8 +530,10 @@
 				B20100000000000000000052 /* OhMyPi.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B20100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,
 				B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */,
+				B20100000000000000000061 /* ToolCallNormalizationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

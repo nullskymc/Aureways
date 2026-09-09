@@ -15,6 +15,9 @@ struct ACPHandlers: Sendable {
     /// Per-harness correction of an incoming agent → client request. See
     /// `Harness.normalizeClientRequest`.
     var normalizeRequest: (@Sendable (String, JSONValue) -> JSONValue)? = nil
+    /// Per-harness rewrite of `session/update` and `session/request_permission`.
+    /// See `Harness.normalizeNotification`.
+    var normalizeNotification: (@Sendable (String, JSONValue) -> JSONValue)? = nil
     var onExit: (@Sendable (Int32) async -> Void)? = nil
 }
 
@@ -324,7 +327,14 @@ actor ACPConnection {
             || method == "x.ai/session/update"
             || method == "_x.ai/session/update"
             || method == "_x.ai/session_notification"
-        guard isSessionUpdate, let params, let notification = SessionNotification(json: params) else {
+        guard isSessionUpdate, let params else {
+            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
+                await handlers.onLog(method)
+            }
+            return
+        }
+        let normalized = handlers.normalizeNotification?(method, params) ?? params
+        guard let notification = SessionNotification(json: normalized) else {
             if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
                 await handlers.onLog(method)
             }
@@ -354,7 +364,10 @@ actor ACPConnection {
     private func perform(method: String, rawParams: JSONValue) async throws -> JSONValue {
         // Let the harness correct the request first: some agents send shapes the
         // spec does not allow and we cannot patch the agent.
-        let params = handlers.normalizeRequest?(method, rawParams) ?? rawParams
+        var params = handlers.normalizeRequest?(method, rawParams) ?? rawParams
+        if method == "session/request_permission" {
+            params = handlers.normalizeNotification?(method, params) ?? params
+        }
         switch method {
         case "session/request_permission":
             guard let prompt = PermissionPrompt(json: params) else {
