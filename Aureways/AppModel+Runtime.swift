@@ -26,7 +26,7 @@ extension AppModel {
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
-            await quotaService.refreshQuota(for: session.agent, force: true)
+            await quotaService.refreshQuota(for: session.agent)
         } catch {
             fail(session, error)
         }
@@ -63,7 +63,7 @@ extension AppModel {
             flushSessionUpdates()
             session.phase = .ready
             persistIfNeeded(session)
-            await quotaService.refreshQuota(for: session.agent, force: true)
+            await quotaService.refreshQuota(for: session.agent)
         } catch {
             fail(session, error)
         }
@@ -97,7 +97,7 @@ extension AppModel {
                 applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
                 flushSessionUpdates()
                 session.phase = .ready
-                await quotaService.refreshQuota(for: session.agent, force: true)
+                await quotaService.refreshQuota(for: session.agent)
             } else {
                 await prepareWorkspaces(connection, session: session)
                 let created = try await runtime.withAuthentication {
@@ -112,7 +112,7 @@ extension AppModel {
                 flushSessionUpdates()
                 session.phase = .ready
                 persistIfNeeded(session)
-                await quotaService.refreshQuota(for: session.agent, force: true)
+                await quotaService.refreshQuota(for: session.agent)
             }
         } catch {
             fail(session, error)
@@ -156,6 +156,7 @@ extension AppModel {
             session.isStreaming = false
             Task { [weak self] in
                 guard let self else { return }
+                // 一轮任务结束是唯一的自动刷新时机，强制刷一次。
                 await self.quotaService.refreshQuota(for: session.agent, force: true)
             }
         }

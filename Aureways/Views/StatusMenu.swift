@@ -296,6 +296,7 @@ struct StatusMenuView: View {
         .fixedSize(horizontal: false, vertical: true)
         .task {
             model.refreshAvailability()
+            // 打开窗口刷一轮，但仍受 60 秒闸门管，反复开关不会连打请求。
             Task { await model.quotaService.refreshAll(agents: model.selectableAgents) }
         }
     }

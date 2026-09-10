@@ -1080,6 +1080,7 @@ final class HarnessQuotaService {
     private(set) var snapshots: [String: HarnessQuotaSnapshot] = [:]
     private(set) var isRefreshing: [String: Bool] = [:]
     private var lastFetchTimes: [String: Date] = [:]
+    /// 事件型刷新的最小间隔；`force`（打开菜单栏窗口、一轮任务结束、手动点击）不受它限制。
     private let cacheTTL: TimeInterval = 60.0
     private let fetcher = HarnessQuotaFetcher()
     private static let persistKey = "harnessQuotaSnapshots"
