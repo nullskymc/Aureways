@@ -19,6 +19,9 @@ struct ACPHandlers: Sendable {
     /// See `Harness.normalizeNotification`.
     var normalizeNotification: (@Sendable (String, JSONValue) -> JSONValue)? = nil
     var onExit: (@Sendable (Int32) async -> Void)? = nil
+    /// Handshake methods only. Zero skips the timer. Prompt turns are not stalled.
+    var requestStall: Duration = .seconds(8)
+    var onRequestStall: (@Sendable (_ method: String, _ json: String) async -> Void)? = nil
 }
 
 actor ACPConnection {
@@ -28,7 +31,7 @@ actor ACPConnection {
     private let fileOps: FileOps
     private let terminals: TerminalHost
     private var nextID: Int64 = 1
-    private var pending: [JSONRPCID: CheckedContinuation<JSONValue, Error>] = [:]
+    private var pending: [JSONRPCID: PendingCall] = [:]
     private var closed = false
     private var stdoutFinished = false
     private var pendingExitCode: Int32?
@@ -225,9 +228,11 @@ actor ACPConnection {
     private func request(_ method: String, params: JSONValue?) async throws -> JSONValue {
         let id = JSONRPCID.number(nextID)
         nextID += 1
+        let stall = startStall(id: id, method: method, params: params)
+        defer { stall?.cancel() }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSONValue, Error>) in
-                pending[id] = continuation
+                pending[id] = PendingCall(method: method, continuation: continuation)
                 Task {
                     do {
                         try await self.write(.request(id: id, method: method, params: params))
@@ -436,24 +441,65 @@ actor ACPConnection {
         guard !closed else { return }
         closed = true
         await terminals.shutdown()
-        failPending(ACPError.transportClosed("agent exited (\(code))"))
+        let waiting = pending.values.map(\.method)
+        let suffix = waiting.isEmpty ? "" : " while waiting for \(waiting.joined(separator: ", "))"
+        failPending(ACPError.transportClosed("agent exited (\(code))\(suffix)"))
         await handlers.onLog("agent exited with status \(code)")
         await handlers.onExit?(code)
     }
 
     private func finishPending(id: JSONRPCID, _ result: Result<JSONValue, Error>) {
-        guard let continuation = pending.removeValue(forKey: id) else { return }
+        guard let call = pending.removeValue(forKey: id) else { return }
         switch result {
         case .success(let value):
-            continuation.resume(returning: value)
+            call.continuation.resume(returning: value)
         case .failure(let error):
-            continuation.resume(throwing: error)
+            call.continuation.resume(throwing: error)
         }
     }
 
     private func failPending(_ error: Error) {
-        let continuations = pending
+        let calls = pending
         pending.removeAll()
-        continuations.values.forEach { $0.resume(throwing: error) }
+        calls.values.forEach { $0.continuation.resume(throwing: error) }
     }
+
+    private func startStall(id: JSONRPCID, method: String, params: JSONValue?) -> Task<Void, Never>? {
+        guard Self.stallMethods.contains(method),
+              handlers.onRequestStall != nil,
+              handlers.requestStall > .zero else { return nil }
+        let json = Self.requestEnvelope(id: id, method: method, params: params)
+        let delay = handlers.requestStall
+        return Task {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await self.emitStallIfPending(id: id, method: method, json: json)
+        }
+    }
+
+    private func emitStallIfPending(id: JSONRPCID, method: String, json: String) async {
+        guard pending[id] != nil else { return }
+        await handlers.onRequestStall?(method, json)
+    }
+
+    private static func requestEnvelope(id: JSONRPCID, method: String, params: JSONValue?) -> String {
+        let message = JSONRPCMessage.request(id: id, method: method, params: params)
+        guard let line = try? message.line(), let json = try? JSONValue.decode(from: line) else {
+            return "{\"method\":\"\(method)\"}"
+        }
+        return json.prettyPrinted()
+    }
+
+    private static let stallMethods: Set<String> = [
+        "initialize",
+        "authenticate",
+        "session/new",
+        "session/load",
+        "session/list",
+    ]
+}
+
+private struct PendingCall {
+    let method: String
+    let continuation: CheckedContinuation<JSONValue, Error>
 }

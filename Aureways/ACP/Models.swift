@@ -21,6 +21,25 @@ enum ACPError: LocalizedError, Sendable {
         }
     }
 
+    /// Wire-shaped JSON-RPC for connect failures. Handshake has no progress
+    /// channel, so this is what we can actually show the user.
+    var jsonRPCDisplay: String {
+        switch self {
+        case .agent(let code, let message, let data):
+            var error: [String: JSONValue] = [
+                "code": .number(Double(code)),
+                "message": .string(message),
+            ]
+            if let data { error["data"] = data }
+            return JSONValue.object([
+                "jsonrpc": .string("2.0"),
+                "error": .object(error),
+            ]).prettyPrinted()
+        default:
+            return errorDescription ?? "\(self)"
+        }
+    }
+
     /// ACP `session/new` / `load` may refuse until `authenticate`. Login and
     /// provider config stay in the harness; the client only reacts to this.
     var isAuthRequired: Bool {

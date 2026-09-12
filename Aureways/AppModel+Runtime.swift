@@ -24,6 +24,7 @@ extension AppModel {
             guard !session.isClosed else { return }
             applyDecodedSetup(session, harness: runtime.harness, from: created)
             flushSessionUpdates()
+            session.clearConnectRPC()
             session.phase = .ready
             persistIfNeeded(session)
             await quotaService.refreshQuota(for: session.agent)
@@ -35,7 +36,10 @@ extension AppModel {
     func openExisting(_ session: ChatSession) async {
         guard let acpId = session.acpSessionId else { return }
         session.phase = .connecting
+        session.resetTranscript()
         session.log("Loading \(session.agent.title) session")
+        session.isReplaying = true
+        defer { session.isReplaying = false }
         do {
             let runtime = try await ensureRuntime(session.agent)
             session.agentInfo = runtime.agentInfo
@@ -45,9 +49,6 @@ extension AppModel {
             guard let connection = runtime.connection else {
                 throw ACPError.launch("Agent process is not running")
             }
-            session.resetTranscript()
-            session.isReplaying = true
-            defer { session.isReplaying = false }
             await prepareWorkspaces(connection, session: session)
             let loaded = try await runtime.withAuthentication {
                 try await connection.loadSession(
@@ -61,6 +62,7 @@ extension AppModel {
             guard !session.isClosed else { return }
             applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
             flushSessionUpdates()
+            session.clearConnectRPC()
             session.phase = .ready
             persistIfNeeded(session)
             await quotaService.refreshQuota(for: session.agent)
@@ -71,19 +73,22 @@ extension AppModel {
 
     func reopen(_ session: ChatSession) async {
         session.phase = .connecting
+        let acpId = session.acpSessionId
+        if acpId != nil {
+            session.resetTranscript()
+            session.isReplaying = true
+        }
+        defer { session.isReplaying = false }
         do {
             let runtime = try await ensureRuntime(session.agent)
             session.agentInfo = runtime.agentInfo
             guard let connection = runtime.connection else {
                 throw ACPError.launch("Agent process is not running")
             }
-            if let acpId = session.acpSessionId {
+            if let acpId {
                 guard runtime.canLoad else {
                     throw ACPError.launch("This agent does not support restoring sessions")
                 }
-                session.resetTranscript()
-                session.isReplaying = true
-                defer { session.isReplaying = false }
                 await prepareWorkspaces(connection, session: session)
                 let loaded = try await runtime.withAuthentication {
                     try await connection.loadSession(
@@ -96,6 +101,7 @@ extension AppModel {
                 }
                 applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
                 flushSessionUpdates()
+                session.clearConnectRPC()
                 session.phase = .ready
                 await quotaService.refreshQuota(for: session.agent)
             } else {
@@ -110,6 +116,7 @@ extension AppModel {
                 }
                 applyDecodedSetup(session, harness: runtime.harness, from: created)
                 flushSessionUpdates()
+                session.clearConnectRPC()
                 session.phase = .ready
                 persistIfNeeded(session)
                 await quotaService.refreshQuota(for: session.agent)
@@ -217,8 +224,10 @@ extension AppModel {
 
     func fail(_ session: ChatSession, _ error: Error) {
         session.endCurrentRun()
-        session.phase = .failed(error.localizedDescription)
-        errorMessage = error.localizedDescription
+        let text = (error as? ACPError)?.jsonRPCDisplay ?? error.localizedDescription
+        session.phase = .failed(text)
+        session.appendConnectFailure(text)
+        errorMessage = text
     }
 
     func ensureRuntime(_ profile: AgentProfile) async throws -> HarnessRuntime {
@@ -383,6 +392,9 @@ extension AppModel {
             },
             onExit: { _ in
                 await MainActor.run { bridge.model?.handleRuntimeExit(agentId: agentId) }
+            },
+            onRequestStall: { method, json in
+                await MainActor.run { bridge.model?.appendConnectStall(agentId: agentId, method: method, json: json) }
             }
         )
     }
@@ -405,7 +417,19 @@ extension AppModel {
             selected.log(line)
             return
         }
-        sessions.first(where: { $0.agent.id == agentId && $0.phase.isReady })?.log(line)
+        sessions.first(where: { $0.agent.id == agentId && ($0.phase.isReady || $0.phase == .connecting) })?.log(line)
+    }
+
+    func appendConnectStall(agentId: String, method: String, json: String) {
+        guard let session = sessionForConnectLog(agentId: agentId), session.phase == .connecting else { return }
+        session.appendConnectRPC(method: method, json: json)
+    }
+
+    private func sessionForConnectLog(agentId: String) -> ChatSession? {
+        if let selected = selectedSession, selected.agent.id == agentId {
+            return selected
+        }
+        return sessions.first(where: { $0.agent.id == agentId && $0.phase == .connecting })
     }
 
     func appendFileOp(agentId: String, type: String, path: String) {

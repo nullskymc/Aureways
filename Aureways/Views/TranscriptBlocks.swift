@@ -49,13 +49,17 @@ struct TranscriptBlockView: View, Equatable {
 private struct ErrorNotice: View {
     let text: String
 
+    private var isWaiting: Bool {
+        text.hasPrefix(ChatSession.connectRPCPrefix)
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: isWaiting ? "clock" : "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.red)
+                .foregroundStyle(isWaiting ? Palette.gold : Color.red)
             Text(text)
-                .font(.system(size: 12))
+                .font(.system(size: 12, design: text.contains("{") ? .monospaced : .default))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             Spacer(minLength: 0)

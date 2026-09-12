@@ -558,6 +558,40 @@ final class ProtocolTests: XCTestCase {
         XCTAssertFalse(ACPError.launch("Authentication required (API Key): missing env").isAuthRequired)
     }
 
+    func testAgentErrorJSONRPCDisplay() {
+        let text = ACPError.agent(
+            -32603,
+            "nope",
+            .object(["type": .string("auth_required")])
+        ).jsonRPCDisplay
+        XCTAssertTrue(text.contains("\"jsonrpc\""), text)
+        XCTAssertTrue(text.contains("32603"), text)
+        XCTAssertTrue(text.contains("nope"), text)
+        XCTAssertTrue(text.contains("auth_required"), text)
+        XCTAssertEqual(
+            ACPError.launch("Command not found: grok").jsonRPCDisplay,
+            "Command not found: grok"
+        )
+    }
+
+    @MainActor
+    func testConnectRPCStatusReplacesPrevious() {
+        let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .connecting)
+        session.appendConnectRPC(method: "initialize", json: "{\"method\":\"initialize\"}")
+        session.appendConnectRPC(method: "session/new", json: "{\"method\":\"session/new\"}")
+        session.appendConnectFailure("{\"error\":{\"code\":-32603}}")
+        let statuses = session.items.compactMap { item -> String? in
+            if case .status(_, let text) = item { return text }
+            return nil
+        }
+        XCTAssertEqual(statuses.count, 1)
+        XCTAssertTrue(statuses[0].contains("-32603"), statuses[0])
+        XCTAssertFalse(statuses[0].contains("仍在等待"), statuses[0])
+        session.clearConnectRPC()
+        XCTAssertTrue(session.items.isEmpty)
+    }
+
     @MainActor
     func testHandshakeDoesNotAuthenticateAdvertisedMethods() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -612,6 +646,72 @@ final class ProtocolTests: XCTestCase {
         )
         let handshake = try await connection.initialize()
         XCTAssertEqual(handshake.agentInfo?.name, "eof")
+        await connection.shutdown()
+    }
+
+    func testInitializeStallSurfacesJSONRPC() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("hang_agent.py")
+        try hangAgentSource.write(to: file, atomically: true, encoding: .utf8)
+        let stalled = expectation(description: "initialize stall")
+        let seen = StallBox()
+        let connection = try ACPConnection.launch(
+            ACPLaunch(
+                command: "/usr/bin/python3",
+                arguments: [file.path],
+                cwd: directory.path,
+                environment: HostEnvironment.augmented()
+            ),
+            handlers: ACPHandlers(
+                onUpdate: { _ in },
+                onPermission: { _ in .cancelled },
+                onLog: { _ in },
+                requestStall: .milliseconds(80),
+                onRequestStall: { method, json in
+                    await seen.set(method, json)
+                    stalled.fulfill()
+                }
+            )
+        )
+        let task = Task {
+            try await connection.initialize()
+        }
+        await fulfillment(of: [stalled], timeout: 2)
+        let event = await seen.value()
+        XCTAssertEqual(event.method, "initialize")
+        XCTAssertTrue(event.json.contains("initialize"), event.json)
+        XCTAssertTrue(event.json.contains("jsonrpc"), event.json)
+        task.cancel()
+        await connection.shutdown()
+    }
+
+    func testInitializeExitNamesPendingMethod() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("exit_agent.py")
+        try exitAgentSource.write(to: file, atomically: true, encoding: .utf8)
+        let connection = try ACPConnection.launch(
+            ACPLaunch(
+                command: "/usr/bin/python3",
+                arguments: [file.path],
+                cwd: directory.path,
+                environment: HostEnvironment.augmented()
+            ),
+            handlers: ACPHandlers(
+                onUpdate: { _ in },
+                onPermission: { _ in .cancelled },
+                onLog: { _ in }
+            )
+        )
+        do {
+            _ = try await connection.initialize()
+            XCTFail("expected the agent to exit")
+        } catch let error as ACPError {
+            let text = error.jsonRPCDisplay
+            XCTAssertTrue(text.contains("initialize"), text)
+            XCTAssertTrue(text.contains("exited"), text)
+        }
         await connection.shutdown()
     }
 
@@ -1376,6 +1476,20 @@ private actor TextBox {
     }
 }
 
+private actor StallBox {
+    private var method: String?
+    private var json: String?
+
+    func set(_ method: String, _ json: String) {
+        self.method = method
+        self.json = json
+    }
+
+    func value() -> (method: String, json: String) {
+        (method ?? "", json ?? "")
+    }
+}
+
 private let advertisedAuthAgentSource = #"""
 #!/usr/bin/env python3
 import json, sys
@@ -1412,6 +1526,23 @@ while True:
         send({"jsonrpc": "2.0", "id": mid, "result": {"sessionId": "sess_auth_ok"}})
     elif mid is not None:
         send({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "Method not found"}})
+"""#
+
+private let hangAgentSource = #"""
+#!/usr/bin/env python3
+import sys, time
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    time.sleep(3600)
+"""#
+
+private let exitAgentSource = #"""
+#!/usr/bin/env python3
+import sys
+sys.stdin.readline()
+sys.exit(1)
 """#
 
 private let eofAgentSource = #"""

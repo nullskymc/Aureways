@@ -70,6 +70,26 @@ enum JSONValue: Sendable, Equatable {
         try JSONSerialization.data(withJSONObject: jsonObject())
     }
 
+    func prettyPrinted(limit: Int = 4000) -> String {
+        let text: String
+        if let object = try? jsonObject(),
+           let data = try? JSONSerialization.data(
+            withJSONObject: object,
+            options: [.prettyPrinted, .sortedKeys]
+           ),
+           let pretty = String(data: data, encoding: .utf8) {
+            text = pretty
+        } else if let data = try? encode(), let compact = String(data: data, encoding: .utf8) {
+            text = compact
+        } else {
+            return "(unencodable)"
+        }
+        if text.count > limit {
+            return String(text.prefix(limit)) + "…"
+        }
+        return text
+    }
+
     func jsonObject() throws -> Any {
         switch self {
         case .null: return NSNull()

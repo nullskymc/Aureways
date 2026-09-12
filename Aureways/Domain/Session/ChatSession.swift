@@ -98,6 +98,7 @@ final class ChatSession: Identifiable {
     var permissionContinuation: CheckedContinuation<PermissionDecision, Never>?
     var agentInfo: String = ""
     var logs: [String] = []
+    private var connectDiagnosticID: UUID?
     var fileOps: [FileOpRecord] = []
     var availableCommands: [SlashCommand] = []
     var phase: SessionPhase = .connecting
@@ -177,6 +178,40 @@ final class ChatSession: Identifiable {
 
     func appendStatus(_ text: String) {
         items.append(.status(UUID(), text))
+        rebuildTranscriptProjection()
+        transcriptRevision += 1
+    }
+
+    /// Handshake has no ACP progress channel. One card covers stall → error so a
+    /// retry that later succeeds can drop it cleanly.
+    func appendConnectRPC(method: String, json: String) {
+        upsertConnectDiagnostic("\(Self.connectRPCPrefix)\(method)\n\n\(json)")
+    }
+
+    func appendConnectFailure(_ text: String) {
+        upsertConnectDiagnostic(text)
+    }
+
+    func clearConnectRPC() {
+        guard let id = connectDiagnosticID else { return }
+        connectDiagnosticID = nil
+        let before = items.count
+        items.removeAll { $0.id == id }
+        guard items.count != before else { return }
+        rebuildTranscriptProjection()
+        transcriptRevision += 1
+    }
+
+    nonisolated static let connectRPCPrefix = "仍在等待 "
+
+    private func upsertConnectDiagnostic(_ text: String) {
+        if let id = connectDiagnosticID, let index = items.firstIndex(where: { $0.id == id }) {
+            items[index] = .status(id, text)
+        } else {
+            let id = UUID()
+            connectDiagnosticID = id
+            items.append(.status(id, text))
+        }
         rebuildTranscriptProjection()
         transcriptRevision += 1
     }
@@ -544,6 +579,7 @@ final class ChatSession: Identifiable {
 
     func resetTranscript() {
         items = []
+        connectDiagnosticID = nil
         logs = []
         fileOps = []
         availableCommands = []
