@@ -49,7 +49,7 @@ Auto-approve 时由当前 `Harness.sessionMeta` / `launchArguments` 决定透传
 
 - `fs.readTextFile` / `fs.writeTextFile`
 - `terminal: true`
-- `clientInfo`: name `aureways`，title `Aureways`，version `0.1.8`
+- `clientInfo`: name `aureways`，title `Aureways`，version `0.1.9`
 
 Agent 回调实现：
 
