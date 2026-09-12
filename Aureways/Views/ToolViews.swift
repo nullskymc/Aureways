@@ -20,6 +20,18 @@ struct ToolCompactRow: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                    if let badge = diffBadge {
+                        if badge.added > 0 {
+                            Text("+\(badge.added)")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(Palette.moss)
+                        }
+                        if badge.removed > 0 {
+                            Text("−\(badge.removed)")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(Color.red.opacity(0.85))
+                        }
+                    }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .bold))
@@ -74,6 +86,19 @@ struct ToolCompactRow: View {
             if ToolCallView.titleHasToken(call.title, ["search", "grep", "find"]) { return "magnifyingglass" }
             return "wrench.and.screwdriver"
         }
+    }
+
+    private var diffBadge: (added: Int, removed: Int)? {
+        guard call.cardLayout == .edit, !call.diffs.isEmpty else { return nil }
+        var added = 0
+        var removed = 0
+        for diff in call.diffs {
+            let result = TextDiff.compare(old: diff.oldText, new: diff.newText)
+            added += result.added
+            removed += result.removed
+        }
+        if added == 0, removed == 0 { return nil }
+        return (added, removed)
     }
 
     private var statusColor: Color {
@@ -236,26 +261,12 @@ struct ToolCallDetail: View {
     @ViewBuilder
     private var diffs: some View {
         ForEach(Array(call.diffs.enumerated()), id: \.offset) { _, diff in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(URL(fileURLWithPath: diff.path).lastPathComponent)
-                    .font(.system(size: 11, weight: .semibold))
-                if let oldText = diff.oldText, !oldText.isEmpty {
-                    Text(Self.clamped(oldText))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .lineLimit(min(lineLimit, 8))
-                }
-                if let newText = diff.newText, !newText.isEmpty {
-                    Text(Self.clamped(newText))
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .lineLimit(lineLimit)
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            ToolDiffBlock(
+                path: diff.path,
+                oldText: diff.oldText,
+                newText: diff.newText,
+                lineLimit: lineLimit
+            )
         }
     }
 
@@ -341,5 +352,131 @@ struct ToolCallDetail: View {
     private static func clamped(_ text: String) -> String {
         guard text.count > displayLimit else { return text }
         return String(text.prefix(displayLimit)) + "\n… 已截断 \(text.count - displayLimit) 个字符"
+    }
+}
+
+private struct ToolDiffBlock: View {
+    let path: String
+    let oldText: String?
+    let newText: String?
+    var lineLimit: Int
+
+    private var result: TextDiff.Result {
+        TextDiff.compare(old: oldText, new: newText)
+    }
+
+    var body: some View {
+        let diff = result
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(URL(fileURLWithPath: path).lastPathComponent)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if diff.added > 0 {
+                    Text("+\(diff.added)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Palette.moss)
+                }
+                if diff.removed > 0 {
+                    Text("−\(diff.removed)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.red.opacity(0.85))
+                }
+            }
+
+            if diff.isIdentity {
+                Text("无行级变更")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            } else {
+                hunkList(diff)
+            }
+
+            if diff.truncated {
+                Text("仅比较前 \(TextDiff.maxInputLines) 行")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func hunkList(_ diff: TextDiff.Result) -> some View {
+        let shown = displayedHunks(diff)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(shown.rows, id: \.offset) { row in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(row.hunk.header)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 2)
+                    ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+                        diffLine(line)
+                    }
+                }
+            }
+            if shown.hiddenHunks > 0 || shown.hiddenLines > 0 {
+                Text("还有 \(shown.hiddenHunks > 0 ? "\(shown.hiddenHunks) 个片段" : "\(shown.hiddenLines) 行")")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func displayedHunks(_ diff: TextDiff.Result) -> (
+        rows: [(offset: Int, hunk: TextDiff.Hunk, lines: [TextDiff.Line])],
+        hiddenHunks: Int,
+        hiddenLines: Int
+    ) {
+        let cap = max(lineLimit, 6)
+        var remaining = cap
+        var rows: [(offset: Int, hunk: TextDiff.Hunk, lines: [TextDiff.Line])] = []
+        for (index, hunk) in diff.hunks.enumerated() {
+            guard remaining > 0 else { break }
+            let slice = Array(hunk.lines.prefix(remaining))
+            remaining -= slice.count
+            rows.append((index, hunk, slice))
+        }
+        return (
+            rows,
+            diff.hunks.count - rows.count,
+            rows.reduce(0) { $0 + ($1.hunk.lines.count - $1.lines.count) }
+        )
+    }
+
+    private func diffLine(_ line: TextDiff.Line) -> some View {
+        let color: Color = {
+            switch line.kind {
+            case .insert: return Palette.moss
+            case .delete: return Color.red.opacity(0.85)
+            case .context: return Color.secondary
+            }
+        }()
+        let fill: Color = {
+            switch line.kind {
+            case .insert: return Palette.moss.opacity(0.12)
+            case .delete: return Color.red.opacity(0.10)
+            case .context: return Color.clear
+            }
+        }()
+        return HStack(alignment: .top, spacing: 0) {
+            Text(line.prefix)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(color)
+                .frame(width: 12, alignment: .center)
+            Text(line.text.isEmpty ? " " : line.text)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(line.kind == .context ? Color.secondary : Color.primary)
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 0.5)
+        .padding(.horizontal, 4)
+        .background(fill)
     }
 }
