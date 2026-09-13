@@ -17,6 +17,7 @@ Aureways 是 ACP 协议的 macOS 客户端雏形：SwiftUI 负责界面，同进
 | [frontend.md](frontend.md) | 窗口、侧栏、会话区、权限、设置 |
 | [backend.md](backend.md) | 进程启动、PATH、JSON-RPC、fs/terminal |
 | [protocol.md](protocol.md) | 实现了哪些 ACP 方法、尚未做的 |
+| [protocol-latency.md](protocol-latency.md) | 协议交互延时排查：链路、候选点、测量缺口 |
 | [development.md](development.md) | 编译、运行、测试、常见路径错误 |
 | [brand/app-icon.md](brand/app-icon.md) | A 轨道标志、App Icon 分层与交付 |
 
