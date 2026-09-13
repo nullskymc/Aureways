@@ -22,6 +22,10 @@ struct ACPHandlers: Sendable {
     /// Handshake methods only. Zero skips the timer. Prompt turns are not stalled.
     var requestStall: Duration = .seconds(8)
     var onRequestStall: (@Sendable (_ method: String, _ json: String) async -> Void)? = nil
+    /// Grok (and future) `x.ai/*` / `_x.ai/*` requests. Return nil from the
+    /// caller's throw to keep Method not found. Notifications still go through
+    /// `onUpdate`, not this hook.
+    var onExtRequest: (@Sendable (String, JSONValue) async throws -> JSONValue)? = nil
 }
 
 actor ACPConnection {
@@ -355,10 +359,20 @@ actor ACPConnection {
         // the error below goes back to the agent over the wire and nothing
         // reaches the UI, so "the agent cannot use the terminal" and "the
         // client never got asked" look identical.
-        await handlers.onLog("← \(method) \(Self.compact(params ?? .null, limit: 240))")
+        let limit = method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") ? 8000 : 240
+        await handlers.onLog("← \(method) \(Self.compact(params ?? .null, limit: limit))")
         do {
             let result = try await perform(method: method, rawParams: params ?? .object([:]))
             try await write(.response(id: id, result: result))
+        } catch let error as ACPError {
+            let message = error.localizedDescription
+            await handlers.onLog("✗ \(method) failed: \(message)")
+            switch error {
+            case .agent(let code, let text, let data):
+                try? await write(.error(id: id, code: code, message: text, data: data))
+            default:
+                try? await write(.error(id: id, code: -32000, message: message, data: nil))
+            }
         } catch {
             let message = error.localizedDescription
             await handlers.onLog("✗ \(method) failed: \(message)")
@@ -429,6 +443,12 @@ actor ACPConnection {
             }
             return await terminals.release(id: id)
         default:
+            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
+                let canonical = method.hasPrefix("_") ? String(method.dropFirst()) : method
+                if let onExtRequest = handlers.onExtRequest {
+                    return try await onExtRequest(canonical, params)
+                }
+            }
             throw ACPError.agent(-32601, "Method not found: \(method)")
         }
     }

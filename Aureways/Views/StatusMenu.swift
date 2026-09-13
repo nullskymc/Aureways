@@ -650,7 +650,11 @@ struct StatusMenuView: View {
 
     private func sessionStatus(_ session: ChatSession) -> String {
         if session.isStreaming { return "生成中" }
-        if session.pendingPermission != nil { return "等待确认" }
+        if session.pendingPermission != nil
+            || session.pendingPlanApproval != nil
+            || session.pendingUserQuestion != nil {
+            return "等待确认"
+        }
         switch session.phase {
         case .connecting: return "连接中"
         case .ready: return "就绪"

@@ -23,6 +23,18 @@ struct ComposerDock: View {
                     prompt: pending.prompt,
                     showsSessionBadge: pending.session.id != session?.id
                 )
+            } else if let pending = pendingPlanApproval {
+                PlanApprovalCard(
+                    session: pending.session,
+                    prompt: pending.prompt,
+                    showsSessionBadge: pending.session.id != session?.id
+                )
+            } else if let pending = pendingUserQuestion {
+                UserQuestionCard(
+                    session: pending.session,
+                    prompt: pending.prompt,
+                    showsSessionBadge: pending.session.id != session?.id
+                )
             }
             ComposerCard(session: session)
         }
@@ -40,12 +52,24 @@ struct ComposerDock: View {
     /// 待批准的权限请求：优先当前会话，其次其余会话——
     /// 新建对话落地页上也能批准后台会话的请求，替代原来的模态弹窗。
     private var pendingPermission: (session: ChatSession, prompt: PermissionPrompt)? {
-        if let session, let prompt = session.pendingPermission {
-            return (session, prompt)
+        firstPending { $0.pendingPermission }.map { ($0.0, $0.1) }
+    }
+
+    private var pendingPlanApproval: (session: ChatSession, prompt: PlanApprovalPrompt)? {
+        firstPending { $0.pendingPlanApproval }
+    }
+
+    private var pendingUserQuestion: (session: ChatSession, prompt: UserQuestionPrompt)? {
+        firstPending { $0.pendingUserQuestion }
+    }
+
+    private func firstPending<T>(_ key: (ChatSession) -> T?) -> (ChatSession, T)? {
+        if let session, let value = key(session) {
+            return (session, value)
         }
         for candidate in model.sessions {
-            if let prompt = candidate.pendingPermission {
-                return (candidate, prompt)
+            if let value = key(candidate) {
+                return (candidate, value)
             }
         }
         return nil

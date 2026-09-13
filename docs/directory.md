@@ -40,6 +40,7 @@ Aureways/                          # 仓库根
 │   │   ├── Harness.swift          # 基类、配方、PATH、注册表
 │   │   ├── HarnessRuntime.swift   # 共用 stdio 连接生命周期
 │   │   ├── GrokBuild.swift
+│   │   ├── GrokExt.swift          # Grok `_x.ai/exit_plan_mode` / `ask_user_question` 解析
 │   │   ├── Codex.swift
 │   │   ├── ClaudeCode.swift
 │   │   ├── Antigravity.swift      # 取代 Gemini CLI
@@ -71,6 +72,7 @@ Aureways/                          # 仓库根
 │       ├── ComposerTextView.swift # NSTextView 输入与拖拽
 │       ├── CompletionPopup.swift  # / 与 @ 补全
 │       ├── PermissionCard.swift   # 权限确认
+│       ├── PlanApprovalCard.swift # Grok 计划审批 + 选择题
 │       ├── InspectorViews.swift   # 右栏面板容器与信息标签
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树

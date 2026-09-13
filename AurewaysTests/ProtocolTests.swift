@@ -1457,6 +1457,128 @@ final class ProtocolTests: XCTestCase {
         """)
         XCTAssertEqual(ToolCallView(json: other).cardLayout, .other)
     }
+
+    func testGrokExitPlanModeExtRequestIsAnswered() async throws {
+        let seen = TextBox()
+        let connection = try await launchMock(
+            mode: "ext_plan",
+            extraEnv: ["MOCK_EXT_METHOD": "_x.ai/exit_plan_mode"],
+            onExtRequest: { method, params in
+                XCTAssertEqual(method, "x.ai/exit_plan_mode")
+                XCTAssertEqual(params["planContent"]?.stringValue, "# Plan\n\nDo the thing.")
+                return PlanApprovalDecision.approved(feedback: "").json
+            },
+            onUpdate: { note in
+                if case .agentMessageChunk(let content) = note.update {
+                    await seen.append(content.text ?? "")
+                }
+            }
+        )
+        defer { Task { await connection.shutdown() } }
+        _ = try await connection.initialize()
+        let session = try await connection.newSession(cwd: FileManager.default.temporaryDirectory.path, meta: nil)
+        let response = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("plan")])
+        XCTAssertEqual(response.stopReason, "end_turn")
+        let output = await seen.joined()
+        XCTAssertTrue(output.contains("\"approved\":true") || output.contains("approved"), output)
+    }
+
+    func testGrokExitPlanModeAcceptsUnprefixedMethod() async throws {
+        let seen = TextBox()
+        let connection = try await launchMock(
+            mode: "ext_plan",
+            extraEnv: ["MOCK_EXT_METHOD": "x.ai/exit_plan_mode"],
+            onExtRequest: { method, _ in
+                XCTAssertEqual(method, "x.ai/exit_plan_mode")
+                return PlanApprovalDecision.quit.json
+            },
+            onUpdate: { note in
+                if case .agentMessageChunk(let content) = note.update {
+                    await seen.append(content.text ?? "")
+                }
+            }
+        )
+        defer { Task { await connection.shutdown() } }
+        _ = try await connection.initialize()
+        let session = try await connection.newSession(cwd: FileManager.default.temporaryDirectory.path, meta: nil)
+        _ = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("plan")])
+        let output = await seen.joined()
+        XCTAssertTrue(output.contains("quit"), output)
+    }
+
+    func testGrokAskUserQuestionExtRequestIsAnswered() async throws {
+        let seen = TextBox()
+        let connection = try await launchMock(
+            mode: "ext_question",
+            extraEnv: [:],
+            onExtRequest: { method, params in
+                XCTAssertEqual(method, "x.ai/ask_user_question")
+                let prompt = GrokExt.parseUserQuestion(params)
+                XCTAssertEqual(prompt.questions.count, 1)
+                XCTAssertEqual(prompt.questions.first?.options.map(\.label), ["PR1", "Docs"])
+                let id = prompt.questions[0].id
+                return UserQuestionDecision.accepted([id: ["PR1"]]).json(for: prompt)
+            },
+            onUpdate: { note in
+                if case .agentMessageChunk(let content) = note.update {
+                    await seen.append(content.text ?? "")
+                }
+            }
+        )
+        defer { Task { await connection.shutdown() } }
+        _ = try await connection.initialize()
+        let session = try await connection.newSession(cwd: FileManager.default.temporaryDirectory.path, meta: nil)
+        _ = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("ask")])
+        let output = await seen.joined()
+        XCTAssertTrue(output.contains("accepted") || output.contains("outcome"), output)
+        XCTAssertTrue(output.contains("PR1"), output)
+    }
+
+    func testUnknownExtRequestWithoutHandlerIsMethodNotFound() async throws {
+        let logs = TextBox()
+        let connection = try await launchMock(
+            mode: "ext_plan",
+            extraEnv: ["MOCK_EXT_METHOD": "_x.ai/exit_plan_mode"],
+            onExtRequest: nil,
+            onLog: { line in await logs.append(line) }
+        )
+        defer { Task { await connection.shutdown() } }
+        _ = try await connection.initialize()
+        let session = try await connection.newSession(cwd: FileManager.default.temporaryDirectory.path, meta: nil)
+        _ = try await connection.prompt(sessionId: session.sessionId, prompt: [.text("plan")])
+        let text = await logs.joined()
+        XCTAssertTrue(text.contains("Method not found") || text.contains("-32601"), text)
+    }
+
+    private func launchMock(
+        mode: String,
+        extraEnv: [String: String],
+        onExtRequest: (@Sendable (String, JSONValue) async throws -> JSONValue)? = nil,
+        onUpdate: (@Sendable (SessionNotification) async -> Void)? = nil,
+        onLog: (@Sendable (String) async -> Void)? = nil
+    ) async throws -> ACPConnection {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("mock_agent.py")
+        try mockAgentSource.write(to: file, atomically: true, encoding: .utf8)
+        var env = HostEnvironment.augmented()
+        env["MOCK_MODE"] = mode
+        for (key, value) in extraEnv { env[key] = value }
+        return try ACPConnection.launch(
+            ACPLaunch(
+                command: "/usr/bin/python3",
+                arguments: [file.path],
+                cwd: directory.path,
+                environment: env
+            ),
+            handlers: ACPHandlers(
+                onUpdate: { note in await onUpdate?(note) },
+                onPermission: { _ in .cancelled },
+                onLog: { line in await onLog?(line) },
+                onExtRequest: onExtRequest
+            )
+        )
+    }
 }
 
 
@@ -1607,6 +1729,39 @@ while True:
             send({"jsonrpc": "2.0", "method": "session/update", "params": {
                 "sessionId": sid,
                 "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": content}}
+            }})
+            send({"jsonrpc": "2.0", "id": mid, "result": {"stopReason": "end_turn"}})
+        elif os.environ.get("MOCK_MODE") == "ext_plan":
+            req_id = 9002
+            send({"jsonrpc": "2.0", "id": req_id, "method": os.environ.get("MOCK_EXT_METHOD", "_x.ai/exit_plan_mode"), "params": {
+                "sessionId": sid,
+                "planContent": "# Plan\n\nDo the thing.",
+                "planFilePath": "/tmp/plan.md"
+            }})
+            reply = recv()
+            payload = json.dumps((reply or {}).get("result") or (reply or {}).get("error") or {})
+            send({"jsonrpc": "2.0", "method": "session/update", "params": {
+                "sessionId": sid,
+                "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": payload}}
+            }})
+            send({"jsonrpc": "2.0", "id": mid, "result": {"stopReason": "end_turn"}})
+        elif os.environ.get("MOCK_MODE") == "ext_question":
+            req_id = 9003
+            send({"jsonrpc": "2.0", "id": req_id, "method": "_x.ai/ask_user_question", "params": {
+                "sessionId": sid,
+                "questions": [{
+                    "question": "What next?",
+                    "options": [
+                        {"label": "PR1", "description": "Implement first"},
+                        {"label": "Docs", "description": "Write the plan down"}
+                    ]
+                }]
+            }})
+            reply = recv()
+            payload = json.dumps((reply or {}).get("result") or (reply or {}).get("error") or {})
+            send({"jsonrpc": "2.0", "method": "session/update", "params": {
+                "sessionId": sid,
+                "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": payload}}
             }})
             send({"jsonrpc": "2.0", "id": mid, "result": {"stopReason": "end_turn"}})
         else:

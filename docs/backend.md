@@ -80,6 +80,8 @@ Agent 侧终端不是完整 PTY，是 `Process` + Pipe（stdin 为 `/dev/null`�
 | `session/cancel` | 通知，无 id |
 | `authenticate` | initialize 若返回 `authMethods`，连接时用第一个 methodId 调用 |
 
+Grok 还会发 `_x.ai/exit_plan_mode`、`_x.ai/ask_user_question`（带 JSON-RPC id）。`ACPConnection` 把 `x.ai/` / `_x.ai/` request 交给 `onExtRequest`，由 Grok 会话弹出计划审批 / 选择题卡后再回包。未知扩展仍 32601。`--no-leader` 下没有 TUI，这两条必须由本客户端实现。
+
 未实现：`session/resume`、WebSocket / HTTP 传输。
 
 ## 环境注意

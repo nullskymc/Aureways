@@ -30,7 +30,9 @@
 | `terminal/output` | 有 | |
 | `terminal/wait_for_exit` | 有 | flatten `exitCode` |
 | `terminal/kill` / `release` | 有 | |
-| 其它 `x.ai/*` | 忽略 | 未知 Grok 扩展只记日志 |
+| `_x.ai/exit_plan_mode` / `x.ai/exit_plan_mode` | 有（Grok） | 阻塞：Composer 上方计划预览卡。`--no-leader` 下没有 TUI 审批面，必须由 Aureways 回包，否则 agent 会报 client disconnected、计划模式退不出 |
+| `_x.ai/ask_user_question` / `x.ai/ask_user_question` | 有（Grok） | 阻塞：选择题卡。yolo / auto-approve **不**自动点 |
+| 其它 `x.ai/*` | 忽略 / 32601 | notification 只记日志；未知 request 仍 Method not found |
 
 ## 各 Agent 的协议偏差（客户端兼容层）
 
@@ -47,6 +49,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | Grok Build | `terminal/create` 把整条 shell 行塞进 `command`，不发 `args`（规范里 `command` 是程序名） | `GrokBuild.swift` 的 `normalizeClientRequest`：`args` 为空时改写成 `$SHELL -lc "<原 command>"`。对这个 agent 一律走 shell，builtin / 管道 / 重定向的行为才一致 |
 | Grok Build | `initialize` 声明 `promptCapabilities.image: false`，但 `session/prompt` 实际接受 `{type:"image"}` | `normalizeCapabilities` 把 `image` 改成 `true`。不改的话 Composer 会给图片贴「不支持」角标并禁发，剪贴板图片（没有文件路径可降级）会被丢掉 |
 | Grok Build | `rawInput` 是带 `variant` 的 `ToolInput`（`target_file` / `file_path` / `target_directory`）；`list_dir` 的 `kind` 是 `other` | `normalizeToolCall`：拍平 tag、补 `path` / `locations`，ListDir → `kind: read` |
+| Grok Build | 计划结束和选择题是带 `id` 的 `_x.ai/*` **request**，不是 notification | `ACPConnection` 把 `x.ai/` / `_x.ai/` request 交给 `onExtRequest`；`GrokExt` 解析 `planContent` / `questions`，UI 点完再回包。其它 harness 仍 32601 |
 | Claude Code | `rawInput` 用 `file_path` 而不是 `path` | `normalizeToolCall`：别名为 `path`，缺 `locations` 时从 path/offset 补 |
 | Codex | 文件编辑标题固定 `Editing files`，只有 `content[].diff`、没有 `locations`；命令完成用 `formatted_output`/`exit_code`；MCP 包一层 `{server,tool,arguments}` | `normalizeToolCall`：从 diff 补 locations 和标题，输出字段别名，解开 MCP 信封 |
 | OpenCode | camelCase（`filePath`/`workdir`）；pending 标题是工具名 `read`/`write`/`bash`；write 完成后 title 变成相对路径 | `normalizeToolCall`：别名 `path`/`cwd`，从工具名推断 `kind`，路径标题改成 `Edit foo.ts`，必要时从 `content` 合成 diff |

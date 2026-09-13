@@ -395,6 +395,9 @@ extension AppModel {
             },
             onRequestStall: { method, json in
                 await MainActor.run { bridge.model?.appendConnectStall(agentId: agentId, method: method, json: json) }
+            },
+            onExtRequest: { method, params in
+                try await bridge.handleExtRequest(method, params: params)
             }
         )
     }
@@ -410,6 +413,18 @@ extension AppModel {
 
     func session(agentId: String, acpSessionId: String) -> ChatSession? {
         sessions.first(where: { $0.agent.id == agentId && $0.acpSessionId == acpSessionId && !$0.isClosed })
+    }
+
+    func sessionForExt(agentId: String, sessionId: String) -> ChatSession? {
+        if !sessionId.isEmpty, let matched = session(agentId: agentId, acpSessionId: sessionId) {
+            return matched
+        }
+        if let selected = selectedSession, selected.agent.id == agentId, !selected.isClosed {
+            return selected
+        }
+        return sessions.first(where: {
+            $0.agent.id == agentId && !$0.isClosed && ($0.phase.isReady || $0.phase == .connecting)
+        })
     }
 
     func appendLog(agentId: String, line: String) {
@@ -483,6 +498,40 @@ private final class AgentBridge: @unchecked Sendable {
     init(agentId: String, model: AppModel) {
         self.agentId = agentId
         self.model = model
+    }
+
+    func handleExtRequest(_ method: String, params: JSONValue) async throws -> JSONValue {
+        guard agentId == GrokBuildHarness.id, GrokExt.handles(method) else {
+            throw ACPError.agent(-32601, "Method not found: \(method)")
+        }
+        let sessionId = params["sessionId"]?.stringValue ?? params["session_id"]?.stringValue ?? ""
+        guard let session = await MainActor.run(body: {
+            self.model?.sessionForExt(agentId: self.agentId, sessionId: sessionId)
+        }) else {
+            await MainActor.run {
+                self.model?.appendLog(
+                    agentId: self.agentId,
+                    line: "✗ \(method): no session for id \(sessionId.isEmpty ? "nil" : sessionId)"
+                )
+            }
+            throw ACPError.agent(-32000, "no session for \(method)")
+        }
+        await MainActor.run {
+            self.model?.flushSessionUpdates()
+            self.model?.appendLog(agentId: self.agentId, line: "← \(method) waiting for UI")
+        }
+        switch GrokExt.stripUnderscorePrefix(method) {
+        case "x.ai/exit_plan_mode":
+            let prompt = GrokExt.parsePlanApproval(params)
+            let decision = await session.waitForPlanApproval(prompt)
+            return decision.json
+        case "x.ai/ask_user_question":
+            let prompt = GrokExt.parseUserQuestion(params)
+            let decision = await session.waitForUserQuestion(prompt)
+            return decision.json(for: prompt)
+        default:
+            throw ACPError.agent(-32601, "Method not found: \(method)")
+        }
     }
 }
 

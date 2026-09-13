@@ -96,6 +96,10 @@ final class ChatSession: Identifiable {
     var isStreaming = false
     var pendingPermission: PermissionPrompt?
     var permissionContinuation: CheckedContinuation<PermissionDecision, Never>?
+    var pendingPlanApproval: PlanApprovalPrompt?
+    var planApprovalContinuation: CheckedContinuation<PlanApprovalDecision, Never>?
+    var pendingUserQuestion: UserQuestionPrompt?
+    var userQuestionContinuation: CheckedContinuation<UserQuestionDecision, Never>?
     var agentInfo: String = ""
     var logs: [String] = []
     private var connectDiagnosticID: UUID?
@@ -410,6 +414,40 @@ final class ChatSession: Identifiable {
 
     func resumeBlockingPrompts() {
         resumePermission(.cancelled)
+        resumePlanApproval(.quit)
+        resumeUserQuestion(.chatAboutThis)
+    }
+
+    func waitForPlanApproval(_ prompt: PlanApprovalPrompt) async -> PlanApprovalDecision {
+        if isClosed { return .quit }
+        resumePlanApproval(.quit)
+        pendingPlanApproval = prompt
+        return await withCheckedContinuation { continuation in
+            planApprovalContinuation = continuation
+        }
+    }
+
+    func resumePlanApproval(_ decision: PlanApprovalDecision) {
+        pendingPlanApproval = nil
+        let waiter = planApprovalContinuation
+        planApprovalContinuation = nil
+        waiter?.resume(returning: decision)
+    }
+
+    func waitForUserQuestion(_ prompt: UserQuestionPrompt) async -> UserQuestionDecision {
+        if isClosed { return .chatAboutThis }
+        resumeUserQuestion(.chatAboutThis)
+        pendingUserQuestion = prompt
+        return await withCheckedContinuation { continuation in
+            userQuestionContinuation = continuation
+        }
+    }
+
+    func resumeUserQuestion(_ decision: UserQuestionDecision) {
+        pendingUserQuestion = nil
+        let waiter = userQuestionContinuation
+        userQuestionContinuation = nil
+        waiter?.resume(returning: decision)
     }
 
     private func isDenial(_ decision: PermissionDecision) -> Bool {

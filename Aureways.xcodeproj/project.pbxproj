@@ -64,6 +64,10 @@
 		B1010000000000000000001E /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001E /* Palette.swift */; };
 		B1010000000000000000002A /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002A /* Chrome.swift */; };
 		B1010000000000000000001F /* PermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001F /* PermissionCard.swift */; };
+		B10100000000000000000056 /* GrokExt.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000056 /* GrokExt.swift */; };
+		B10100000000000000000057 /* PlanApprovalCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000057 /* PlanApprovalCard.swift */; };
+		B20100000000000000000056 /* GrokExt.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000056 /* GrokExt.swift */; };
+		B20100000000000000000063 /* GrokExtTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000063 /* GrokExtTests.swift */; };
 		B2010000000000000000001C /* SessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001C /* SessionModels.swift */; };
 		B2010000000000000000001D /* UpdateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000001D /* UpdateModels.swift */; };
 		B10100000000000000000020 /* Harness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000020 /* Harness.swift */; };
@@ -166,6 +170,9 @@
 		F1010000000000000000001E /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		F1010000000000000000002A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
 		F1010000000000000000001F /* PermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCard.swift; sourceTree = "<group>"; };
+		F10100000000000000000056 /* GrokExt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokExt.swift; sourceTree = "<group>"; };
+		F10100000000000000000057 /* PlanApprovalCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanApprovalCard.swift; sourceTree = "<group>"; };
+		F20100000000000000000063 /* GrokExtTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokExtTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000020 /* Harness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Harness.swift; sourceTree = "<group>"; };
 		F10100000000000000000021 /* HarnessRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessRuntime.swift; sourceTree = "<group>"; };
 		F10100000000000000000022 /* GrokBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokBuild.swift; sourceTree = "<group>"; };
@@ -284,6 +291,7 @@
 				F1010000000000000000001E /* Palette.swift */,
 				F1010000000000000000002A /* Chrome.swift */,
 				F1010000000000000000001F /* PermissionCard.swift */,
+				F10100000000000000000057 /* PlanApprovalCard.swift */,
 				F10100000000000000000051 /* HarnessQuotaViews.swift */,
 				F10100000000000000000053 /* StatusMenu.swift */,
 			);
@@ -310,6 +318,7 @@
 				F20100000000000000000060 /* MarkdownStreamTests.swift */,
 				F20100000000000000000061 /* ToolCallNormalizationTests.swift */,
 				F20100000000000000000062 /* TextDiffTests.swift */,
+				F20100000000000000000063 /* GrokExtTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -320,6 +329,7 @@
 				F10100000000000000000020 /* Harness.swift */,
 				F10100000000000000000021 /* HarnessRuntime.swift */,
 				F10100000000000000000022 /* GrokBuild.swift */,
+				F10100000000000000000056 /* GrokExt.swift */,
 				F10100000000000000000023 /* Codex.swift */,
 				F10100000000000000000024 /* ClaudeCode.swift */,
 				F10100000000000000000025 /* Antigravity.swift */,
@@ -493,6 +503,8 @@
 				B1010000000000000000001E /* Palette.swift in Sources */,
 				B1010000000000000000002A /* Chrome.swift in Sources */,
 				B1010000000000000000001F /* PermissionCard.swift in Sources */,
+				B10100000000000000000057 /* PlanApprovalCard.swift in Sources */,
+				B10100000000000000000056 /* GrokExt.swift in Sources */,
 				B10100000000000000000020 /* Harness.swift in Sources */,
 				B10100000000000000000021 /* HarnessRuntime.swift in Sources */,
 				B10100000000000000000022 /* GrokBuild.swift in Sources */,
@@ -536,6 +548,8 @@
 				B20100000000000000000020 /* Harness.swift in Sources */,
 				B20100000000000000000021 /* HarnessRuntime.swift in Sources */,
 				B20100000000000000000022 /* GrokBuild.swift in Sources */,
+				B20100000000000000000056 /* GrokExt.swift in Sources */,
+				B20100000000000000000063 /* GrokExtTests.swift in Sources */,
 				B20100000000000000000023 /* Codex.swift in Sources */,
 				B20100000000000000000024 /* ClaudeCode.swift in Sources */,
 				B20100000000000000000025 /* Antigravity.swift in Sources */,
