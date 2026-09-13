@@ -28,6 +28,10 @@ final class HarnessQuotaTests: XCTestCase {
     }
 
     func testCountdownDescriptionFormatting() {
+        let previous = L10n.languageCode
+        L10n.languageCode = "zh-Hans"
+        defer { L10n.languageCode = previous }
+
         let now = Date()
         let futureDate = now.addingTimeInterval(3600 * 2 + 60 * 15) // 2h 15m
         let window = HarnessQuotaWindow(id: "test", title: "Session", usedPercent: 50.0, resetsAt: futureDate)

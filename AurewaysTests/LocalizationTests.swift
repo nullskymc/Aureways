@@ -3,6 +3,11 @@ import XCTest
 
 final class LocalizationTests: XCTestCase {
 
+    override func tearDown() {
+        L10n.languageCode = L10n.systemLanguage
+        super.tearDown()
+    }
+
     private func findXCStringsURL() -> URL? {
         let fromFilePath = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
