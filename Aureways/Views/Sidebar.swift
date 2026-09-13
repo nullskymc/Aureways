@@ -29,7 +29,6 @@ struct SidebarView: View {
 
 struct UserProfileFooter: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 9) {
@@ -59,15 +58,16 @@ struct UserProfileFooter: View {
 
             Spacer()
 
-            Button {
-                openSettings()
-            } label: {
+            SettingsLink {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("设置与偏好 (⌘,)")
+            .help("设置与偏好 (⌘,)".localized)
+            .simultaneousGesture(TapGesture().onEnded {
+                AppActivation.prepareForSettings()
+            })
         }
     }
 }

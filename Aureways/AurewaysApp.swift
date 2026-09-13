@@ -57,7 +57,9 @@ struct AurewaysApp: App {
         Window("Aureways", id: AppActivation.mainWindowID) {
             RootView()
                 .environment(model)
+                .environment(\.locale, model.displayLocale)
                 .preferredColorScheme(model.colorScheme)
+                .id(model.appLanguage)
                 .frame(minWidth: 980, minHeight: 640)
         }
         .windowStyle(.automatic)
@@ -65,13 +67,13 @@ struct AurewaysApp: App {
         .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("新对话") {
+                Button("新对话".localized) {
                     model.startNewSession()
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
             CommandGroup(replacing: .appTermination) {
-                Button("关闭窗口") {
+                Button("关闭窗口".localized) {
                     AppActivation.resignToMenuBar()
                 }
                 .keyboardShortcut("q", modifiers: [.command])
@@ -81,12 +83,16 @@ struct AurewaysApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .environment(\.locale, model.displayLocale)
                 .preferredColorScheme(model.colorScheme)
+                .id(model.appLanguage)
         }
 
         MenuBarExtra(isInserted: $showMenuBarExtra) {
             StatusMenuView()
                 .environment(model)
+                .environment(\.locale, model.displayLocale)
+                .id(model.appLanguage)
         } label: {
             MenuBarExtraLabel()
         }

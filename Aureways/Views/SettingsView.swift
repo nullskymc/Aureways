@@ -6,13 +6,13 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettingsPage()
-                .tabItem { Label("通用", systemImage: "gearshape") }
+                .tabItem { Label("通用".localized, systemImage: "gearshape") }
             AgentSettingsPage()
                 .tabItem { Label("Agent", systemImage: "puzzlepiece.extension") }
             WorkspaceSettingsPage()
-                .tabItem { Label("工作区", systemImage: "folder") }
+                .tabItem { Label("工作区".localized, systemImage: "folder") }
             PermissionSettingsPage()
-                .tabItem { Label("权限", systemImage: "checkmark.shield") }
+                .tabItem { Label("权限".localized, systemImage: "checkmark.shield") }
             MCPSettingsPage()
                 .tabItem { Label("MCP", systemImage: "cable.connector") }
         }
@@ -28,22 +28,30 @@ struct GeneralSettingsPage: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("外观") {
-                Picker("主题", selection: $model.appearance) {
-                    Text("跟随系统").tag("system")
-                    Text("浅色").tag("light")
-                    Text("深色").tag("dark")
+            Section("外观".localized) {
+                Picker("主题".localized, selection: $model.appearance) {
+                    Text("跟随系统".localized).tag("system")
+                    Text("浅色".localized).tag("light")
+                    Text("深色".localized).tag("dark")
                 }
-                Toggle("在菜单栏显示图标", isOn: $showMenuBarExtra)
+                Toggle("在菜单栏显示图标".localized, isOn: $showMenuBarExtra)
             }
 
-            Section("新对话默认") {
+            Section("语言".localized) {
+                Picker("界面语言".localized, selection: $model.appLanguage) {
+                    Text("跟随系统".localized).tag(L10n.systemLanguage)
+                    Text("简体中文".localized).tag("zh-Hans")
+                    Text("English").tag("en")
+                }
+            }
+
+            Section("新对话默认".localized) {
                 Picker("Agent", selection: $model.selectedAgentId) {
                     ForEach(model.selectableAgents) { agent in
                         Text(agent.title).tag(agent.id)
                     }
                 }
-                Text("只影响下一条新对话，已打开的会话不会跟着变。")
+                Text("只影响下一条新对话，已打开的会话不会跟着变。".localized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -54,9 +62,9 @@ struct GeneralSettingsPage: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Aureways")
                             .font(.title3.weight(.semibold))
-                        Text("版本 \(AppInfo.version)")
+                        Text("版本 %@".localized(AppInfo.version))
                             .foregroundStyle(.secondary)
-                        Text("macOS 原生 Agent 客户端")
+                        Text("macOS 原生 Agent 客户端".localized)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -64,9 +72,9 @@ struct GeneralSettingsPage: View {
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("关于")
+                Text("关于".localized)
             } footer: {
-                Text("实现 Agent Client Protocol，在本机拉起已安装的命令行 Agent。")
+                Text("实现 Agent Client Protocol，在本机拉起已安装的命令行 Agent。".localized)
             }
         }
         .formStyle(.grouped)
@@ -104,13 +112,13 @@ struct AgentSettingsPage: View {
                     AgentRow(agent: agent)
                 }
             } header: {
-                Text("内置")
+                Text("内置".localized)
             } footer: {
-                Text("登录和密钥由各 Agent 自己的命令行工具管理。点一行设为默认；开关控制是否出现在新建对话。已打开的会话不受影响。")
+                Text("登录和密钥由各 Agent 自己的命令行工具管理。点一行设为默认；开关控制是否出现在新建对话。已打开的会话不受影响。".localized)
             }
 
             if !customAgents.isEmpty {
-                Section("自定义") {
+                Section("自定义".localized) {
                     ForEach(customAgents) { agent in
                         AgentRow(agent: agent)
                     }
@@ -121,7 +129,7 @@ struct AgentSettingsPage: View {
                 Button {
                     isShowingCustomSheet = true
                 } label: {
-                    Label("添加自定义 Agent", systemImage: "plus")
+                    Label("添加自定义 Agent".localized, systemImage: "plus")
                 }
             }
         }
@@ -155,7 +163,7 @@ private struct AgentRow: View {
                 HStack(spacing: 6) {
                     Text(agent.title)
                         .font(.system(size: 13, weight: .medium))
-                    Text(agent.builtIn ? "内置" : "自定义")
+                    Text(agent.builtIn ? "内置".localized : "自定义".localized)
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Palette.accent)
                         .padding(.horizontal, 5)
@@ -177,7 +185,7 @@ private struct AgentRow: View {
             if isDefault {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Palette.moss)
-                    .help("新建对话默认使用此 Agent")
+                    .help("新建对话默认使用此 Agent".localized)
             }
 
             Toggle("", isOn: Binding(
@@ -187,7 +195,7 @@ private struct AgentRow: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
-            .help(isEnabled ? "停用后不会出现在新建对话的 Agent 选择里" : "重新启用此 Agent")
+            .help(isEnabled ? "停用后不会出现在新建对话的 Agent 选择里".localized : "重新启用此 Agent".localized)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
@@ -213,21 +221,21 @@ private struct AgentRow: View {
                 .frame(width: 8, height: 8)
                 .overlay(Circle().strokeBorder(.background, lineWidth: 1.5))
         }
-        .help(isAvailable ? "已找到对应的命令行工具" : "未找到对应的命令行工具")
+        .help(isAvailable ? "已找到对应的命令行工具".localized : "未找到对应的命令行工具".localized)
     }
 
     @ViewBuilder
     private var contextMenu: some View {
-        Button("设为默认") {
+        Button("设为默认".localized) {
             model.selectedAgentId = agent.id
         }
-        Button("复制启动命令") {
+        Button("复制启动命令".localized) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(agent.launchLine, forType: .string)
         }
         if !agent.builtIn {
             Divider()
-            Button("移除", role: .destructive) {
+            Button("移除".localized, role: .destructive) {
                 model.removeAgent(agent)
             }
         }
@@ -255,7 +263,7 @@ struct WorkspaceSettingsPage: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(Palette.moss)
                         }
-                        Button("移除", role: .destructive) {
+                        Button("移除".localized, role: .destructive) {
                             model.removeWorkspace(workspace.path)
                         }
                     }
@@ -264,12 +272,12 @@ struct WorkspaceSettingsPage: View {
                         model.selectWorkspace(workspace.path)
                     }
                 }
-                LabeledContent("新对话默认路径", value: model.workspacePath)
-                Button("添加工作区…", action: model.addWorkspace)
+                LabeledContent("新对话默认路径".localized, value: model.workspacePath)
+                Button("添加工作区…".localized, action: model.addWorkspace)
             } header: {
-                Text("已添加的工作区")
+                Text("已添加的工作区".localized)
             } footer: {
-                Text("只显示你添加的项目。更改默认路径不会影响已打开的会话。")
+                Text("只显示你添加的项目。更改默认路径不会影响已打开的会话。".localized)
             }
         }
         .formStyle(.grouped)
@@ -283,9 +291,9 @@ struct PermissionSettingsPage: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("工具权限") {
-                Toggle("自动批准工具权限", isOn: $model.autoApprove)
-                Text("开启后，Agent 读写文件或执行命令时不再弹窗确认。部分 Agent 会把这项带到自己的会话里；其它选项可在会话信息中调整。")
+            Section("工具权限".localized) {
+                Toggle("自动批准工具权限".localized, isOn: $model.autoApprove)
+                Text("开启后，Agent 读写文件或执行命令时不再弹窗确认。部分 Agent 会把这项带到自己的会话里；其它选项可在会话信息中调整。".localized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -318,26 +326,26 @@ struct MCPSettingsPage: View {
         Form {
             Section {
                 if model.mcpServers.isEmpty {
-                    Text("还没有配置 MCP 服务器。")
+                    Text("还没有配置 MCP 服务器。".localized)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(model.mcpServers) { server in
                         mcpRow(server)
                     }
                 }
-                Button("添加 MCP 服务器…") {
+                Button("添加 MCP 服务器…".localized) {
                     isAdding = true
                 }
             } header: {
-                Text("发给 Agent 的服务器")
+                Text("发给 Agent 的服务器".localized)
             } footer: {
-                Text("新建或恢复会话时写入 session/new 的 mcpServers。stdio 是规范基线；HTTP / SSE 仅当当前 Agent 声明 mcpCapabilities.http / sse 时才会发送。")
+                Text("新建或恢复会话时写入 session/new 的 mcpServers。stdio 是规范基线；HTTP / SSE 仅当当前 Agent 声明 mcpCapabilities.http / sse 时才会发送。".localized)
             }
 
             if let caps = agentCaps {
-                Section("当前 Agent 能力") {
-                    LabeledContent("HTTP") { Text(caps.http ? "支持" : "不支持") }
-                    LabeledContent("SSE") { Text(caps.sse ? "支持" : "不支持") }
+                Section("当前 Agent 能力".localized) {
+                    LabeledContent("HTTP") { Text(caps.http ? "支持".localized : "不支持".localized) }
+                    LabeledContent("SSE") { Text(caps.sse ? "支持".localized : "不支持".localized) }
                 }
             }
 
@@ -354,9 +362,9 @@ struct MCPSettingsPage: View {
                         }
                     }
                 } header: {
-                    Text("Agent 回传")
+                    Text("Agent 回传".localized)
                 } footer: {
-                    Text("部分 Agent 会在 session/new、session/load 或 session/list 里带回已连接的 MCP 服务器。这里只读展示。")
+                    Text("部分 Agent 会在 session/new、session/load 或 session/list 里带回已连接的 MCP 服务器。这里只读展示。".localized)
                 }
             }
         }
@@ -389,14 +397,14 @@ struct MCPSettingsPage: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
-                Text(server.summary.isEmpty ? "未填写命令或地址" : server.summary)
+                Text(server.summary.isEmpty ? "未填写命令或地址".localized : server.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .textSelection(.enabled)
             }
             Spacer()
-            Button("移除", role: .destructive) {
+            Button("移除".localized, role: .destructive) {
                 model.mcpServers.removeAll { $0.id == server.id }
             }
         }
@@ -423,18 +431,18 @@ private struct AddMCPServerSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("添加 MCP 服务器")
+            Text("添加 MCP 服务器".localized)
                 .font(.headline)
             Form {
-                TextField("名称", text: $name)
-                Picker("传输", selection: $transport) {
+                TextField("名称".localized, text: $name)
+                Picker("传输".localized, selection: $transport) {
                     Text("stdio").tag(McpServerConfig.Transport.stdio)
                     Text("HTTP").tag(McpServerConfig.Transport.http)
                     Text("SSE").tag(McpServerConfig.Transport.sse)
                 }
                 if transport == .stdio {
-                    TextField("启动命令", text: $command)
-                        .help("可带参数，例如 npx -y @modelcontextprotocol/server-filesystem /path")
+                    TextField("启动命令".localized, text: $command)
+                        .help("可带参数，例如 npx -y @modelcontextprotocol/server-filesystem /path".localized)
                 } else {
                     TextField("URL", text: $url)
                 }
@@ -442,9 +450,9 @@ private struct AddMCPServerSheet: View {
             .formStyle(.grouped)
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
+                Button("取消".localized) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("添加") { save() }
+                Button("添加".localized) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
             }

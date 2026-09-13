@@ -9,23 +9,23 @@ struct CustomAgentSheet: View {
     var body: some View {
         @Bindable var model = model
         VStack(alignment: .leading, spacing: 14) {
-            Text("添加自定义 Agent")
+            Text("添加自定义 Agent".localized)
                 .font(.title3.weight(.semibold))
-            Text("用命令行启动任意 Agent。名称可选，命令与参数以空格分隔。")
+            Text("用命令行启动任意 Agent。名称可选，命令与参数以空格分隔。".localized)
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            TextField("名称", text: $model.customTitle)
+            TextField("名称".localized, text: $model.customTitle)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("启动命令", text: $model.customCommand)
+            TextField("启动命令".localized, text: $model.customCommand)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
 
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
-                Button("添加") {
+                Button("取消".localized) { dismiss() }
+                Button("添加".localized) {
                     model.addCustomAgent()
                     dismiss()
                 }

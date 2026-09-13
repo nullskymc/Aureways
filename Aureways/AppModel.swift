@@ -35,6 +35,13 @@ final class AppModel {
             UserDefaults.standard.set(appearance, forKey: "appAppearance")
         }
     }
+    /// `system` / `zh-Hans` / `en`. Drives `L10n` and SwiftUI `locale`.
+    var appLanguage: String = L10n.languageCode {
+        didSet {
+            guard oldValue != appLanguage else { return }
+            L10n.languageCode = appLanguage
+        }
+    }
     var autoApprove = false
     var inspectorOpen = false
     var paneTabs: [PaneTab] = [.browser]
@@ -72,6 +79,8 @@ final class AppModel {
         default: return nil
         }
     }
+
+    var displayLocale: Locale { L10n.locale }
 
     var selectedSession: ChatSession? {
         sessions.first(where: { $0.id == selectedSessionID })

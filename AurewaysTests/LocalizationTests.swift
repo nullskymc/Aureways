@@ -33,6 +33,25 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(L10n.tr(nonExistent), nonExistent)
     }
 
+    func testLanguageOverrideSelectsCatalog() {
+        let previous = L10n.languageCode
+        defer { L10n.languageCode = previous }
+
+        guard Bundle.main.path(forResource: "en", ofType: "lproj") != nil else {
+            // Test host without compiled catalogs still has to accept the setter.
+            L10n.languageCode = "en"
+            XCTAssertEqual(L10n.languageCode, "en")
+            return
+        }
+
+        L10n.languageCode = "en"
+        XCTAssertEqual(L10n.tr("设置"), "Settings")
+        L10n.languageCode = "zh-Hans"
+        XCTAssertEqual(L10n.tr("设置"), "设置")
+        L10n.languageCode = "not-a-locale"
+        XCTAssertEqual(L10n.languageCode, L10n.systemLanguage)
+    }
+
     func testLocalizableXCStringsIntegrity() throws {
         guard let fileURL = findXCStringsURL() else {
             XCTFail("Localizable.xcstrings not found")

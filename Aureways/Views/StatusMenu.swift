@@ -270,7 +270,6 @@ private struct StatusMenuQuotaBlock: View {
 struct StatusMenuView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
     @State private var focusedAgentId = StatusMenuFocus.overview
 
     var body: some View {
@@ -612,20 +611,21 @@ struct StatusMenuView: View {
 
     private var footer: some View {
         HStack(spacing: 0) {
-            Button {
-                openSettings()
-            } label: {
+            SettingsLink {
                 Image(systemName: "gearshape")
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .help("设置")
+            .help("设置".localized)
             .modifier(StatusMenuHoverChrome(
                 isSelected: false,
                 selectedFill: .clear,
                 cornerRadius: 7
             ))
+            .simultaneousGesture(TapGesture().onEnded {
+                AppActivation.prepareForSettings()
+            })
 
             Spacer()
 
@@ -716,6 +716,16 @@ enum AppActivation {
         if mainWindows.isEmpty {
             NSApp.setActivationPolicy(.accessory)
         }
+    }
+
+    /// Settings 在 `.accessory`（只留菜单栏）时 `openSettings()` 是空操作。
+    /// 先回到 regular 并激活，再用 `SettingsLink` 打开。
+    @MainActor
+    static func prepareForSettings() {
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @MainActor
