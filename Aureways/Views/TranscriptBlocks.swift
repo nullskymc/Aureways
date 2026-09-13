@@ -350,15 +350,15 @@ private struct ActivityCard: View {
     private var summary: String {
         let tools = toolCalls.count
         if isBusy {
-            if tools > 0 { return "正在思考并使用工具" }
-            return "正在思考"
+            if tools > 0 { return "正在思考并使用工具".localized }
+            return "正在思考".localized
         }
         var parts: [String] = []
-        if thoughtCount > 0 { parts.append("已思考") }
-        if tools > 0 { parts.append("执行工具 \(tools) 次") }
-        if failedCount > 0 { parts.append("\(failedCount) 失败") }
+        if thoughtCount > 0 { parts.append("已思考".localized) }
+        if tools > 0 { parts.append("执行工具 %lld 次".localized(tools)) }
+        if failedCount > 0 { parts.append("%lld 失败".localized(failedCount)) }
         if let duration = durationText { parts.append(duration) }
-        if parts.isEmpty { return "工作记录" }
+        if parts.isEmpty { return "工作记录".localized }
         return parts.joined(separator: " · ")
     }
 

@@ -23,7 +23,7 @@ struct PlanApprovalCard: View {
                 .foregroundStyle(Palette.gold)
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 2) {
-                Text("批准计划")
+                Text("批准计划".localized)
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(.primary)
                 if let path = prompt.filePath {
@@ -49,7 +49,7 @@ struct PlanApprovalCard: View {
     @ViewBuilder
     private var bodyPreview: some View {
         if prompt.isEmpty {
-            Text("尚未写入计划。仍可批准并开始实现，或请 agent 继续规划。")
+            Text("尚未写入计划。仍可批准并开始实现，或请 agent 继续规划。".localized)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -63,23 +63,23 @@ struct PlanApprovalCard: View {
 
     private var actions: some View {
         HStack(spacing: 8) {
-            Button("放弃") {
+            Button("放弃".localized) {
                 session.resumePlanApproval(.quit)
             }
             .buttonStyle(.glass)
-            .help("放弃计划并退出计划模式")
-            Button("要修改") {
+            .help("放弃计划并退出计划模式".localized)
+            Button("要修改".localized) {
                 session.resumePlanApproval(.requestChanges)
             }
             .buttonStyle(.glass)
-            .help("留在计划模式，在输入框里说明要改什么")
+            .help("留在计划模式，在输入框里说明要改什么".localized)
             Spacer()
-            Button("批准") {
+            Button("批准".localized) {
                 session.resumePlanApproval(.approved(feedback: ""))
             }
             .buttonStyle(.glass)
             .keyboardShortcut(.defaultAction)
-            .help("批准计划并开始实现 (Return)")
+            .help("批准计划并开始实现 (Return)".localized)
         }
     }
 }
@@ -110,7 +110,9 @@ struct UserQuestionCard: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Palette.gold)
                 .padding(.top, 1)
-            Text(prompt.questions.count == 1 ? "请选择" : "请回答 \(prompt.questions.count) 个问题")
+            Text(prompt.questions.count == 1
+                 ? "请选择".localized
+                 : "请回答 %lld 个问题".localized(prompt.questions.count))
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,13 +188,13 @@ struct UserQuestionCard: View {
 
     private var actions: some View {
         HStack {
-            Button("跳过") {
+            Button("跳过".localized) {
                 session.resumeUserQuestion(.skipInterview)
             }
             .buttonStyle(.glass)
             .keyboardShortcut(.cancelAction)
             Spacer()
-            Button("确认") {
+            Button("确认".localized) {
                 var mapped: [UUID: [String]] = [:]
                 for question in prompt.questions {
                     mapped[question.id] = Array(selections[question.id] ?? [])

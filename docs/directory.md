@@ -27,6 +27,8 @@ Aureways/                          # 仓库根
 │       └── Aureways.xcscheme
 ├── Aureways/                      # 应用源码（bundle id: ai.aureways.client）
 │   ├── AurewaysApp.swift          # @main，WindowGroup + Settings + 退出清理
+│   ├── Localization.swift         # L10n / String.localized
+│   ├── Localizable.xcstrings      # zh-Hans 源文案 + en 翻译
 │   ├── AppModel.swift             # 应用状态
 │   ├── AppModel+Workspace.swift   # 工作区目录
 │   ├── AppModel+Sessions.swift    # 会话列表 / 发送 / 关闭 / 删除

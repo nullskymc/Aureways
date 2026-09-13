@@ -152,8 +152,8 @@ extension AppModel {
     func prompt(_ session: ChatSession, message: OutgoingMessage) async {
         guard let acpId = session.acpSessionId, session.phase.isReady else { return }
         guard let connection = await liveConnection(for: session.agent) else {
-            fail(session, ACPError.transportClosed("连接已断开"))
-            session.appendStatus("连接已断开，发送消息可重新连接")
+            fail(session, ACPError.transportClosed("连接已断开".localized))
+            session.appendStatus("连接已断开，发送消息可重新连接".localized)
             session.transcriptRevision += 1
             return
         }

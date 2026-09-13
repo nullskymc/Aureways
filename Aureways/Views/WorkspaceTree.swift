@@ -236,12 +236,12 @@ struct SessionNavItem: View {
     }
 
     private var sessionStatus: String {
-        if session.isStreaming { return "生成中" }
+        if session.isStreaming { return "生成中".localized }
         switch session.phase {
-        case .ready: return "已连接"
-        case .failed: return "失败"
-        case .connecting: return "连接中"
-        case .idle: return "已断开"
+        case .ready: return "已连接".localized
+        case .failed: return "失败".localized
+        case .connecting: return "连接中".localized
+        case .idle: return "已断开".localized
         }
     }
 

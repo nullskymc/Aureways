@@ -56,7 +56,7 @@ struct HarnessQuotaWindow: Identifiable, Sendable, Codable, Hashable {
         let now = Date()
         let interval = resetsAt.timeIntervalSince(now)
         if interval <= 0 {
-            return "已重置"
+            return "已重置".localized
         }
         let totalMinutes = Int(ceil(interval / 60.0))
         let days = totalMinutes / 1440
@@ -64,11 +64,11 @@ struct HarnessQuotaWindow: Identifiable, Sendable, Codable, Hashable {
         let minutes = totalMinutes % 60
 
         if days > 0 {
-            return "\(days) 天 \(hours) 小时后重置"
+            return "%1$lld 天 %2$lld 小时后重置".localized(days, hours)
         } else if hours > 0 {
-            return "\(hours) 小时 \(minutes) 分后重置"
+            return "%1$lld 小时 %2$lld 分后重置".localized(hours, minutes)
         } else {
-            return "\(max(1, minutes)) 分钟后重置"
+            return "%lld 分钟后重置".localized(max(1, minutes))
         }
     }
 }

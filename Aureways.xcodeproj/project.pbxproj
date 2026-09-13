@@ -110,6 +110,10 @@
 		B20100000000000000000061 /* ToolCallNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000061 /* ToolCallNormalizationTests.swift */; };
 		B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000060 /* MarkdownStreamTests.swift */; };
 		B10100000000000000000099 /* FileTreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000099 /* FileTreeService.swift */; };
+		B10100000000000000000070 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000070 /* Localization.swift */; };
+		B10100000000000000000071 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000071 /* Localizable.xcstrings */; };
+		B20100000000000000000070 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000070 /* Localization.swift */; };
+		B20100000000000000000072 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000072 /* LocalizationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -197,6 +201,9 @@
 		F20100000000000000000060 /* MarkdownStreamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownStreamTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000061 /* ToolCallNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalizationTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000099 /* FileTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/FileTreeService.swift; sourceTree = "<group>"; };
+		F10100000000000000000070 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		F10100000000000000000071 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		F20100000000000000000072 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -250,6 +257,8 @@
 				G10100000000000000000003 /* Views */,
 				F1010000000000000000000C /* Assets.xcassets */,
 				F10100000000000000000040 /* AppIcon.icon */,
+				F10100000000000000000070 /* Localization.swift */,
+				F10100000000000000000071 /* Localizable.xcstrings */,
 			);
 			path = Aureways;
 			sourceTree = "<group>";
@@ -319,6 +328,7 @@
 				F20100000000000000000061 /* ToolCallNormalizationTests.swift */,
 				F20100000000000000000062 /* TextDiffTests.swift */,
 				F20100000000000000000063 /* GrokExtTests.swift */,
+				F20100000000000000000072 /* LocalizationTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -426,6 +436,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = G10100000000000000000000;
 			packageReferences = (
@@ -449,6 +460,7 @@
 			files = (
 				B1010000000000000000000C /* Assets.xcassets in Resources */,
 				B10100000000000000000040 /* AppIcon.icon in Resources */,
+				B10100000000000000000071 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,6 +472,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10100000000000000000099 /* FileTreeService.swift in Sources */,
+				B10100000000000000000070 /* Localization.swift in Sources */,
 				B10100000000000000000001 /* AurewaysApp.swift in Sources */,
 				B10100000000000000000002 /* AppModel.swift in Sources */,
 				B10100000000000000000003 /* JSONRPC.swift in Sources */,
@@ -549,6 +562,8 @@
 				B20100000000000000000021 /* HarnessRuntime.swift in Sources */,
 				B20100000000000000000022 /* GrokBuild.swift in Sources */,
 				B20100000000000000000056 /* GrokExt.swift in Sources */,
+				B20100000000000000000070 /* Localization.swift in Sources */,
+				B20100000000000000000072 /* LocalizationTests.swift in Sources */,
 				B20100000000000000000063 /* GrokExtTests.swift in Sources */,
 				B20100000000000000000023 /* Codex.swift in Sources */,
 				B20100000000000000000024 /* ClaudeCode.swift in Sources */,

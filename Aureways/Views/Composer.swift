@@ -375,16 +375,16 @@ struct ComposerCard: View {
         if let s = currentSession {
             switch s.phase {
             case .connecting:
-                return "正在启动 \(s.agent.title)..."
+                return "正在启动 %@...".localized(s.agent.title)
             case .idle:
-                return "发送以恢复 \(s.agent.title) 会话..."
+                return "发送以恢复 %@ 会话...".localized(s.agent.title)
             case .failed:
-                return "启动失败，发送以重试 \(s.agent.title)..."
+                return "启动失败，发送以重试 %@...".localized(s.agent.title)
             case .ready:
-                return "向 \(s.agent.title) 发送消息..."
+                return "向 %@ 发送消息...".localized(s.agent.title)
             }
         }
-        return "向 \(model.selectedAgent.title) 发送消息..."
+        return "向 %@ 发送消息...".localized(model.selectedAgent.title)
     }
 
     private var displayedAgent: AgentProfile {

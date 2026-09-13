@@ -110,20 +110,20 @@ struct HarnessQuotaIndicatorView: View {
 
     private var tooltipText: String {
         if let snapshot = snapshot {
-            var lines = ["\(snapshot.providerTitle) 配额情况"]
+            var lines = ["%@ 配额情况".localized(snapshot.providerTitle)]
             if let email = snapshot.accountEmail {
-                lines.append("账号: \(email)")
+                lines.append("账号: %@".localized(email))
             }
             if let urgent = snapshot.mostUrgentWindow {
-                lines.append("\(urgent.title): 剩余 \(Int(round(urgent.remainingPercent)))% (已用 \(Int(round(urgent.usedPercent)))%)")
+                lines.append("%1$@: 剩余 %2$lld%% (已用 %3$lld%%)".localized(urgent.title, Int(round(urgent.remainingPercent)), Int(round(urgent.usedPercent))))
                 if let reset = urgent.countdownDescription {
                     lines.append(reset)
                 }
             }
-            lines.append("点击查看完整配额详情")
+            lines.append("点击查看完整配额详情".localized)
             return lines.joined(separator: "\n")
         }
-        return "点击查看并刷新 \(agent?.title ?? "Agent") 配额"
+        return "点击查看并刷新 %@ 配额".localized(agent?.title ?? "Agent")
     }
 }
 
@@ -534,13 +534,13 @@ struct HarnessQuotaPopoverView: View {
     private var updatedTimeString: String {
         let interval = Date().timeIntervalSince(snapshot.updatedAt)
         if interval < 60 {
-            return "刚刚更新"
+            return "刚刚更新".localized
         } else if interval < 3600 {
             let mins = Int(interval / 60)
-            return "\(mins) 分钟前更新"
+            return "%lld 分钟前更新".localized(mins)
         } else {
             let hours = Int(interval / 3600)
-            return "\(hours) 小时前更新"
+            return "%lld 小时前更新".localized(hours)
         }
     }
 }

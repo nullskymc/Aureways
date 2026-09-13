@@ -17,11 +17,11 @@ final class InteractiveTerminal: NSObject {
     var onExited: ((Int32?) -> Void)?
 
     var title: String {
-        guard exited else { return "终端 \(index)" }
+        guard exited else { return "终端 %lld".localized(index) }
         if let code = exitCode {
-            return "终端 \(index)（已退出 \(code)）"
+            return "终端 %1$lld（已退出 %2$lld）".localized(index, code)
         }
-        return "终端 \(index)（已退出）"
+        return "终端 %lld（已退出）".localized(index)
     }
 
     init(index: Int, cwd: String) {

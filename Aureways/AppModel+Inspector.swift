@@ -34,10 +34,10 @@ extension AppModel {
 
     func paneTabTitle(_ tab: PaneTab) -> String {
         switch tab {
-        case .browser: return "文件"
-        case .info: return "信息"
+        case .browser: return "文件".localized
+        case .info: return "信息".localized
         case .file(let path): return URL(fileURLWithPath: path).lastPathComponent
-        case .terminal(let id): return terminalTitles[id] ?? "终端"
+        case .terminal(let id): return terminalTitles[id] ?? "终端".localized
         }
     }
 
@@ -62,15 +62,15 @@ extension AppModel {
         let url = URL(fileURLWithPath: path)
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
               let size = (attrs[.size] as? NSNumber)?.int64Value else {
-            errorMessage = "无法打开文件：\(url.lastPathComponent)"
+            errorMessage = "无法打开文件：%@".localized(url.lastPathComponent)
             return
         }
         guard size <= Self.maxEditableFileSize else {
-            errorMessage = "文件超过 2MB，暂不支持打开"
+            errorMessage = "文件超过 2MB，暂不支持打开".localized
             return
         }
         guard let data = try? Data(contentsOf: url), !data.contains(0), let text = String(data: data, encoding: .utf8) else {
-            errorMessage = "无法打开：仅支持 UTF-8 文本文件"
+            errorMessage = "无法打开：仅支持 UTF-8 文本文件".localized
             return
         }
         var state = FileTabState()
@@ -181,7 +181,7 @@ extension AppModel {
             pendingSavePath = nil
             pendingSaveContent = nil
         } catch {
-            errorMessage = "保存失败：\(error.localizedDescription)"
+            errorMessage = "保存失败：%@".localized(error.localizedDescription)
         }
     }
 

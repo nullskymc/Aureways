@@ -40,7 +40,7 @@ struct PermissionCard: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .liquidGlassCapsule(interactive: false)
-                    .help("该请求来自另一个会话")
+                    .help("该请求来自另一个会话".localized)
             }
         }
     }
@@ -108,12 +108,12 @@ struct PermissionCard: View {
 
     private var footer: some View {
         HStack {
-            Button("取消") {
+            Button("取消".localized) {
                 session.resumePermission(.cancelled)
             }
             .buttonStyle(.glass)
             .keyboardShortcut(.cancelAction)
-            .help("拒绝本次请求 (Esc)")
+            .help("拒绝本次请求 (Esc)".localized)
             Spacer()
         }
     }

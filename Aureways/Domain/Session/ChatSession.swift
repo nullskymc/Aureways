@@ -19,11 +19,11 @@ struct ActivityRun: Sendable, Equatable {
 }
 
 enum SessionTitle {
-    static let placeholder = "新对话"
+    static var placeholder: String { "新对话".localized }
     static let maxLength = 42
 
     static func isPlaceholder(_ title: String) -> Bool {
-        title == placeholder || title.hasPrefix("新 ") || title.hasPrefix("New ")
+        title == "新对话" || title == "New Chat" || title.hasPrefix("新 ") || title.hasPrefix("New ")
     }
 
     static func derived(from text: String) -> String {

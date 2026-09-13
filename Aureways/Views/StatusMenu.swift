@@ -259,9 +259,9 @@ private struct StatusMenuQuotaBlock: View {
 
     private var updatedLabel: String {
         let interval = Date().timeIntervalSince(snapshot.updatedAt)
-        if interval < 60 { return "刚刚更新" }
-        if interval < 3600 { return "\(Int(interval / 60)) 分钟前更新" }
-        return "\(Int(interval / 3600)) 小时前更新"
+        if interval < 60 { return "刚刚更新".localized }
+        if interval < 3600 { return "%lld 分钟前更新".localized(Int(interval / 60)) }
+        return "%lld 小时前更新".localized(Int(interval / 3600))
     }
 }
 
@@ -649,17 +649,17 @@ struct StatusMenuView: View {
     }
 
     private func sessionStatus(_ session: ChatSession) -> String {
-        if session.isStreaming { return "生成中" }
+        if session.isStreaming { return "生成中".localized }
         if session.pendingPermission != nil
             || session.pendingPlanApproval != nil
             || session.pendingUserQuestion != nil {
-            return "等待确认"
+            return "等待确认".localized
         }
         switch session.phase {
-        case .connecting: return "连接中"
-        case .ready: return "就绪"
-        case .idle: return "已断开"
-        case .failed: return "失败"
+        case .connecting: return "连接中".localized
+        case .ready: return "就绪".localized
+        case .idle: return "已断开".localized
+        case .failed: return "失败".localized
         }
     }
 

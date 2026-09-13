@@ -12,7 +12,7 @@ struct FileVisual {
             return FileVisual(
                 icon: isExpanded ? "folder.fill" : "folder",
                 color: Palette.accent,
-                language: "目录"
+                language: "目录".localized
             )
         }
         let url = URL(fileURLWithPath: path)
@@ -26,19 +26,19 @@ struct FileVisual {
         } else if ["md", "markdown"].contains(ext) {
             return FileVisual(icon: "text.book.closed.fill", color: Palette.sky, language: "Markdown")
         } else if ["txt", "rtf"].contains(ext) {
-            return FileVisual(icon: "doc.text.fill", color: Palette.sky, language: "文本")
+            return FileVisual(icon: "doc.text.fill", color: Palette.sky, language: "文本".localized)
         } else if ["json"].contains(ext) {
             return FileVisual(icon: "curlybraces", color: Palette.gold, language: "JSON")
         } else if ["yaml", "yml"].contains(ext) {
             return FileVisual(icon: "curlybraces", color: Palette.gold, language: "YAML")
         } else if ["plist", "toml", "xml"].contains(ext) {
-            return FileVisual(icon: "curlybraces", color: Palette.gold, language: "配置")
+            return FileVisual(icon: "curlybraces", color: Palette.gold, language: "配置".localized)
         } else if ["sh", "zsh", "bash", "command"].contains(ext) {
             return FileVisual(icon: "terminal.fill", color: Palette.moss, language: "Shell")
         } else if name == "makefile" {
             return FileVisual(icon: "terminal.fill", color: Palette.moss, language: "Makefile")
         } else if ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "icns", "heic"].contains(ext) {
-            return FileVisual(icon: "photo.fill", color: .purple, language: "图片")
+            return FileVisual(icon: "photo.fill", color: .purple, language: "图片".localized)
         } else if ["html", "htm"].contains(ext) {
             return FileVisual(icon: "globe", color: .cyan, language: "HTML")
         } else if ["css", "scss", "less"].contains(ext) {
@@ -58,7 +58,7 @@ struct FileVisual {
         } else if ["c", "cpp", "h", "hpp", "m", "mm"].contains(ext) {
             return FileVisual(icon: "chevron.left.forwardslash.chevron.right", color: .indigo, language: "C/C++")
         } else {
-            return FileVisual(icon: "doc.text.fill", color: Color.secondary.opacity(0.8), language: "文本")
+            return FileVisual(icon: "doc.text.fill", color: Color.secondary.opacity(0.8), language: "文本".localized)
         }
     }
 }
