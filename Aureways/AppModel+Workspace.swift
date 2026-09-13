@@ -44,8 +44,8 @@ extension AppModel {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.directoryURL = URL(fileURLWithPath: workspacePath)
-        panel.message = "选择要加入工作区目录的文件夹"
-        panel.prompt = "添加"
+        panel.message = "选择要加入工作区目录的文件夹".localized
+        panel.prompt = "添加".localized
         guard panel.runModal() == .OK else { return }
         let paths = panel.urls.map { WorkspaceRecord.normalized($0.path) }.filter { !$0.isEmpty }
         guard let last = paths.last else { return }

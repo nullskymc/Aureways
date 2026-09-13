@@ -410,7 +410,7 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         } ?? choices.first?.id
         return SessionConfigOption(
             id: "reasoning_effort",
-            name: "推理强度",
+            name: "推理强度".localized,
             category: "thought_level",
             value: selected.map(JSONValue.string),
             options: choices

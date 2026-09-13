@@ -25,57 +25,63 @@ struct InspectorPaneView: View {
                 .frame(width: 1)
                 .allowsHitTesting(false)
         }
-        .alert("文件已被外部修改", isPresented: Binding(
+        .alert("文件已被外部修改".localized, isPresented: Binding(
             get: { model.pendingSavePath != nil },
             set: { if !$0 { model.cancelPendingSave() } }
         )) {
-            Button("仍然覆盖") {
+            Button("仍然覆盖".localized) {
                 if let path = model.pendingSavePath, let content = model.pendingSaveContent {
                     model.writeFileTab(path: path, content: content)
                 } else {
                     model.cancelPendingSave()
                 }
             }
-            Button("放弃我的修改", role: .destructive) {
+            Button("放弃我的修改".localized, role: .destructive) {
                 if let path = model.pendingSavePath {
                     model.cancelPendingSave()
                     model.reloadFileTab(path)
                 }
             }
-            Button("取消", role: .cancel) {
+            Button("取消".localized, role: .cancel) {
                 model.cancelPendingSave()
             }
         } message: {
-            Text("“\(model.pendingSavePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 在你打开后被外部修改过，保存会覆盖新内容。")
+            Text("“%@” 在你打开后被外部修改过，保存会覆盖新内容。".localized(
+                model.pendingSavePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+            ))
         }
-        .alert("有未保存的修改", isPresented: Binding(
+        .alert("有未保存的修改".localized, isPresented: Binding(
             get: { model.pendingClosePath != nil },
             set: { if !$0 { model.pendingClosePath = nil } }
         )) {
-            Button("保存并关闭") {
+            Button("保存并关闭".localized) {
                 model.resolvePendingCloseFileTab(save: true)
             }
-            Button("不保存", role: .destructive) {
+            Button("不保存".localized, role: .destructive) {
                 model.resolvePendingCloseFileTab(save: false)
             }
-            Button("取消", role: .cancel) {
+            Button("取消".localized, role: .cancel) {
                 model.pendingClosePath = nil
             }
         } message: {
-            Text("“\(model.pendingClosePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 还有未保存的修改。")
+            Text("“%@” 还有未保存的修改。".localized(
+                model.pendingClosePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+            ))
         }
-        .alert("重新载入会丢失未保存的修改", isPresented: Binding(
+        .alert("重新载入会丢失未保存的修改".localized, isPresented: Binding(
             get: { model.pendingReloadPath != nil },
             set: { if !$0 { model.pendingReloadPath = nil } }
         )) {
-            Button("重新载入", role: .destructive) {
+            Button("重新载入".localized, role: .destructive) {
                 model.confirmPendingReload()
             }
-            Button("取消", role: .cancel) {
+            Button("取消".localized, role: .cancel) {
                 model.pendingReloadPath = nil
             }
         } message: {
-            Text("“\(model.pendingReloadPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "")” 有未保存的修改，从磁盘重新载入会丢弃它们。")
+            Text("“%@” 有未保存的修改，从磁盘重新载入会丢弃它们。".localized(
+                model.pendingReloadPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
+            ))
         }
     }
 
@@ -114,7 +120,7 @@ struct InfoInspectorTab: View {
                         Text(session?.agent.title ?? "Aureways")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.primary)
-                        Text(session == nil ? "尚未打开会话" : "当前会话")
+                        Text(session == nil ? "尚未打开会话".localized : "当前会话".localized)
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                     }
@@ -133,21 +139,21 @@ struct InfoInspectorTab: View {
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
-                    infoRow(title: "客户端", value: "Aureways \(AppInfo.version)")
+                    infoRow(title: "客户端".localized, value: "Aureways \(AppInfo.version)")
 
                     if let s = session {
-                        infoRow(title: "当前 Agent", value: s.agent.title)
+                        infoRow(title: "当前 Agent".localized, value: s.agent.title)
                         if !s.agent.subtitle.isEmpty, s.agent.subtitle != s.agent.title {
-                            infoRow(title: "来源", value: s.agent.subtitle)
+                            infoRow(title: "来源".localized, value: s.agent.subtitle)
                         }
-                        infoRow(title: "启动命令", value: s.agent.launchLine)
-                        infoRow(title: "工作区", value: s.cwd)
-                        infoRow(title: "会话 ID", value: s.acpSessionId ?? "尚未建立")
+                        infoRow(title: "启动命令".localized, value: s.agent.launchLine)
+                        infoRow(title: "工作区".localized, value: s.cwd)
+                        infoRow(title: "会话 ID".localized, value: s.acpSessionId ?? "尚未建立".localized)
                         if let mode = s.currentModeId, !mode.isEmpty {
-                            infoRow(title: "当前模式", value: s.modeChoices.first(where: { $0.id == mode })?.name ?? mode)
+                            infoRow(title: "当前模式".localized, value: s.modeChoices.first(where: { $0.id == mode })?.name ?? mode)
                         }
                         if let usage = s.usage {
-                            infoRow(title: "上下文", value: usageLabel(usage))
+                            infoRow(title: "上下文".localized, value: usageLabel(usage))
                             usageBar(usage)
                         }
                         if !s.reportedMcpServers.isEmpty {
@@ -162,10 +168,10 @@ struct InfoInspectorTab: View {
                 .background(Palette.badgeBg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 if let s = session, s.phase.isReady, !s.configOptions.isEmpty {
-                    Text("会话选项")
+                    Text("会话选项".localized)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    Text("由当前 Agent 提供，只作用于本会话。")
+                    Text("由当前 Agent 提供，只作用于本会话。".localized)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 10) {

@@ -14,29 +14,29 @@ struct RootView: View {
             MainWorkspaceView()
         }
         .navigationSplitViewStyle(.balanced)
-        .navigationTitle(model.selectedSession?.title ?? "新对话")
+        .navigationTitle(model.selectedSession?.title ?? "新对话".localized)
         .navigationSubtitle(workspaceSubtitle)
         .toolbarTitleMenu {
             workspaceMenu
         }
-        .searchable(text: $model.searchQuery, placement: .sidebar, prompt: "搜索会话")
+        .searchable(text: $model.searchQuery, placement: .sidebar, prompt: "搜索会话".localized)
         .toolbar {
             if let session = model.selectedSession {
                 if session.phase == .connecting {
                     ToolbarItem(placement: .automatic) {
                         ProgressView()
                             .controlSize(.small)
-                            .help("正在连接 \(session.agent.title)")
+                            .help("正在连接 %@".localized(session.agent.title))
                     }
                 } else if case .failed = session.phase {
                     ToolbarItem(placement: .automatic) {
-                        Button("重试", systemImage: "arrow.clockwise") {
+                        Button("重试".localized, systemImage: "arrow.clockwise") {
                             model.retry(session)
                         }
                     }
                 } else if session.phase == .idle {
                     ToolbarItem(placement: .automatic) {
-                        Button("打开", systemImage: "arrow.clockwise") {
+                        Button("打开".localized, systemImage: "arrow.clockwise") {
                             model.select(session)
                         }
                     }
@@ -51,11 +51,11 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .aurewaysRevealMainWindow)) { _ in
             AppActivation.revealMainWindow()
         }
-        .alert("出错了", isPresented: Binding(
+        .alert("出错了".localized, isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
         )) {
-            Button("知道了", role: .cancel) { model.errorMessage = nil }
+            Button("知道了".localized, role: .cancel) { model.errorMessage = nil }
         } message: {
             Text(model.errorMessage ?? "")
         }
@@ -93,7 +93,7 @@ struct RootView: View {
 
     @ViewBuilder
     private var workspaceMenu: some View {
-        Section("工作区") {
+        Section("工作区".localized) {
             ForEach(model.workspaces) { workspace in
                 Button {
                     model.selectWorkspace(workspace.path)
@@ -106,8 +106,8 @@ struct RootView: View {
                 }
             }
         }
-        Button("添加工作区...") { model.addWorkspace() }
-        Button("在 Finder 中打开当前工作区") { model.openWorkspaceInFinder() }
+        Button("添加工作区...".localized) { model.addWorkspace() }
+        Button("在 Finder 中打开当前工作区".localized) { model.openWorkspaceInFinder() }
     }
 }
 

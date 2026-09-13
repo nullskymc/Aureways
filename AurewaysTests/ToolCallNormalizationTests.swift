@@ -2,6 +2,16 @@ import XCTest
 
 final class ToolCallNormalizationTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        L10n.languageCode = "zh-Hans"
+    }
+
+    override func tearDown() {
+        L10n.languageCode = L10n.systemLanguage
+        super.tearDown()
+    }
+
     func testGrokReadFlattensTaggedInput() throws {
         let json = try JSONValue.decode(from: """
         {

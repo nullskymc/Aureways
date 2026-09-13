@@ -226,7 +226,7 @@ private struct ThoughtStep: View {
             }
         }
         .onHover { isHovered = $0 }
-        .help(isExpanded ? "收起思考" : "展开完整思考")
+        .help(isExpanded ? "收起思考".localized : "展开完整思考".localized)
     }
 }
 

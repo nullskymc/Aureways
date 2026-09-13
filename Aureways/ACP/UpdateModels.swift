@@ -566,21 +566,21 @@ struct ToolCallView: Sendable, Equatable {
     }
 
     var kindLabel: String {
-        if isTerminal { return "执行命令" }
+        if isTerminal { return "执行命令".localized }
         let k = kind.lowercased()
         switch k {
-        case "read": return "读取文件"
-        case "edit": return "编辑文件"
-        case "delete": return "删除文件"
-        case "move": return "移动文件"
-        case "execute", "terminal": return "执行命令"
-        case "search": return "搜索"
-        case "fetch": return "抓取网页"
+        case "read": return "读取文件".localized
+        case "edit": return "编辑文件".localized
+        case "delete": return "删除文件".localized
+        case "move": return "移动文件".localized
+        case "execute", "terminal": return "执行命令".localized
+        case "search": return "搜索".localized
+        case "fetch": return "抓取网页".localized
         default:
-            if Self.titleHasToken(title, ["read", "view", "readfile", "viewfile"]) { return "读取文件" }
-            if Self.titleHasToken(title, ["edit", "write", "create", "editfile", "writefile"]) { return "编辑文件" }
-            if Self.titleHasToken(title, ["search", "grep", "find"]) { return "搜索" }
-            return "工具"
+            if Self.titleHasToken(title, ["read", "view", "readfile", "viewfile"]) { return "读取文件".localized }
+            if Self.titleHasToken(title, ["edit", "write", "create", "editfile", "writefile"]) { return "编辑文件".localized }
+            if Self.titleHasToken(title, ["search", "grep", "find"]) { return "搜索".localized }
+            return "工具".localized
         }
     }
 

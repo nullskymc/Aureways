@@ -155,14 +155,14 @@ struct FileBrowserTabView: View {
             if isFiltering, isFilterPending {
                 ProgressView()
                     .controlSize(.small)
-                Text("正在搜索…")
+                Text("正在搜索…".localized)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             } else {
                 Image(systemName: isFiltering ? "magnifyingglass" : "folder")
                     .font(.system(size: 24))
                     .foregroundStyle(.tertiary)
-                Text(isFiltering ? "未找到匹配文件" : "工作区暂无文件")
+                Text(isFiltering ? "未找到匹配文件".localized : "工作区暂无文件".localized)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -215,7 +215,7 @@ private struct WorkspaceControlBar: View {
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.tertiary)
 
-                TextField("快速过滤文件...", text: $query)
+                TextField("快速过滤文件...".localized, text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 11.5))
                     .focused($filterFocused)
@@ -259,7 +259,7 @@ private struct WorkspaceControlBar: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isCollapseHovered = $0 }
-                .help("全部折叠")
+                .help("全部折叠".localized)
 
                 Button(action: onReload) {
                     Image(systemName: "arrow.clockwise")
@@ -273,7 +273,7 @@ private struct WorkspaceControlBar: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isReloadHovered = $0 }
-                .help("刷新文件列表")
+                .help("刷新文件列表".localized)
 
                 Button {
                     model.openWorkspaceInFinder()
@@ -289,7 +289,7 @@ private struct WorkspaceControlBar: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isFinderHovered = $0 }
-                .help("在 Finder 中显示工作区")
+                .help("在 Finder 中显示工作区".localized)
             }
             .layoutPriority(1)
         }
@@ -367,22 +367,22 @@ private struct FileNodeRow: View {
         .onHover { isHovered = $0 }
         .contextMenu {
             if node.isDirectory {
-                Button("在 Finder 中显示") {
+                Button("在 Finder 中显示".localized) {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)])
                 }
             } else {
-                Button("打开") {
+                Button("打开".localized) {
                     onOpen()
                 }
-                Button("在 Finder 中显示") {
+                Button("在 Finder 中显示".localized) {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)])
                 }
                 Divider()
-                Button("复制相对路径") {
+                Button("复制相对路径".localized) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(relativePath, forType: .string)
                 }
-                Button("复制绝对路径") {
+                Button("复制绝对路径".localized) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(node.path, forType: .string)
                 }
@@ -401,10 +401,10 @@ private struct WorkspaceStatusBar: View {
     @State private var isTerminalHovered = false
 
     private var countLabel: String {
-        guard isFiltering else { return "\(count) 个项目" }
+        guard isFiltering else { return "%lld 个项目".localized(count) }
         return count >= FileFilterScan.maxResults
-            ? "匹配 \(count)+ 个文件"
-            : "匹配 \(count) 个文件"
+            ? "匹配 %lld+ 个文件".localized(count)
+            : "匹配 %lld 个文件".localized(count)
     }
 
     var body: some View {
@@ -425,7 +425,7 @@ private struct WorkspaceStatusBar: View {
                 HStack(spacing: 4) {
                     Image(systemName: "terminal")
                         .font(.system(size: 9.5))
-                    Text("终端")
+                    Text("终端".localized)
                         .font(.system(size: 10.5, weight: .medium))
                 }
                 .padding(.horizontal, 7)
@@ -438,7 +438,7 @@ private struct WorkspaceStatusBar: View {
             }
             .buttonStyle(.plain)
             .onHover { isTerminalHovered = $0 }
-            .help("打开集成终端")
+            .help("打开集成终端".localized)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)

@@ -51,7 +51,7 @@ struct UserProfileFooter: View {
                 Text(model.userName)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.primary)
-                Text("准备就绪")
+                Text("准备就绪".localized)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }

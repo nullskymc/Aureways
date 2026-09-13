@@ -180,7 +180,7 @@ private struct StatusMenuQuotaBlock: View {
             if snapshot.creditsRemaining != nil || (snapshot.resetCreditsAvailable ?? 0) > 0 {
                 if let credits = snapshot.creditsRemaining {
                     HStack {
-                        Text("剩余点数")
+                        Text("剩余点数".localized)
                             .font(StatusMenuType.meta)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -190,11 +190,11 @@ private struct StatusMenuQuotaBlock: View {
                 }
                 if let resets = snapshot.resetCreditsAvailable, resets > 0 {
                     HStack {
-                        Text("免费重置")
+                        Text("免费重置".localized)
                             .font(StatusMenuType.meta)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(resets) 次")
+                        Text("%lld 次".localized(resets))
                             .font(StatusMenuType.bodyMedium)
                             .foregroundStyle(Palette.moss)
                     }
@@ -210,7 +210,7 @@ private struct StatusMenuQuotaBlock: View {
                     if isRefreshing {
                         ProgressView().controlSize(.mini)
                     } else {
-                        Text("刷新")
+                        Text("刷新".localized)
                             .font(StatusMenuType.meta)
                     }
                 }
@@ -350,7 +350,7 @@ struct StatusMenuView: View {
                 Image(systemName: "square.grid.2x2.fill")
                     .font(.system(size: 9, weight: .semibold))
                     .frame(width: 14, height: 14)
-                Text("概览")
+                Text("概览".localized)
                     .font(StatusMenuType.tab)
                     .lineLimit(1)
                 Color.clear.frame(width: 22, height: 2.5)
@@ -366,7 +366,7 @@ struct StatusMenuView: View {
             selectedFill: Palette.accent,
             cornerRadius: StatusMenuLayout.tabCornerRadius
         ))
-        .help("概览")
+        .help("概览".localized)
     }
 
     private func harnessTab(_ agent: AgentProfile) -> some View {
@@ -434,7 +434,7 @@ struct StatusMenuView: View {
                 .font(StatusMenuType.meta)
                 .foregroundStyle(.secondary)
 
-            Text("配额")
+            Text("配额".localized)
                 .font(StatusMenuType.metaMedium)
                 .foregroundStyle(.secondary)
 
@@ -470,7 +470,7 @@ struct StatusMenuView: View {
                             .foregroundStyle(barColor(remaining))
                             .monospacedDigit()
                     } else if model.availability[agent.id] != true {
-                        Text("未安装")
+                        Text("未安装".localized)
                             .font(StatusMenuType.meta)
                             .foregroundStyle(.secondary)
                     } else if !HarnessQuotaFetcher.supportsQuota(for: agent.id) {
@@ -525,12 +525,12 @@ struct StatusMenuView: View {
                 }
             } else if HarnessQuotaFetcher.supportsQuota(for: agent.id) {
                 Text(model.quotaService.isRefreshing[agent.id] == true
-                     ? "正在更新配额…"
-                     : "还没有配额缓存，稍后自动刷新")
+                     ? "正在更新配额…".localized
+                     : "还没有配额缓存，稍后自动刷新".localized)
                     .font(StatusMenuType.meta)
                     .foregroundStyle(.secondary)
             } else {
-                Text("此 Agent 不提供配额查询")
+                Text("此 Agent 不提供配额查询".localized)
                     .font(StatusMenuType.meta)
                     .foregroundStyle(.secondary)
             }
@@ -544,25 +544,25 @@ struct StatusMenuView: View {
             model.startNewSession(agent: agent)
             revealMainWindow()
         } label: {
-            Label("新对话", systemImage: "plus")
+            Label("新对话".localized, systemImage: "plus")
                 .font(StatusMenuType.bodyMedium)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glass)
         .controlSize(.small)
         .disabled(!isAvailable)
-        .help(isAvailable ? "用 \(resolvedAgent?.title ?? "Agent") 开始新对话" : "未安装")
+        .help(isAvailable ? "用 %@ 开始新对话".localized(resolvedAgent?.title ?? "Agent") : "未安装".localized)
     }
 
     @ViewBuilder
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("最近会话")
+            Text("最近会话".localized)
                 .font(StatusMenuType.metaMedium)
                 .foregroundStyle(.secondary)
 
             if recentSessions.isEmpty {
-                Text("还没有会话")
+                Text("还没有会话".localized)
                     .font(StatusMenuType.meta)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 2)
@@ -637,7 +637,7 @@ struct StatusMenuView: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .help("退出")
+            .help("退出".localized)
             .modifier(StatusMenuHoverChrome(
                 isSelected: false,
                 selectedFill: .clear,

@@ -130,20 +130,20 @@ struct ToolCallDetail: View {
                 extraInput
             case .file:
                 locationLinks
-                labeledText("内容", call.contentText, lines: lineLimit)
+                labeledText("内容".localized, call.contentText, lines: lineLimit)
                 extraInput
             case .search:
                 if let pattern = call.searchPattern {
-                    labeledText("模式", pattern, lines: 3)
+                    labeledText("模式".localized, pattern, lines: 3)
                 }
                 locationLinks
-                labeledText("结果", call.contentText, lines: lineLimit)
+                labeledText("结果".localized, call.contentText, lines: lineLimit)
                 extraInput
             case .fetch:
                 if let url = call.fetchURL {
                     urlRow(url)
                 }
-                labeledText("内容", call.contentText, lines: lineLimit)
+                labeledText("内容".localized, call.contentText, lines: lineLimit)
                 extraInput
             case .other:
                 locationLinks
@@ -189,13 +189,13 @@ struct ToolCallDetail: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("复制命令")
+                .help("复制命令".localized)
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.badgeBg.opacity(0.60), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         } else if !call.terminalIds.isEmpty {
-            Text(call.status.lowercased() == "completed" ? "终端已结束" : "终端运行中")
+            Text(call.status.lowercased() == "completed" ? "终端已结束".localized : "终端运行中".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
@@ -204,11 +204,11 @@ struct ToolCallDetail: View {
         if let output = call.terminalOutput, !output.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("输出")
+                    Text("输出".localized)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     if let code = call.terminalExitCode {
-                        Text("退出码 \(code)")
+                        Text("退出码 %lld".localized(code))
                             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                             .foregroundStyle(code == 0 ? Palette.moss : Color.red)
                             .padding(.horizontal, 4)
@@ -252,7 +252,7 @@ struct ToolCallDetail: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Palette.accent)
-                    .help("在编辑器中打开")
+                    .help("在编辑器中打开".localized)
                 }
             }
         }
@@ -334,7 +334,7 @@ struct ToolCallDetail: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Palette.accent)
-        .help("在浏览器中打开")
+        .help("在浏览器中打开".localized)
     }
 
     private func locationLabel(_ location: ToolCallLocation) -> String {
@@ -351,7 +351,7 @@ struct ToolCallDetail: View {
 
     private static func clamped(_ text: String) -> String {
         guard text.count > displayLimit else { return text }
-        return String(text.prefix(displayLimit)) + "\n… 已截断 \(text.count - displayLimit) 个字符"
+        return String(text.prefix(displayLimit)) + "\n" + "… 已截断 %lld 个字符".localized(text.count - displayLimit)
     }
 }
 
@@ -386,7 +386,7 @@ private struct ToolDiffBlock: View {
             }
 
             if diff.isIdentity {
-                Text("无行级变更")
+                Text("无行级变更".localized)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             } else {
@@ -394,7 +394,7 @@ private struct ToolDiffBlock: View {
             }
 
             if diff.truncated {
-                Text("仅比较前 \(TextDiff.maxInputLines) 行")
+                Text("仅比较前 %lld 行".localized(TextDiff.maxInputLines))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -420,7 +420,9 @@ private struct ToolDiffBlock: View {
                 }
             }
             if shown.hiddenHunks > 0 || shown.hiddenLines > 0 {
-                Text("还有 \(shown.hiddenHunks > 0 ? "\(shown.hiddenHunks) 个片段" : "\(shown.hiddenLines) 行")")
+                Text(shown.hiddenHunks > 0
+                     ? "还有 %lld 个片段".localized(shown.hiddenHunks)
+                     : "还有 %lld 行".localized(shown.hiddenLines))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }

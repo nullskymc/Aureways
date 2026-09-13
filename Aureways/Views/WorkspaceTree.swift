@@ -12,12 +12,12 @@ struct WorkspaceSessionTree: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            GlassPrimaryButton(title: "新建对话", help: "新建对话 (⌘N)") {
+            GlassPrimaryButton(title: "新建对话".localized, help: "新建对话 (⌘N)".localized) {
                 model.startNewSession()
             }
 
             HStack(spacing: 6) {
-                Text("工作区")
+                Text("工作区".localized)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -29,7 +29,7 @@ struct WorkspaceSessionTree: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("添加工作区")
+                .help("添加工作区".localized)
             }
             .padding(.horizontal, 10)
 
@@ -107,7 +107,7 @@ struct WorkspaceGroupView: View {
                             .frame(width: 16)
                     }
                     .buttonStyle(.plain)
-                    .help("在此工作区新建对话")
+                    .help("在此工作区新建对话".localized)
                 }
             }
             .padding(.horizontal, 8)
@@ -116,17 +116,17 @@ struct WorkspaceGroupView: View {
             .onHover { isHovered = $0 }
             .help(workspace.path)
             .contextMenu {
-                Button("新建对话") {
+                Button("新建对话".localized) {
                     model.startNewSession(inWorkspace: workspace.path)
                 }
-                Button("设为当前工作区") {
+                Button("设为当前工作区".localized) {
                     model.selectWorkspace(workspace.path)
                 }
-                Button("在 Finder 中打开") {
+                Button("在 Finder 中打开".localized) {
                     model.openWorkspaceInFinder(workspace.path)
                 }
                 Divider()
-                Button("从列表移除", role: .destructive) {
+                Button("从列表移除".localized, role: .destructive) {
                     model.removeWorkspace(workspace.path)
                 }
             }
@@ -141,7 +141,7 @@ struct WorkspaceGroupView: View {
                     Button {
                         withAnimation { showAll.toggle() }
                     } label: {
-                        Text(showAll ? "收起" : "展开显示 (\(sessions.count - 5) 条更多)")
+                        Text(showAll ? "收起".localized : "展开显示 (\(sessions.count - 5) 条更多)")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 36)
@@ -199,23 +199,23 @@ struct SessionNavItem: View {
         .help(session.agent.title)
         .onHover { isHovered = $0 }
         .contextMenu {
-            Button("关闭会话") {
+            Button("关闭会话".localized) {
                 model.close(session)
             }
-            Button("从列表移除") {
+            Button("从列表移除".localized) {
                 model.forget(session)
             }
             if model.canDelete(session) {
-                Button("从 Agent 删除", role: .destructive) {
+                Button("从 Agent 删除".localized, role: .destructive) {
                     model.delete(session)
                 }
             }
-            Button("复制标题") {
+            Button("复制标题".localized) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(session.title, forType: .string)
             }
             Divider()
-            Button("在 Finder 中查看工作区") {
+            Button("在 Finder 中查看工作区".localized) {
                 model.openWorkspaceInFinder(session.cwd)
             }
         }

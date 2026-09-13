@@ -14,7 +14,7 @@ struct EmptyWorkspaceLanding: View {
                 BrandMark(size: 96, glow: true)
 
                 HStack(spacing: 4) {
-                    Text("在")
+                    Text("在".localized)
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.primary)
 
@@ -26,9 +26,9 @@ struct EmptyWorkspaceLanding: View {
                     }
                     .buttonStyle(.plain)
                     .onHover { isHoveringWorkspace = $0 }
-                    .help("点击切换工作区（当前：\(model.workspacePath)）")
+                    .help("点击切换工作区（当前：%@）".localized(model.workspacePath))
 
-                    Text("做什么？")
+                    Text("做什么？".localized)
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.primary)
                 }

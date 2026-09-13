@@ -47,7 +47,7 @@ struct FileEditorTabView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.gold)
-                Text("文件已被 Agent 或外部修改")
+                Text("文件已被 Agent 或外部修改".localized)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -55,14 +55,14 @@ struct FileEditorTabView: View {
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                Button("重新载入") {
+                Button("重新载入".localized) {
                     model.reloadFileTab(path)
                 }
                 .font(.system(size: 11, weight: .semibold))
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
 
-                Button("保留我的") {
+                Button("保留我的".localized) {
                     model.keepEditedFileTab(path)
                 }
                 .font(.system(size: 11))
@@ -139,7 +139,7 @@ private struct FileEditorHeader: View {
                     Circle()
                         .fill(Palette.gold)
                         .frame(width: 5, height: 5)
-                        .help("未保存")
+                        .help("未保存".localized)
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -165,7 +165,7 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isCopyHovered = $0 }
-                .help(copiedFeedback ? "已复制路径" : "复制完整路径")
+                .help(copiedFeedback ? "已复制路径".localized : "复制完整路径".localized)
 
                 Button {
                     NSWorkspace.shared.open(URL(fileURLWithPath: path))
@@ -182,7 +182,7 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isExternalHovered = $0 }
-                .help("在默认外部编辑器中打开")
+                .help("在默认外部编辑器中打开".localized)
 
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -199,7 +199,7 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isFinderHovered = $0 }
-                .help("在 Finder 中显示")
+                .help("在 Finder 中显示".localized)
 
                 Button {
                     model.requestReloadFileTab(path)
@@ -216,7 +216,7 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isReloadHovered = $0 }
-                .help("重新从磁盘载入")
+                .help("重新从磁盘载入".localized)
             }
             .layoutPriority(1)
         }
@@ -271,7 +271,7 @@ private struct FileEditorStatusBar: View {
             Spacer(minLength: 4)
 
             if state?.isDirty == true {
-                Text("⌘S 保存")
+                Text("⌘S 保存".localized)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Palette.gold)
                     .padding(.horizontal, 5)
@@ -294,7 +294,7 @@ private struct FileEditorStatusBar: View {
             if draft != nil {
                 Text("·")
                     .foregroundStyle(.tertiary)
-                Text("共 \(lineCount) 行")
+                Text("共 %lld 行".localized(lineCount))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -587,7 +587,7 @@ private final class Coordinator: NSObject, NSTextViewDelegate {
                 apply(text, persistDraft: true)
             } else {
                 applyingProgrammaticChange = true
-                textView?.string = "（无法读取文件内容）"
+                textView?.string = "（无法读取文件内容）".localized
                 textView?.font = NSFont.systemFont(ofSize: 12)
                 textView?.isEditable = false
                 applyingProgrammaticChange = false

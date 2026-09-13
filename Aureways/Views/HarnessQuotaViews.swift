@@ -69,7 +69,7 @@ struct HarnessQuotaIndicatorView: View {
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(severityColor(snapshot.overallSeverity))
             } else {
-                Text("配额")
+                Text("配额".localized)
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(.secondary)
             }
@@ -160,7 +160,7 @@ struct HarnessQuotaFloatingCard: View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.small)
-            Text("正在查询 \(agent.title) 配额...")
+            Text("正在查询 %@ 配额...".localized(agent.title))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
@@ -212,7 +212,7 @@ struct HarnessQuotaPopoverView: View {
 
             if !snapshot.extraWindows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("其他模型限额")
+                    Text("其他模型限额".localized)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
 
@@ -319,7 +319,7 @@ struct HarnessQuotaPopoverView: View {
 
                 Spacer()
 
-                Text("剩余 \(Int(round(window.remainingPercent)))%")
+                Text("剩余 %lld%%".localized(Int(round(window.remainingPercent))))
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(progressBarColor(forRemaining: window.remainingPercent))
             }
@@ -351,7 +351,7 @@ struct HarnessQuotaPopoverView: View {
 
                             Spacer()
 
-                            Text("已用 \(Int(round(item.usedPercent)))%")
+                            Text("已用 %lld%%".localized(Int(round(item.usedPercent))))
                                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
@@ -387,7 +387,7 @@ struct HarnessQuotaPopoverView: View {
 
                 Spacer()
 
-                Text("剩余 \(Int(round(window.remainingPercent)))%")
+                Text("剩余 %lld%%".localized(Int(round(window.remainingPercent))))
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(progressBarColor(forRemaining: window.remainingPercent))
             }
@@ -411,7 +411,7 @@ struct HarnessQuotaPopoverView: View {
                     Image(systemName: "creditcard")
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.accent)
-                    Text("剩余点数:")
+                    Text("剩余点数:".localized)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -425,11 +425,11 @@ struct HarnessQuotaPopoverView: View {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.moss)
-                    Text("免费重置额度:")
+                    Text("免费重置额度:".localized)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(resetCredits) 次可用")
+                    Text("%lld 次可用".localized(resetCredits))
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(Palette.moss)
                 }
@@ -456,7 +456,7 @@ struct HarnessQuotaPopoverView: View {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 10))
                     }
-                    Text("刷新")
+                    Text("刷新".localized)
                         .font(.system(size: 10.5))
                 }
                 .padding(.horizontal, 7)

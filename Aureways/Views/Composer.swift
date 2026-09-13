@@ -242,10 +242,10 @@ struct ComposerCard: View {
         // 包住 buttonStyle(.glass) 控件会吞掉 bezel（实测截图验证）。
         HStack(alignment: .center, spacing: 8) {
             Menu {
-                Button("添加文件…") { pickComposerFiles() }
-                Button("添加工作区…") { model.addWorkspace() }
+                Button("添加文件…".localized) { pickComposerFiles() }
+                Button("添加工作区…".localized) { model.addWorkspace() }
                 if let commands = currentSession?.availableCommands, !commands.isEmpty {
-                    Section("指令") {
+                    Section("指令".localized) {
                         ForEach(commands) { command in
                             Button {
                                 insertSlashCommand(command)
@@ -264,7 +264,7 @@ struct ComposerCard: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .buttonStyle(.glass)
-            .help("添加文件、工作区或插入指令")
+            .help("添加文件、工作区或插入指令".localized)
 
             autoApproveButton
 
@@ -287,7 +287,7 @@ struct ComposerCard: View {
                         .background(Color.red.opacity(0.85), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("停止生成 (⌘.)")
+                .help("停止生成 (⌘.)".localized)
                 .keyboardShortcut(".", modifiers: [.command])
             } else {
                 Button(action: submit) {
@@ -303,7 +303,7 @@ struct ComposerCard: View {
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: [.command])
-                .help(canSend ? "发送消息 (⌘Return)" : "输入内容后可发送")
+                .help(canSend ? "发送消息 (⌘Return)".localized : "输入内容后可发送".localized)
             }
         }
     }
@@ -313,11 +313,11 @@ struct ComposerCard: View {
         let base = Button {
             model.autoApprove.toggle()
         } label: {
-            Text(model.autoApprove ? "帮我批准" : "需我确认")
+            Text(model.autoApprove ? "帮我批准".localized : "需我确认".localized)
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(.primary)
         }
-        .help("开启后，Agent 读写文件或执行命令时不再弹出确认，由客户端代为批准。关闭则每次工具调用都需你确认。")
+        .help("开启后，Agent 读写文件或执行命令时不再弹出确认，由客户端代为批准。关闭则每次工具调用都需你确认。".localized)
 
         if model.autoApprove {
             base.buttonStyle(.glass(.regular.tint(Palette.moss)))
@@ -418,7 +418,7 @@ struct ComposerCard: View {
                         HStack {
                             Text(item.title)
                             if model.availability[item.id] == true {
-                                Text("(可用)")
+                                Text("(可用)".localized)
                             }
                         }
                     }
@@ -430,13 +430,13 @@ struct ComposerCard: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .buttonStyle(.glass)
-            .help("新对话将使用此 Agent，并记为下次默认。已打开的会话不会跟着变。")
+            .help("新对话将使用此 Agent，并记为下次默认。已打开的会话不会跟着变。".localized)
         } else {
             chip
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
                 .liquidGlassCapsule(interactive: false)
-                .help("本会话已绑定 \(agent.title)，不能中途更换。新对话请先点 ⌘N。")
+                .help("本会话已绑定 %@，不能中途更换。新对话请先点 ⌘N。".localized(agent.title))
         }
     }
 
@@ -448,7 +448,7 @@ struct ComposerCard: View {
            !option.options.isEmpty {
             sessionSelectChip(
                 title: option.options.first(where: { $0.id == option.selectedString })?.labeledName ?? option.name,
-                help: "切换本会话使用的模型",
+                help: "切换本会话使用的模型".localized,
                 choices: option.options,
                 selectedId: option.selectedString
             ) { id in
@@ -465,7 +465,7 @@ struct ComposerCard: View {
            !option.options.isEmpty {
             sessionSelectChip(
                 title: option.options.first(where: { $0.id == option.selectedString })?.name ?? option.name,
-                help: "切换本会话的推理强度",
+                help: "切换本会话的推理强度".localized,
                 choices: option.options,
                 selectedId: option.selectedString
             ) { id in
@@ -478,8 +478,8 @@ struct ComposerCard: View {
     private var sessionModeChip: some View {
         if let session = currentSession, session.phase.isReady, !session.modeChoices.isEmpty {
             sessionSelectChip(
-                title: session.modeChoices.first(where: { $0.id == session.currentModeId })?.name ?? "模式",
-                help: "切换本会话模式",
+                title: session.modeChoices.first(where: { $0.id == session.currentModeId })?.name ?? "模式".localized,
+                help: "切换本会话模式".localized,
                 choices: session.modeChoices,
                 selectedId: session.currentModeId
             ) { id in
@@ -547,7 +547,7 @@ struct ComposerCard: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
         panel.directoryURL = URL(fileURLWithPath: model.workspacePath)
-        panel.prompt = "添加"
+        panel.prompt = "添加".localized
         guard panel.runModal() == .OK else { return }
         attachments.append(contentsOf: ComposerAttachment.fromFileURLs(panel.urls))
     }
@@ -611,8 +611,8 @@ struct ComposerCard: View {
         case .slash(let query):
             var entries: [(name: String, description: String?)] =
                 (currentSession?.availableCommands ?? []).map { ($0.name, $0.description) }
-            if !entries.contains(where: { $0.name == "help" }) { entries.append(("help", "帮助说明")) }
-            if !entries.contains(where: { $0.name == "clear" }) { entries.append(("clear", "清空上下文")) }
+            if !entries.contains(where: { $0.name == "help" }) { entries.append(("help", "帮助说明".localized)) }
+            if !entries.contains(where: { $0.name == "clear" }) { entries.append(("clear", "清空上下文".localized)) }
             return entries
                 .filter { query.isEmpty || $0.name.lowercased().hasPrefix(query.lowercased()) }
                 .map {
@@ -713,7 +713,7 @@ private struct ComposerAttachmentChip: View {
                     .background(Color.black.opacity(0.55), in: Circle())
             }
             .buttonStyle(.plain)
-            .help("移除附件")
+            .help("移除附件".localized)
             .offset(x: 5, y: -5)
         }
     }
@@ -744,7 +744,7 @@ private struct ComposerAttachmentChip: View {
                     .foregroundStyle(Palette.gold)
                     .padding(3)
                     .background(Color.black.opacity(0.55), in: Circle())
-                    .help("当前 Agent 不支持图片输入，请移除后发送")
+                    .help("当前 Agent 不支持图片输入，请移除后发送".localized)
                     .offset(x: 4, y: 4)
             }
         }

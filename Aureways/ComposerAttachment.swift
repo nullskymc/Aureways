@@ -120,7 +120,7 @@ extension TranscriptAttachment {
             }
             let name = path.map { URL(fileURLWithPath: $0).lastPathComponent }
                 ?? uri.flatMap { URL(string: $0)?.lastPathComponent }
-                ?? "图片"
+                ?? "图片".localized
             var base64: String? = data.isEmpty ? nil : data
             if base64 == nil, let path, let fileData = try? Data(contentsOf: URL(fileURLWithPath: path)), fileData.count <= maxInlineImageBytes {
                 base64 = fileData.base64EncodedString()
@@ -147,7 +147,7 @@ extension TranscriptAttachment {
             let attachment = TranscriptAttachment(
                 id: UUID(),
                 kind: isImg ? "image" : "file",
-                name: name.isEmpty ? (path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "附件") : name,
+                name: name.isEmpty ? (path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "附件".localized) : name,
                 path: path,
                 mimeType: isImg ? (UTType(filenameExtension: ext)?.preferredMIMEType ?? "image/png") : nil,
                 imageBase64: base64
@@ -163,7 +163,7 @@ extension TranscriptAttachment {
             let attachment = TranscriptAttachment(
                 id: UUID(),
                 kind: isImg ? "image" : "file",
-                name: path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "附件",
+                name: path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "附件".localized,
                 path: path,
                 mimeType: mimeType,
                 imageBase64: isImg ? blob : nil
@@ -183,7 +183,7 @@ extension TranscriptAttachment {
                     }
                     return nil
                 }
-                let name = path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "图片"
+                let name = path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "图片".localized
                 let attachment = TranscriptAttachment(
                     id: UUID(),
                     kind: "image",
@@ -322,7 +322,7 @@ extension ComposerAttachment {
             return urls.compactMap(fromFileURL)
         }
         if let image = NSImage(pasteboard: pasteboard) {
-            return [imageAttachment(from: image, name: "图片")].compactMap { $0 }
+            return [imageAttachment(from: image, name: "图片".localized)].compactMap { $0 }
         }
         return []
     }

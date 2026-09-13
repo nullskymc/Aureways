@@ -23,7 +23,8 @@ enum SessionTitle {
     static let maxLength = 42
 
     static func isPlaceholder(_ title: String) -> Bool {
-        title == "新对话" || title == "New Chat" || title.hasPrefix("新 ") || title.hasPrefix("New ")
+        title == "新对话" || title == "New Chat" || title == "新对话".localized
+            || title.hasPrefix("新 ") || title.hasPrefix("New ")
     }
 
     static func derived(from text: String) -> String {
@@ -206,7 +207,7 @@ final class ChatSession: Identifiable {
         transcriptRevision += 1
     }
 
-    nonisolated static let connectRPCPrefix = "仍在等待 "
+    nonisolated static var connectRPCPrefix: String { "仍在等待 ".localized }
 
     private func upsertConnectDiagnostic(_ text: String) {
         if let id = connectDiagnosticID, let index = items.firstIndex(where: { $0.id == id }) {
@@ -374,7 +375,7 @@ final class ChatSession: Identifiable {
                 let name = URL(string: uri)?.lastPathComponent ?? "image"
                 appendText("\n\n![\(name)](\(uri))\n\n", asThought: false)
             } else {
-                appendText("\n\n(图片)\n\n", asThought: false)
+                appendText("\n\n" + "(图片)".localized + "\n\n", asThought: false)
             }
         case .resourceLink(let uri, let name):
             appendText("[\(name)](\(uri))", asThought: false)
@@ -385,7 +386,7 @@ final class ChatSession: Identifiable {
                 appendText(uri, asThought: false)
             }
         case .audio:
-            appendText("\n\n(音频)\n\n", asThought: false)
+            appendText("\n\n" + "(音频)".localized + "\n\n", asThought: false)
         case .text(let value):
             appendText(value, asThought: false)
         case .other:

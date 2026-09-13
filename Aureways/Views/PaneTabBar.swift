@@ -21,7 +21,7 @@ struct InspectorToolbarContent: ToolbarContent {
     }
 
     private var panePicker: some View {
-        Picker("检查器", selection: Binding(
+        Picker("检查器".localized, selection: Binding(
             get: { model.activePaneTabId },
             set: { model.selectPaneTab($0) }
         )) {
@@ -53,32 +53,32 @@ struct InspectorToolbarContent: ToolbarContent {
 
     private var newTabMenu: some View {
         Menu {
-            Button("新建终端", systemImage: "terminal") {
+            Button("新建终端".localized, systemImage: "terminal") {
                 model.openTerminalTab()
             }
-            Button("文件浏览器", systemImage: "folder") {
+            Button("文件浏览器".localized, systemImage: "folder") {
                 model.selectPaneTab(PaneTab.browser.id)
             }
-            Button("会话信息", systemImage: "info.circle") {
+            Button("会话信息".localized, systemImage: "info.circle") {
                 model.openInfoTab()
             }
             if let tab = currentTab, tab.isClosable {
                 Divider()
-                Button("关闭当前标签", systemImage: "xmark") {
+                Button("关闭当前标签".localized, systemImage: "xmark") {
                     model.closePaneTab(tab)
                 }
-                Button("关闭其它标签") {
+                Button("关闭其它标签".localized) {
                     model.closeOtherPaneTabs(keeping: tab)
                 }
             }
             Divider()
-            Button("在 Finder 中显示工作区", systemImage: "macwindow") {
+            Button("在 Finder 中显示工作区".localized, systemImage: "macwindow") {
                 model.openWorkspaceInFinder()
             }
         } label: {
-            Label("新建标签", systemImage: "plus")
+            Label("新建标签".localized, systemImage: "plus")
         }
-        .help("新建标签")
+        .help("新建标签".localized)
     }
 
     private var inspectorToggle: some View {
@@ -86,11 +86,11 @@ struct InspectorToolbarContent: ToolbarContent {
             model.inspectorOpen.toggle()
         } label: {
             Label(
-                model.inspectorOpen ? "收起检查器" : "展开检查器",
+                model.inspectorOpen ? "收起检查器".localized : "展开检查器".localized,
                 systemImage: "sidebar.right"
             )
         }
-        .help(model.inspectorOpen ? "收起检查器 (⌘B / ⌥⌘I)" : "展开检查器 (⌘B / ⌥⌘I)")
+        .help(model.inspectorOpen ? "收起检查器 (⌘B / ⌥⌘I)".localized : "展开检查器 (⌘B / ⌥⌘I)".localized)
     }
 
     private var currentTab: PaneTab? {
@@ -234,24 +234,24 @@ private struct TabPickerRightClickCatcher: NSViewRepresentable {
             let menu = NSMenu()
             menu.autoenablesItems = false
             if tab.isClosable {
-                let close = NSMenuItem(title: "关闭", action: #selector(Coordinator.close(_:)), keyEquivalent: "")
+                let close = NSMenuItem(title: "关闭".localized, action: #selector(Coordinator.close(_:)), keyEquivalent: "")
                 close.target = coordinator
                 close.representedObject = tab.id
                 menu.addItem(close)
 
-                let others = NSMenuItem(title: "关闭其它", action: #selector(Coordinator.closeOthers(_:)), keyEquivalent: "")
+                let others = NSMenuItem(title: "关闭其它".localized, action: #selector(Coordinator.closeOthers(_:)), keyEquivalent: "")
                 others.target = coordinator
                 others.representedObject = tab.id
                 menu.addItem(others)
             }
             if case .file(let path) = tab {
                 if !menu.items.isEmpty { menu.addItem(.separator()) }
-                let reveal = NSMenuItem(title: "在 Finder 中显示", action: #selector(Coordinator.reveal(_:)), keyEquivalent: "")
+                let reveal = NSMenuItem(title: "在 Finder 中显示".localized, action: #selector(Coordinator.reveal(_:)), keyEquivalent: "")
                 reveal.target = coordinator
                 reveal.representedObject = path
                 menu.addItem(reveal)
 
-                let copy = NSMenuItem(title: "复制路径", action: #selector(Coordinator.copyPath(_:)), keyEquivalent: "")
+                let copy = NSMenuItem(title: "复制路径".localized, action: #selector(Coordinator.copyPath(_:)), keyEquivalent: "")
                 copy.target = coordinator
                 copy.representedObject = path
                 menu.addItem(copy)

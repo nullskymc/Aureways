@@ -2,6 +2,16 @@ import AppKit
 import XCTest
 
 final class ProtocolTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        L10n.languageCode = "zh-Hans"
+    }
+
+    override func tearDown() {
+        L10n.languageCode = L10n.systemLanguage
+        super.tearDown()
+    }
+
     func testJSONRPCRoundTrip() throws {
         let request = JSONRPCMessage.request(
             id: .number(1),
