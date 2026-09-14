@@ -218,6 +218,24 @@ struct ToolCallPatch {
         object["title"] = .string("\(pathTitleVerb()) \(leaf)")
     }
 
+    /// Streaming execute calls often land as generic `Tool` plus a command; history
+    /// replay already has `Execute git status`. Match that shape live.
+    mutating func prefixExecuteTitle() {
+        let resolvedKind = kind.lowercased()
+        guard resolvedKind == "execute" || resolvedKind == "terminal" || resolvedKind == "shell" else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("execute ") || lower.hasPrefix("run ") { return }
+        let command = inputString(["command"])
+        let firstLine = command?.split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        let isCommandTitle = trimmed == command || (!firstLine.isEmpty && trimmed == firstLine)
+        guard isGenericTitle || isCommandTitle else { return }
+        let brief = firstLine.isEmpty ? trimmed : firstLine
+        object["title"] = .string("Execute \(brief)")
+    }
+
     /// Codex file-change events use a fixed "Editing files" title and no locations.
     mutating func rewriteEditingFilesTitle() {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)

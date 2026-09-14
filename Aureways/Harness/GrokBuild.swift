@@ -102,10 +102,13 @@ final class GrokBuildHarness: Harness {
             patch.flattenTaggedInput()
             patch.setKind(fromVariant: Self.kindByVariant)
             patch.aliasInput(from: ["target_file", "file_path", "target_directory"], as: "path")
+            patch.inferExecuteIfCommand()
             patch.fillLocationsFromPath(lineKeys: ["offset", "line"])
             patch.fillLocationsFromDiffs()
             patch.preferCommandTitle()
             patch.preferPathTitle()
+            patch.replacePathOnlyTitle()
+            patch.prefixExecuteTitle()
             patch.canonicalizeOutput()
         }
     }

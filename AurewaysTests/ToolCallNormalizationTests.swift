@@ -99,6 +99,62 @@ final class ToolCallNormalizationTests: XCTestCase {
         XCTAssertEqual(call.kindLabel, "编辑文件")
     }
 
+    func testGrokStreamingReadUsesReadFilenameTitle() throws {
+        let json = try JSONValue.decode(from: """
+        {
+            "toolCallId": "c-read",
+            "title": "FileEditorTab.swift",
+            "kind": "other",
+            "rawInput": {
+                "variant": "ReadFile",
+                "target_file": "/Volumes/app/DevelopProject/Aureways/Aureways/Views/FileEditorTab.swift"
+            }
+        }
+        """)
+        let call = ToolCallView(json: GrokBuildHarness().normalizeToolCall(json))
+        XCTAssertEqual(call.kind, "read")
+        XCTAssertEqual(call.displayTitle, "Read FileEditorTab.swift")
+    }
+
+    func testGrokStreamingBashUsesExecuteTitle() throws {
+        let json = try JSONValue.decode(from: """
+        {
+            "toolCallId": "c-bash",
+            "title": "Tool",
+            "kind": "other",
+            "rawInput": {
+                "variant": "Bash",
+                "command": "git status && echo DIFF"
+            }
+        }
+        """)
+        let call = ToolCallView(json: GrokBuildHarness().normalizeToolCall(json))
+        XCTAssertEqual(call.kind, "execute")
+        XCTAssertEqual(call.displayTitle, "Execute git status && echo DIFF")
+    }
+
+    func testToolCallUpdateDoesNotClobberInferredName() {
+        var call = ToolCallView(json: .object([
+            "toolCallId": .string("c1"),
+            "title": .string("Read FileEditorTab.swift"),
+            "kind": .string("read"),
+            "status": .string("in_progress"),
+        ]))
+        let update = ToolCallView(json: .object([
+            "toolCallId": .string("c1"),
+            "status": .string("completed"),
+            "content": .array([.object([
+                "type": .string("text"),
+                "text": .string("ok"),
+            ])]),
+        ]))
+        XCTAssertTrue(call.merge(update))
+        XCTAssertEqual(call.kind, "read")
+        XCTAssertEqual(call.displayTitle, "Read FileEditorTab.swift")
+        XCTAssertEqual(call.status, "completed")
+        XCTAssertEqual(call.contentText, "ok")
+    }
+
     func testClaudeAliasesFilePath() throws {
         let json = try JSONValue.decode(from: """
         {

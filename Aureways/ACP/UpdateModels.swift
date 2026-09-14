@@ -418,8 +418,12 @@ struct ToolCallView: Sendable, Equatable {
     @discardableResult
     mutating func merge(_ other: ToolCallView) -> Bool {
         let before = self
-        if !other.title.isEmpty, title != other.title { title = other.title }
-        if !other.kind.isEmpty, kind != other.kind { kind = other.kind }
+        if !other.title.isEmpty, title != other.title, Self.shouldReplaceTitle(existing: title, incoming: other.title) {
+            title = other.title
+        }
+        if !other.kind.isEmpty, kind != other.kind, Self.shouldReplaceKind(existing: kind, incoming: other.kind) {
+            kind = other.kind
+        }
         if !other.status.isEmpty, status != other.status { status = other.status }
         if let value = other.rawInput, rawInput != value { rawInput = value }
         if let value = other.rawOutput, rawOutput != value { rawOutput = value }
@@ -427,6 +431,26 @@ struct ToolCallView: Sendable, Equatable {
         if !other.contents.isEmpty, contents != other.contents { contents = other.contents }
         if !other.locations.isEmpty, locations != other.locations { locations = other.locations }
         return self != before
+    }
+
+    /// `tool_call_update` often omits `title`/`kind`. The parser fills those with
+    /// `Tool` / `other`, and a naive merge would wipe a name already inferred
+    /// from the first `tool_call`. History replay sends one complete snapshot,
+    /// which is why reopening a session looks right.
+    private static func shouldReplaceTitle(existing: String, incoming: String) -> Bool {
+        isGenericTitleValue(existing) || !isGenericTitleValue(incoming)
+    }
+
+    private static func shouldReplaceKind(existing: String, incoming: String) -> Bool {
+        let existingSpecific = !existing.isEmpty && existing.lowercased() != "other"
+        if incoming.lowercased() == "other", existingSpecific { return false }
+        return true
+    }
+
+    private static func isGenericTitleValue(_ title: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return true }
+        return genericTitles.contains(trimmed.lowercased())
     }
 
     private static func extractValue(from json: JSONValue?, keys: [String]) -> JSONValue? {
