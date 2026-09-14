@@ -10,13 +10,21 @@ struct FileEditorTabView: View {
 
     private var state: FileTabState? { model.fileTabStates[path] }
     private var visual: FileVisual { FileVisual.for(path: path) }
+    private var isMarkdown: Bool { FileVisual.isMarkdown(path: path) }
+    private var showingPreview: Bool { isMarkdown && (state?.showsMarkdownPreview ?? true) }
 
     var body: some View {
         VStack(spacing: 0) {
-            FileEditorHeader(path: path, state: state, visual: visual)
-                .frame(minHeight: 32)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(Palette.inspectorBg)
+            FileEditorHeader(
+                path: path,
+                state: state,
+                visual: visual,
+                isMarkdown: isMarkdown,
+                showingPreview: showingPreview
+            )
+            .frame(minHeight: 32)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Palette.inspectorBg)
 
             Divider()
                 .overlay(Palette.splitDivider)
@@ -27,18 +35,59 @@ struct FileEditorTabView: View {
                     .overlay(Palette.splitDivider)
             }
 
-            TextEditorRepresentable(path: path, isActive: isActive)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            ZStack {
+                TextEditorRepresentable(path: path, isActive: isActive && !showingPreview)
+                    .opacity(showingPreview ? 0 : 1)
+                    .allowsHitTesting(!showingPreview)
+                    .accessibilityHidden(showingPreview)
+
+                if showingPreview {
+                    markdownPreview
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
 
             Divider()
                 .overlay(Palette.splitDivider)
 
-            FileEditorStatusBar(path: path, state: state, visual: visual)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(Palette.inspectorBg)
+            FileEditorStatusBar(
+                path: path,
+                state: state,
+                visual: visual,
+                showingPreview: showingPreview
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Palette.inspectorBg)
         }
         .background(Palette.inspectorBg)
+        .background { previewSaveShortcut }
+    }
+
+    private var markdownPreview: some View {
+        ScrollView {
+            MarkdownBody(source: model.editorDrafts[path] ?? "", isStreaming: false)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var previewSaveShortcut: some View {
+        if isActive, showingPreview {
+            Button("") {
+                if let content = model.editorDrafts[path] {
+                    model.saveFileTab(path: path, content: content)
+                }
+            }
+            .keyboardShortcut("s", modifiers: [.command])
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     private var externalChangeBanner: some View {
@@ -83,6 +132,8 @@ private struct FileEditorHeader: View {
     let path: String
     let state: FileTabState?
     let visual: FileVisual
+    let isMarkdown: Bool
+    let showingPreview: Bool
 
     @State private var isCopyHovered = false
     @State private var isExternalHovered = false
@@ -145,6 +196,13 @@ private struct FileEditorHeader: View {
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 1) {
+                if isMarkdown {
+                    MarkdownModeSwitcher(showsPreview: showingPreview) { preview in
+                        model.fileTabStates[path]?.showsMarkdownPreview = preview
+                    }
+                    .padding(.trailing, 5)
+                }
+
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(path, forType: .string)
@@ -225,6 +283,63 @@ private struct FileEditorHeader: View {
     }
 }
 
+private struct MarkdownModeSwitcher: View {
+    let showsPreview: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 1) {
+            MarkdownModeButton(
+                systemImage: "doc.plaintext",
+                selected: !showsPreview,
+                help: "源码".localized
+            ) { onChange(false) }
+            MarkdownModeButton(
+                systemImage: "doc.richtext",
+                selected: showsPreview,
+                help: "预览".localized
+            ) { onChange(true) }
+        }
+        .padding(1.5)
+        .background(
+            RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                .fill(Palette.badgeBg.opacity(0.50))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5.5, style: .continuous)
+                .strokeBorder(Palette.border, lineWidth: 0.5)
+        )
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct MarkdownModeButton: View {
+    let systemImage: String
+    let selected: Bool
+    let help: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10.5))
+                .foregroundStyle(selected ? Palette.accent : (isHovered ? .primary : .secondary))
+                .frame(width: 22, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(selected ? Palette.selection : (isHovered ? Color.primary.opacity(0.06) : Color.clear))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
 // MARK: - File Editor Status Bar
 
 private struct FileEditorStatusBar: View {
@@ -232,6 +347,7 @@ private struct FileEditorStatusBar: View {
     let path: String
     let state: FileTabState?
     let visual: FileVisual
+    var showingPreview = false
 
     /// 行数与体积都取内存里的草稿：这个视图随每次按键重渲染，
     /// 读盘等于在每个键击上把整个文件（上限 2MB）重新解码一遍。
@@ -310,7 +426,7 @@ private struct FileEditorStatusBar: View {
             if includeEncoding {
                 Text("·")
                     .foregroundStyle(.tertiary)
-                Text("UTF-8")
+                Text(showingPreview ? "预览".localized : "UTF-8")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

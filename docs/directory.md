@@ -78,7 +78,7 @@ Aureways/                          # 仓库根
 │       ├── InspectorViews.swift   # 右栏面板容器与信息标签
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树
-│       ├── FileEditorTab.swift    # 文本编辑器
+│       ├── FileEditorTab.swift    # 文本编辑器（Markdown 可预览）
 │       ├── TerminalTab.swift      # SwiftTerm 交互终端
 │       ├── EmptyWorkspace.swift   # 空白画布
 │       ├── AgentSheets.swift      # 自定义 Agent

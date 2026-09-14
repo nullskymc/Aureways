@@ -25,6 +25,8 @@ struct FileTabState {
     var isDirty = false
     var externallyModified = false
     var reloadToken = 0
+    /// Markdown 文件默认预览；其它类型忽略。
+    var showsMarkdownPreview = true
 }
 
 extension AppModel {

@@ -23,7 +23,7 @@ struct FileVisual {
             return FileVisual(icon: "swift", color: .orange, language: "Swift")
         } else if ext == "xcodeproj" || ext == "xcworkspace" {
             return FileVisual(icon: "hammer.fill", color: Palette.sky, language: "Xcode")
-        } else if ["md", "markdown"].contains(ext) {
+        } else if Self.isMarkdown(path: path) {
             return FileVisual(icon: "text.book.closed.fill", color: Palette.sky, language: "Markdown")
         } else if ["txt", "rtf"].contains(ext) {
             return FileVisual(icon: "doc.text.fill", color: Palette.sky, language: "文本".localized)
@@ -60,6 +60,10 @@ struct FileVisual {
         } else {
             return FileVisual(icon: "doc.text.fill", color: Color.secondary.opacity(0.8), language: "文本".localized)
         }
+    }
+
+    static func isMarkdown(path: String) -> Bool {
+        ["md", "markdown"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
     }
 }
 
