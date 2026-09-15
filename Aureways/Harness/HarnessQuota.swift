@@ -331,7 +331,7 @@ actor HarnessQuotaFetcher {
         #else
         let arch = "arm64"
         #endif
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.11"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.0"
         return "antigravity/acp/1.1.1 (aidev_client; os_type=darwin; arch=\(arch); host_path=aureways/\(version); proxy_client=antigravity/sdk)"
     }
 
