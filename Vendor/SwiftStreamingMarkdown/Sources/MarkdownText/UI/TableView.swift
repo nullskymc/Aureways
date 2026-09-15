@@ -29,6 +29,7 @@ struct TableView: View {
   @State private var isExpanded: Bool = false
   @State private var isCopyPressed: Bool = false
   @State private var isCopyScaled: Bool = false
+  @State private var widthCommitTask: Task<Void, Never>?
 
   private let rawMarkdown: String
 
@@ -84,6 +85,25 @@ struct TableView: View {
             gridCellViewFor(rowIdx: rowIdx, colIdx: colIdx)
           }
         }
+      }
+    }
+  }
+
+  /// Split-pane drags fire width changes every frame. Writing `@State` each
+  /// time rebuilds the grid (and any inline math) for the whole table.
+  private func commitScrollWidth(_ newWidth: CGFloat) {
+    guard newWidth > 0 else { return }
+    if scrollWidth == 0 {
+      scrollWidth = newWidth
+      return
+    }
+    guard abs(scrollWidth - newWidth) > 1 else { return }
+    widthCommitTask?.cancel()
+    widthCommitTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 80_000_000)
+      guard !Task.isCancelled else { return }
+      if abs(scrollWidth - newWidth) > 1 {
+        scrollWidth = newWidth
       }
     }
   }
@@ -167,18 +187,15 @@ struct TableView: View {
             .stroke(config.tableStyle.borderColor, lineWidth: 1)
         )
         .cornerRadius(12)
-        .onWidthChange { newWidth in
-          scrollWidth = newWidth
-        }
     }
     .background {
       GeometryReader { geo in
         Color.clear
           .onAppear {
-            scrollWidth = geo.size.width
+            commitScrollWidth(geo.size.width)
           }
           .onChange(of: geo.size.width) { newValue in
-            scrollWidth = newValue
+            commitScrollWidth(newValue)
           }
       }
     }

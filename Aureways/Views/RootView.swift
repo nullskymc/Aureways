@@ -47,11 +47,7 @@ struct RootView: View {
         .liquidGlassWindow(appearance: model.colorScheme)
         .onAppear {
             AppActivation.openMainWindow = { openWindow(id: AppActivation.mainWindowID) }
-            AppActivation.bindMarkdownOpener { path in
-                openWindow(id: AppActivation.markdownWindowID, value: path)
-            }
             AppActivation.flushPendingOpens()
-            AppActivation.hideChatWindowIfDocumentLaunch()
         }
         .onReceive(NotificationCenter.default.publisher(for: .aurewaysRevealMainWindow)) { _ in
             AppActivation.revealMainWindow()
@@ -127,7 +123,7 @@ struct MainWorkspaceView: View {
                 set: { model.inspectorOpen = $0 }
             )) {
                 InspectorPaneView()
-                    .inspectorColumnWidth(min: 320, ideal: 440, max: 600)
+                    .inspectorColumnWidth(min: 320, ideal: 440, max: 760)
             }
     }
 

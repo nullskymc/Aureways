@@ -22,7 +22,7 @@ Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com)
 - **Streaming transcript** — Markdown body, collapsible thinking, grouped tool calls, plan steps. The composer takes `/` commands, `@` workspace-file references, and image/file attachments. Long transcripts are virtualized so scrolling stays cheap.
 - **Permissions** — the agent asks before reading/writing files or running commands; you can instead let the client approve on its behalf.
 - **Workbench** (`⌘B`) — a file browser, a text editor (line numbers, `⌘S`, conflict handling when you and the agent edit the same file), and interactive terminals. Every open file and terminal keeps its own tab, so switching doesn't lose state.
-- **Markdown documents** — Finder, Dock, `open -a`, and File → Open Markdown (`⌘O`) open `.md` files in a dedicated preview window (same renderer as the transcript). Set Aureways as the default Markdown app in Settings if you want double-click.
+- **Markdown documents** — Finder, Dock, `open -a`, and File → Open Markdown (`⌘O`) open `.md` files as workbench tabs (same preview renderer as the transcript). Set Aureways as the default Markdown app in Settings if you want double-click.
 
 ```
 ┌──────────────┬────────────────────────────────────────────┬──────────────┐

@@ -5186,34 +5186,18 @@
         }
       }
     },
-    "双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。": {
+    "双击 .md 会在右侧工作台以标签打开。也可在 Finder 里选「打开方式 → Aureways」，或在此设为系统默认。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-click a .md file, or choose Open With → Aureways in Finder. You can also set it as the system default here."
+            "value": "Double-click a .md file to open it as a workbench tab. You can also choose Open With → Aureways in Finder, or set it as the system default here."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。"
-          }
-        }
-      }
-    },
-    "在 Markdown 窗口中打开": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open in Markdown Window"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在 Markdown 窗口中打开"
+            "value": "双击 .md 会在右侧工作台以标签打开。也可在 Finder 里选「打开方式 → Aureways」，或在此设为系统默认。"
           }
         }
       }

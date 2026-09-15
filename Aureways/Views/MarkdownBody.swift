@@ -15,14 +15,17 @@ import SwiftUI
 struct MarkdownBody: View {
     let source: String
     var isStreaming: Bool
+    /// Long workbench previews: only build on-screen blocks. Transcript stays eager.
+    var lazyBlocks: Bool = false
 
     @State private var document: MarkdownParseResult?
     @State private var requestedGeneration = 0
     @StateObject private var streamParser = MarkdownStreamParser()
 
-    init(source: String, isStreaming: Bool = false) {
+    init(source: String, isStreaming: Bool = false, lazyBlocks: Bool = false) {
         self.source = source
         self.isStreaming = isStreaming
+        self.lazyBlocks = lazyBlocks
         let cached = MarkdownDocumentCache.shared.cached(source).map {
             MarkdownParseResult(source: source, generation: 0, document: $0)
         }
@@ -36,7 +39,11 @@ struct MarkdownBody: View {
     var body: some View {
         Group {
             if let document {
-                DocumentView(renderableDocument: document.document, config: config)
+                DocumentView(
+                    renderableDocument: document.document,
+                    config: config,
+                    lazyBlocks: lazyBlocks
+                )
             } else {
                 // 解析落地前用同字号明文占位。高度只是近似，但远好过 0——
                 // 高度 0 会让虚拟化的 stack 把这条消息当成不存在。
@@ -344,5 +351,49 @@ enum AurewaysMarkdown {
 
     static func mono(_ size: CGFloat) -> NSFont {
         NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+}
+
+private struct InspectorResizingKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Inspector column is being live-resized. Markdown should keep its last width.
+    var inspectorResizing: Bool {
+        get { self[InspectorResizingKey.self] }
+        set { self[InspectorResizingKey.self] = newValue }
+    }
+}
+
+/// During inspector split drags, keep the last laid-out width so tables and
+/// formulas are not rebuilt every frame. Commit when resizing ends.
+struct DebouncedWidth<Content: View>: View {
+    @Environment(\.inspectorResizing) private var inspectorResizing
+    @ViewBuilder var content: (CGFloat?) -> Content
+
+    @State private var width: CGFloat?
+    @State private var latest: CGFloat = 0
+
+    var body: some View {
+        content(width)
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { _, newWidth in
+                guard newWidth > 0 else { return }
+                latest = newWidth
+                if width == nil || !inspectorResizing {
+                    if width == nil || abs((width ?? 0) - newWidth) > 1 {
+                        width = newWidth
+                    }
+                }
+            }
+            .onChange(of: inspectorResizing) { _, resizing in
+                guard !resizing, latest > 0 else { return }
+                if width == nil || abs((width ?? 0) - latest) > 1 {
+                    width = latest
+                }
+            }
     }
 }

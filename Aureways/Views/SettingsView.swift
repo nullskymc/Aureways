@@ -112,7 +112,7 @@ private struct MarkdownDefaultSettingsSection: View {
         } header: {
             Text("Markdown")
         } footer: {
-            Text("双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。".localized)
+            Text("双击 .md 会在右侧工作台以标签打开。也可在 Finder 里选「打开方式 → Aureways」，或在此设为系统默认。".localized)
         }
         .onAppear { isDefault = MarkdownDefaultApp.isCurrent }
     }

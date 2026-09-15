@@ -28,7 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     nonisolated func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         DispatchQueue.main.async {
-            if AppActivation.consumeIgnoreNextReopen() { return }
             NotificationCenter.default.post(name: .aurewaysRevealMainWindow, object: nil)
         }
         return true
@@ -40,14 +39,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    #if DEBUG
     nonisolated func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
-            #if DEBUG
             ScrollProbe.shared.start()
-            #endif
-            AppActivation.flushPendingOpens()
         }
     }
+    #endif
 }
 
 @main
@@ -91,19 +89,6 @@ struct AurewaysApp: App {
                 .keyboardShortcut("q", modifiers: [.command])
             }
         }
-
-        WindowGroup(id: AppActivation.markdownWindowID, for: String.self) { $path in
-            if let path, !path.isEmpty {
-                MarkdownDocumentView(path: path)
-                    .environment(\.locale, model.displayLocale)
-                    .preferredColorScheme(model.colorScheme)
-                    .id(model.appLanguage)
-            }
-        }
-        .windowStyle(.automatic)
-        .windowToolbarStyle(.unified)
-        .defaultSize(width: 860, height: 920)
-        .defaultLaunchBehavior(.suppressed)
 
         Settings {
             SettingsView()

@@ -91,11 +91,16 @@ extension AppModel {
     }
 
     func openMarkdownDocuments(urls: [URL]) {
-        AppActivation.openMarkdownURLs(urls)
-    }
-
-    func openMarkdownDocument(path: String) {
-        AppActivation.openMarkdownURLs([URL(fileURLWithPath: path)])
+        let markdown = urls.filter { MarkdownFile.matches(url: $0) }
+        if markdown.isEmpty {
+            if !urls.isEmpty {
+                errorMessage = "不是 Markdown 文件".localized
+            }
+            return
+        }
+        for url in markdown {
+            openFileTab(path: url.standardizedFileURL.path)
+        }
     }
 
     func pickAndOpenMarkdownDocuments() {
@@ -107,6 +112,7 @@ extension AppModel {
         panel.message = "选择 Markdown 文件".localized
         panel.prompt = "打开".localized
         guard panel.runModal() == .OK else { return }
+        AppActivation.revealMainWindow()
         openMarkdownDocuments(urls: panel.urls)
     }
 

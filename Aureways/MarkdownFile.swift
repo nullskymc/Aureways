@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
-/// UTF-8 文本读盘：工作台编辑器和系统打开的 Markdown 窗口共用。
+/// UTF-8 文本读盘：工作台编辑器与 Finder 打开的 Markdown 共用。
 enum TextFile {
     static let maxBytes: Int64 = 2 * 1024 * 1024
 

@@ -11,20 +11,36 @@ struct BlockView: View {
   @Environment(\.markdownConfig) var config: MarkdownRenderConfig
 
   let renderables: [MarkdownRenderable]
+  /// Inspector previews of long files: only materialize on-screen blocks.
+  /// Transcript stays eager so virtualized row heights are known up front.
+  var lazy: Bool = false
 
-  init(renderables: [MarkdownRenderable]) {
+  init(renderables: [MarkdownRenderable], lazy: Bool = false) {
     self.renderables = renderables
+    self.lazy = lazy
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: config.blockSpacing) {
-      ForEach(renderables) { renderable in
-        // Skip body (and therefore AppKit/UIKit representable updates) when the
-        // parsed block has not changed. Streaming re-parses the whole document
-        // on every token; without this, already-closed latex is typeset again.
-        SingleBlockView(renderable: renderable)
-          .equatable()
+    let spacing = config.blockSpacing
+    if lazy {
+      LazyVStack(alignment: .leading, spacing: spacing) {
+        blockStack
       }
+    } else {
+      VStack(alignment: .leading, spacing: spacing) {
+        blockStack
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var blockStack: some View {
+    ForEach(renderables) { renderable in
+      // Skip body (and therefore AppKit/UIKit representable updates) when the
+      // parsed block has not changed. Streaming re-parses the whole document
+      // on every token; without this, already-closed latex is typeset again.
+      SingleBlockView(renderable: renderable)
+        .equatable()
     }
   }
 }

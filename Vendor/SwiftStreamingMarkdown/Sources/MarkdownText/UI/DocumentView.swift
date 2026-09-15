@@ -17,24 +17,28 @@ public struct DocumentView: View {
 
   let renderableDocument: RenderableDocument
   let config: MarkdownRenderConfig
+  var lazyBlocks: Bool = false
 
   /// Create a `DocumentView`.
   /// - Parameters:
   ///   - renderableDocument: The parsed Markdown document to render.
   ///   - config: Render configuration. Defaults to `.default`.
   ///   - listener: Optional listener that receives render and interaction events.
+  ///   - lazyBlocks: Use a lazy stack. Long inspector previews should pass true.
   public init(
     renderableDocument: RenderableDocument,
     config: MarkdownRenderConfig = .default,
-    listener: MarkdownListener? = nil
+    listener: MarkdownListener? = nil,
+    lazyBlocks: Bool = false
   ) {
     self.renderableDocument = renderableDocument
     self.config = config
+    self.lazyBlocks = lazyBlocks
     self._controller = StateObject(wrappedValue: MarkdownController(listener: listener))
   }
 
   public var body: some View {
-    BlockView(renderables: renderableDocument.renderables)
+    BlockView(renderables: renderableDocument.renderables, lazy: lazyBlocks)
     .environment(\.markdownConfig, config)
     .environment(\.markdownController, controller)
     .task {

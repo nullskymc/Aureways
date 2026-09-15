@@ -41,7 +41,7 @@ struct FileEditorTabView: View {
                     .allowsHitTesting(!showingPreview)
                     .accessibilityHidden(showingPreview)
 
-                if showingPreview {
+                if showingPreview, isActive {
                     markdownPreview
                 }
             }
@@ -65,14 +65,24 @@ struct FileEditorTabView: View {
     }
 
     private var markdownPreview: some View {
-        ScrollView {
-            MarkdownBody(source: model.editorDrafts[path] ?? "", isStreaming: false)
+        DebouncedWidth { width in
+            ScrollView {
+                MarkdownBody(
+                    source: model.editorDrafts[path] ?? "",
+                    isStreaming: false,
+                    lazyBlocks: true
+                )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
+                .frame(
+                    maxWidth: width.map { max($0 - 32, 0) } ?? .infinity,
+                    alignment: .leading
+                )
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -226,11 +236,7 @@ private struct FileEditorHeader: View {
                 .help(copiedFeedback ? "已复制路径".localized : "复制完整路径".localized)
 
                 Button {
-                    if FileVisual.isMarkdown(path: path) {
-                        model.openMarkdownDocument(path: path)
-                    } else {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
-                    }
+                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
                 } label: {
                     Image(systemName: "arrow.up.forward.app")
                         .font(.system(size: 10.5))
@@ -244,11 +250,7 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isExternalHovered = $0 }
-                .help(
-                    FileVisual.isMarkdown(path: path)
-                        ? "在 Markdown 窗口中打开".localized
-                        : "在默认外部编辑器中打开".localized
-                )
+                .help("在默认外部编辑器中打开".localized)
 
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -680,9 +682,10 @@ private struct TextEditorRepresentable: NSViewRepresentable {
         context.coordinator.model = model
         context.coordinator.host = nsView
         context.coordinator.syncReload()
+        context.coordinator.updateFirstResponder(isActive: isActive, scrollView: nsView.scrollView)
+        guard isActive else { return }
         nsView.syncTextViewSize()
         nsView.gutter.needsDisplay = true
-        context.coordinator.updateFirstResponder(isActive: isActive, scrollView: nsView.scrollView)
     }
 }
 

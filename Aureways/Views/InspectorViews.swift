@@ -5,6 +5,9 @@ import SwiftUI
 
 struct InspectorPaneView: View {
     @Environment(AppModel.self) private var model
+    @State private var isResizing = false
+    @State private var resizeGeneration = 0
+    @State private var lastWidth: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -19,6 +22,21 @@ struct InspectorPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.inspectorBg)
+        .overlay {
+            ZStack {
+                Palette.inspectorBg.opacity(0.45)
+                Rectangle().fill(.regularMaterial)
+            }
+            .opacity(isResizing ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: isResizing)
+            .allowsHitTesting(false)
+        }
+        .environment(\.inspectorResizing, isResizing)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, width in
+            noteColumnWidth(width)
+        }
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Palette.splitDivider)
@@ -82,6 +100,24 @@ struct InspectorPaneView: View {
             Text("“%@” 有未保存的修改，从磁盘重新载入会丢弃它们。".localized(
                 model.pendingReloadPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
             ))
+        }
+    }
+
+    private func noteColumnWidth(_ width: CGFloat) {
+        guard width > 0 else { return }
+        if lastWidth == 0 {
+            lastWidth = width
+            return
+        }
+        guard abs(lastWidth - width) > 0.5 else { return }
+        lastWidth = width
+        if !isResizing { isResizing = true }
+        resizeGeneration += 1
+        let token = resizeGeneration
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(90))
+            guard token == resizeGeneration else { return }
+            isResizing = false
         }
     }
 

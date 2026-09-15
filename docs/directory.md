@@ -26,7 +26,7 @@ Aureways/                          # 仓库根
 │   └── xcshareddata/xcschemes/
 │       └── Aureways.xcscheme
 ├── Aureways/                      # 应用源码（bundle id: ai.aureways.client）
-│   ├── AurewaysApp.swift          # @main，主窗口 + Markdown WindowGroup + Settings + 退出清理
+│   ├── AurewaysApp.swift          # @main，主窗口 + Settings + 退出清理
 │   ├── Info.plist                 # 与 GENERATE_INFOPLIST_FILE 合并：Markdown 文档类型
 │   ├── Localization.swift         # L10n / String.localized
 │   ├── Localizable.xcstrings      # zh-Hans 源文案 + en 翻译
@@ -81,7 +81,6 @@ Aureways/                          # 仓库根
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树
 │       ├── FileEditorTab.swift    # 文本编辑器（Markdown 可预览）
-│       ├── MarkdownDocumentView.swift # 系统打开的独立 Markdown 窗口
 │       ├── TerminalTab.swift      # SwiftTerm 交互终端
 │       ├── EmptyWorkspace.swift   # 空白画布
 │       ├── AgentSheets.swift      # 自定义 Agent

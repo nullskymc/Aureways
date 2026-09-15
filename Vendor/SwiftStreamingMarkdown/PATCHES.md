@@ -13,5 +13,6 @@ Changes on top of upstream:
 5. **`SingleBlockView`** — `Equatable` + `.equatable()`, so unchanged latex / heading / paragraph blocks do not re-enter `updateNSView` / `sizeThatFits` when a later block grows.
 6. **Final-document text merging** — collapse adjacent headings, paragraphs, and text-only lists into one attributed paragraph after streaming completes, so native TextKit selection crosses those Markdown block boundaries while rich blocks keep their existing views.
 7. **`$...$` inline math** — `LaTexPreProcessor` recognizes Pandoc-style single-dollar spans (`$f_\\beta(x)$`, table cells, `\\theta`) in addition to `\\(...\\)`. Currency (`$5` / `$10`) and `$` inside fenced or inline code are left alone; `_` inside math is no longer parsed as emphasis.
+8. **Table width** — `TableView` was writing viewport width into `@State` on every split-pane frame (and measuring the grid itself, which depends on that width). Commit width after 80 ms of stability so dragging the inspector does not rebuild every cell / formula.
 
 When rebasing onto a newer upstream: copy `Sources/` over, re-apply the items above, and keep this file in sync.

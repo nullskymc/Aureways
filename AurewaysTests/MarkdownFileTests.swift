@@ -70,22 +70,4 @@ final class MarkdownFileTests: XCTestCase {
             XCTAssertEqual(error as? TextFile.ReadError, .binaryOrNotUTF8)
         }
     }
-
-    @MainActor
-    func testDocumentStateLoadsSavesAndTracksDirty() throws {
-        let url = scratch.appendingPathComponent("note.md")
-        try "# Hello".write(to: url, atomically: true, encoding: .utf8)
-        let document = MarkdownDocumentState(path: url.path)
-        document.loadIfNeeded()
-        XCTAssertEqual(document.text, "# Hello")
-        XCTAssertFalse(document.isDirty)
-        XCTAssertNil(document.loadError)
-
-        document.text = "# Hello\n\nEdited"
-        document.markEdited()
-        XCTAssertTrue(document.isDirty)
-        document.save()
-        XCTAssertFalse(document.isDirty)
-        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "# Hello\n\nEdited")
-    }
 }
