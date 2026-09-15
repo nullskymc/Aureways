@@ -293,6 +293,11 @@ struct StatusMenuView: View {
         }
         .frame(width: StatusMenuLayout.width)
         .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            AppActivation.bindMarkdownOpener { path in
+                openWindow(id: AppActivation.markdownWindowID, value: path)
+            }
+        }
         .task {
             model.refreshAvailability()
             // 打开窗口刷一轮，但仍受 60 秒闸门管，反复开关不会连打请求。
@@ -683,16 +688,111 @@ extension Notification.Name {
 
 enum AppActivation {
     static let mainWindowID = "main"
+    static let markdownWindowID = "markdown"
     @MainActor static var openMainWindow: (() -> Void)?
+    @MainActor static var openMarkdownWindow: ((String) -> Void)?
     @MainActor static var allowsTermination = false
+    @MainActor static var openedDocumentsThisLaunch = false
+    @MainActor private static var pendingOpenURLs: [URL] = []
+    @MainActor private static var didHideChatForDocumentLaunch = false
+    @MainActor private static var ignoreNextReopen = false
 
     @MainActor
-    static var mainWindows: [NSWindow] {
+    static var chatWindows: [NSWindow] {
+        NSApp.windows.filter { $0.identifier?.rawValue == mainWindowID }
+    }
+
+    @MainActor
+    static var titledWindows: [NSWindow] {
         NSApp.windows.filter { window in
             window.canBecomeMain
                 && window.styleMask.contains(.titled)
                 && window.styleMask.contains(.closable)
         }
+    }
+
+    @MainActor
+    static var mainWindows: [NSWindow] { titledWindows }
+
+    @MainActor
+    static func bindMarkdownOpener(_ opener: @escaping (String) -> Void) {
+        openMarkdownWindow = opener
+        flushPendingOpens()
+    }
+
+    @MainActor
+    static func receiveOpenedURLs(_ urls: [URL]) {
+        pendingOpenURLs.append(contentsOf: urls)
+        if urls.contains(where: { MarkdownFile.matches(url: $0) }) {
+            openedDocumentsThisLaunch = true
+            ignoreNextReopen = true
+        }
+        flushPendingOpens()
+    }
+
+    @MainActor
+    static func consumeIgnoreNextReopen() -> Bool {
+        defer { ignoreNextReopen = false }
+        return ignoreNextReopen
+    }
+
+    @MainActor
+    static func noteDocumentOpen() {
+        openedDocumentsThisLaunch = true
+        presentDock()
+    }
+
+    @MainActor
+    static func openMarkdown(path: String) {
+        presentDock()
+        if let openMarkdownWindow {
+            openMarkdownWindow(path)
+        } else {
+            pendingOpenURLs.append(URL(fileURLWithPath: path))
+        }
+    }
+
+    @MainActor
+    static func flushPendingOpens() {
+        let urls = pendingOpenURLs
+        guard !urls.isEmpty else { return }
+        pendingOpenURLs.removeAll()
+        openMarkdownURLs(urls)
+    }
+
+    /// Open `.md` windows without touching `AppModel` drafts or the chat inspector.
+    @MainActor
+    static func openMarkdownURLs(_ urls: [URL]) {
+        let markdown = urls.filter { MarkdownFile.matches(url: $0) }
+        if markdown.isEmpty {
+            if !urls.isEmpty {
+                AppModel.shared?.errorMessage = "不是 Markdown 文件".localized
+                revealMainWindow()
+            }
+            return
+        }
+        noteDocumentOpen()
+        for url in markdown {
+            openMarkdown(path: url.standardizedFileURL.path)
+        }
+    }
+
+    @MainActor
+    static func hideChatWindowIfDocumentLaunch() {
+        guard openedDocumentsThisLaunch, !didHideChatForDocumentLaunch else { return }
+        didHideChatForDocumentLaunch = true
+        for window in chatWindows {
+            window.close()
+        }
+        presentDock()
+    }
+
+    @MainActor
+    static func presentDock() {
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// 关掉主窗口和 Dock 图标，只留菜单栏。
@@ -713,7 +813,7 @@ enum AppActivation {
 
     @MainActor
     static func hideDockIfNoMainWindow() {
-        if mainWindows.isEmpty {
+        if titledWindows.isEmpty {
             NSApp.setActivationPolicy(.accessory)
         }
     }
@@ -737,7 +837,7 @@ enum AppActivation {
         NSApp.activate(ignoringOtherApps: true)
 
         let present = {
-            if let window = mainWindows.first {
+            if let window = chatWindows.first {
                 if window.isMiniaturized {
                     window.deminiaturize(nil)
                 }

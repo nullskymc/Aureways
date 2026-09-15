@@ -5089,6 +5089,134 @@
           }
         }
       }
+    },
+    "打开 Markdown…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Markdown…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Markdown…"
+          }
+        }
+      }
+    },
+    "选择 Markdown 文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Markdown Files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 Markdown 文件"
+          }
+        }
+      }
+    },
+    "设为默认 Markdown 打开方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Aureways to Open Markdown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为默认 Markdown 打开方式"
+          }
+        }
+      }
+    },
+    "已是默认 Markdown 打开方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aureways is the default Markdown app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已是默认 Markdown 打开方式"
+          }
+        }
+      }
+    },
+    "无法设为默认打开方式：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't set as default: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法设为默认打开方式：%@"
+          }
+        }
+      }
+    },
+    "不是 Markdown 文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not a Markdown file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是 Markdown 文件"
+          }
+        }
+      }
+    },
+    "双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-click a .md file, or choose Open With → Aureways in Finder. You can also set it as the system default here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。"
+          }
+        }
+      }
+    },
+    "在 Markdown 窗口中打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Markdown Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Markdown 窗口中打开"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

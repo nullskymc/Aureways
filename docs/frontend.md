@@ -77,9 +77,18 @@
 快捷键 `⌘B` / `⌥⌘I` 展开/折叠。窗口工具栏是系统分段选择器（`PaneTabBar`）：文件浏览器、每个打开的文本文件、每个终端各占一段。右键某一段弹出菜单关闭该标签（文件还有「关闭其它」「在 Finder 中显示」）；文件浏览器常驻不能关。标签条尾部 `+` 是选择菜单：新建终端、文件浏览器、会话信息、在 Finder 中显示工作区。切换标签只是隐藏视图，终端输出与编辑器文本不丢。
 
 1. **文件浏览器（常驻）**：当前工作区的递归目录树，懒加载；点击文件即在编辑器标签打开；Agent 写文件后自动刷新。
-2. **文本文件标签**：NSTextView 编辑器（等宽字体 + 行号栏），脏标记 ●、`⌘S` 保存。`.md` / `.markdown` 默认预览，顶栏可切回源码；预览复用对话区的 `MarkdownBody`，编辑器在切走时仍存活所以撤销栈不丢。三层冲突处理：保存时按 mtime 校验外部修改（覆盖 / 放弃 / 取消）；关闭未保存文件弹确认（保存 / 不保存 / 取消）；Agent 写已打开文件时，未脏自动重载、已脏显示「重载 / 保留我的」提示条。>2MB、非 UTF-8、含 NUL 的文件拒绝打开。
+2. **文本文件标签**：NSTextView 编辑器（等宽字体 + 行号栏），脏标记 ●、`⌘S` 保存。`.md` / `.markdown` 等默认预览，顶栏可切回源码；预览复用对话区的 `MarkdownBody`，编辑器在切走时仍存活所以撤销栈不丢。三层冲突处理：保存时按 mtime 校验外部修改（覆盖 / 放弃 / 取消）；关闭未保存文件弹确认（保存 / 不保存 / 取消）；Agent 写已打开文件时，未脏自动重载、已脏显示「重载 / 保留我的」提示条。>2MB、非 UTF-8、含 NUL 的文件拒绝打开。工作台里点「在 Markdown 窗口中打开」会把同一份草稿放到独立窗口。
 3. **终端标签**：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 真实 PTY 交互终端，按登录 shell 启动并继承完整 PATH；背景 / 前景随浅色、深色切换（与检查器画布同色）。进程在 `openTerminalTab()` 创建，关标签即终止，shell 里敲 `exit` 同样关掉标签并回收 PTY，应用退出统一清理。
 4. **信息标签**：协议、Agent、工作区路径、ACP Session ID 与会话配置（`configOptions`）编辑。
+
+### 2.5 系统 Markdown 窗口
+
+Aureways 以 **Editor / Alternate** 身份声明 `net.daringfireball.markdown`（扩展名 `.md` `.markdown` `.mdown` `.mkd` `.mkdn` `.mdwn`）。Finder「打开方式」、Dock 拖放、`open -a Aureways file.md`、以及菜单 **打开 Markdown…**（`⌘O`）都走进独立 `WindowGroup`，而不是挤进右侧工作台。
+
+- 文档窗口有自己的 `MarkdownDocumentState`，不进工作台 `editorDrafts`，也不观察会话流式更新，避免和对话窗口抢主线程。
+- 预览用 `MarkdownBody`（阅读栏宽约 780pt），源码用 `TextEditor`；预览态不挂 NSTextView。
+- 从文件启动时主对话窗口会先收起，只留 Markdown 窗口和菜单栏；点 Dock 仍会唤回对话窗口。
+- 默认不抢系统双击（`LSHandlerRank = Alternate`）。偏好设置 → Markdown 可「设为默认 Markdown 打开方式」。只改 Markdown UTI，不动 `public.plain-text`。
 
 > 旧版「审查 / 日志」两个只读标签已移除，但 `fileOps` / `logs` 数据仍在后台按会话记录（`ChatSession`），供后续恢复或做差异审查。
 
@@ -123,6 +132,9 @@
 | `Aureways/Views/PaneTabBar.swift` | 统一标签条与 `+` 新建菜单 |
 | `Aureways/Views/FileBrowserTab.swift` | 工作区递归目录树（懒加载） |
 | `Aureways/Views/FileEditorTab.swift` | NSTextView 编辑器、行号、保存与冲突处理；Markdown 源码/预览切换 |
+| `Aureways/Views/MarkdownDocumentView.swift` | Finder / ⌘O 打开的独立 Markdown 窗口 |
+| `Aureways/MarkdownFile.swift` | 扩展名识别、UTF-8 读盘、默认打开方式 |
+| `Aureways/Info.plist` | 文档类型与导入的 Markdown UTI |
 | `Aureways/Views/TerminalTab.swift` | SwiftTerm 交互终端与外观适配 |
-| `Aureways/Views/SettingsView.swift` | 设置中心：通用 / Agent / 工作区 / 权限 |
+| `Aureways/Views/SettingsView.swift` | 设置中心：通用 / Agent / 工作区 / 权限 / Markdown 默认打开方式 |
 | `Aureways/AppModel.swift` 及 `AppModel+*.swift` | 状态中心（会话、工作区、运行时、面板标签） |

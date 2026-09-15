@@ -63,7 +63,7 @@ struct FileVisual {
     }
 
     static func isMarkdown(path: String) -> Bool {
-        ["md", "markdown"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
+        MarkdownFile.matches(path: path)
     }
 }
 

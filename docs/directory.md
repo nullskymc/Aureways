@@ -26,7 +26,8 @@ Aureways/                          # 仓库根
 │   └── xcshareddata/xcschemes/
 │       └── Aureways.xcscheme
 ├── Aureways/                      # 应用源码（bundle id: ai.aureways.client）
-│   ├── AurewaysApp.swift          # @main，WindowGroup + Settings + 退出清理
+│   ├── AurewaysApp.swift          # @main，主窗口 + Markdown WindowGroup + Settings + 退出清理
+│   ├── Info.plist                 # 与 GENERATE_INFOPLIST_FILE 合并：Markdown 文档类型
 │   ├── Localization.swift         # L10n / String.localized
 │   ├── Localizable.xcstrings      # zh-Hans 源文案 + en 翻译
 │   ├── AppModel.swift             # 应用状态
@@ -58,6 +59,7 @@ Aureways/                          # 仓库根
 │   │   ├── UpdateModels.swift     # session/update、tool、permission
 │   │   ├── Connection.swift       # 子进程 + 双向 RPC
 │   │   └── ClientOps.swift        # fs/*、terminal/*
+│   ├── MarkdownFile.swift          # Markdown 扩展名、读盘、默认打开方式
 │   ├── MarkdownDocumentCache.swift # 已解析 Markdown 文档缓存
 │   ├── TranscriptVirtualizer.swift # 对话流可见窗口与行高缓存
 │   └── Views/                     # 前端
@@ -79,12 +81,14 @@ Aureways/                          # 仓库根
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树
 │       ├── FileEditorTab.swift    # 文本编辑器（Markdown 可预览）
+│       ├── MarkdownDocumentView.swift # 系统打开的独立 Markdown 窗口
 │       ├── TerminalTab.swift      # SwiftTerm 交互终端
 │       ├── EmptyWorkspace.swift   # 空白画布
 │       ├── AgentSheets.swift      # 自定义 Agent
 │       └── SettingsView.swift     # 设置中心
 └── AurewaysTests/
     ├── ProtocolTests.swift        # JSON-RPC 与 mock agent 集成测试
+    ├── MarkdownFileTests.swift    # Markdown 扩展名与 UTF-8 读盘
     └── ComposerTextViewTests.swift
 ```
 

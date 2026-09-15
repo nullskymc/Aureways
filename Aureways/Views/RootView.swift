@@ -47,6 +47,11 @@ struct RootView: View {
         .liquidGlassWindow(appearance: model.colorScheme)
         .onAppear {
             AppActivation.openMainWindow = { openWindow(id: AppActivation.mainWindowID) }
+            AppActivation.bindMarkdownOpener { path in
+                openWindow(id: AppActivation.markdownWindowID, value: path)
+            }
+            AppActivation.flushPendingOpens()
+            AppActivation.hideChatWindowIfDocumentLaunch()
         }
         .onReceive(NotificationCenter.default.publisher(for: .aurewaysRevealMainWindow)) { _ in
             AppActivation.revealMainWindow()

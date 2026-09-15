@@ -45,6 +45,8 @@ struct GeneralSettingsPage: View {
                 }
             }
 
+            MarkdownDefaultSettingsSection()
+
             Section("新对话默认".localized) {
                 Picker("Agent", selection: $model.selectedAgentId) {
                     ForEach(model.selectableAgents) { agent in
@@ -79,6 +81,52 @@ struct GeneralSettingsPage: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+}
+
+private struct MarkdownDefaultSettingsSection: View {
+    @State private var isDefault = false
+    @State private var isUpdating = false
+    @State private var statusMessage: String?
+
+    var body: some View {
+        Section {
+            Button {
+                Task { await registerAsDefault() }
+            } label: {
+                HStack {
+                    Text(isDefault ? "已是默认 Markdown 打开方式".localized : "设为默认 Markdown 打开方式".localized)
+                    Spacer(minLength: 8)
+                    if isUpdating {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+            }
+            .disabled(isDefault || isUpdating)
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Markdown")
+        } footer: {
+            Text("双击 .md 文件，或在 Finder 里选「打开方式 → Aureways」。也可在此设为系统默认。".localized)
+        }
+        .onAppear { isDefault = MarkdownDefaultApp.isCurrent }
+    }
+
+    private func registerAsDefault() async {
+        isUpdating = true
+        defer { isUpdating = false }
+        do {
+            try await MarkdownDefaultApp.register()
+            isDefault = MarkdownDefaultApp.isCurrent
+            statusMessage = nil
+        } catch {
+            statusMessage = "无法设为默认打开方式：%@".localized(error.localizedDescription)
+        }
     }
 }
 

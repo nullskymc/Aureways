@@ -226,7 +226,11 @@ private struct FileEditorHeader: View {
                 .help(copiedFeedback ? "已复制路径".localized : "复制完整路径".localized)
 
                 Button {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    if FileVisual.isMarkdown(path: path) {
+                        model.openMarkdownDocument(path: path)
+                    } else {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    }
                 } label: {
                     Image(systemName: "arrow.up.forward.app")
                         .font(.system(size: 10.5))
@@ -240,7 +244,11 @@ private struct FileEditorHeader: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { isExternalHovered = $0 }
-                .help("在默认外部编辑器中打开".localized)
+                .help(
+                    FileVisual.isMarkdown(path: path)
+                        ? "在 Markdown 窗口中打开".localized
+                        : "在默认外部编辑器中打开".localized
+                )
 
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -283,7 +291,7 @@ private struct FileEditorHeader: View {
     }
 }
 
-private struct MarkdownModeSwitcher: View {
+struct MarkdownModeSwitcher: View {
     let showsPreview: Bool
     let onChange: (Bool) -> Void
 

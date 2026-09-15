@@ -159,13 +159,200 @@ final class LaTexPreProcessorImpl: LaTexPreProcessor {
     return result
   }
 
-  /// This wraps inline math as inline code to avoid over-unescaping issue
+  /// This wraps inline math as inline code to avoid over-unescaping issue.
+  /// `\(...\)` is rewritten first; `$...$` then walks the string so it can skip
+  /// fenced / inline code (including the spans just produced).
   func processInlineMath(input: String, rules: Set<MarkdownParseOption.LatexMatching>) -> String {
-    guard rules.contains(.inlineSlashBracket) else { return input }
-    return input.replacing(Self.inlineParenthesisMath, with: { match in
-      let latex = String(match[Self.latexRef]).filteringUnsupportedSyntaxes()
-      return "`\\(\(latex)\\)`"
-    })
+    var result = input
+    if rules.contains(.inlineSlashBracket) {
+      result.replace(Self.inlineParenthesisMath, with: { match in
+        let latex = String(match[Self.latexRef]).filteringUnsupportedSyntaxes()
+        return "`\\(\(latex)\\)`"
+      })
+    }
+    if rules.contains(.inlineDollar) {
+      result = processInlineDollarMath(input: result)
+    }
+    return result
+  }
+
+  /// Pandoc-style `$...$`: opening `$` not followed by whitespace, closing `$`
+  /// not preceded by whitespace and not followed by a digit. Newlines reject
+  /// the span so a missing closer cannot swallow the rest of the document.
+  func processInlineDollarMath(input: String) -> String {
+    var output = ""
+    output.reserveCapacity(input.count)
+    var index = input.startIndex
+    let end = input.endIndex
+    while index < end {
+      if let fence = consumeFencedCode(input, from: index) {
+        output.append(contentsOf: fence.text)
+        index = fence.next
+        continue
+      }
+      if let code = consumeInlineCode(input, from: index) {
+        output.append(contentsOf: code.text)
+        index = code.next
+        continue
+      }
+      if input[index] == "\\" {
+        output.append("\\")
+        index = input.index(after: index)
+        if index < end {
+          output.append(input[index])
+          index = input.index(after: index)
+        }
+        continue
+      }
+      if input[index] == "$", let math = consumeInlineDollar(input, from: index) {
+        let latex = String(math.latex).filteringUnsupportedSyntaxes()
+        output.append("`\\(\(latex)\\)`")
+        index = math.next
+        continue
+      }
+      output.append(input[index])
+      index = input.index(after: index)
+    }
+    return output
+  }
+
+  private func isLineStart(_ input: String, _ index: String.Index) -> Bool {
+    index == input.startIndex || input[input.index(before: index)] == "\n"
+  }
+
+  private func consumeFencedCode(
+    _ input: String,
+    from index: String.Index
+  ) -> (text: Substring, next: String.Index)? {
+    guard isLineStart(input, index) else { return nil }
+    var cursor = index
+    var indent = 0
+    while cursor < input.endIndex, input[cursor] == " ", indent < 3 {
+      indent += 1
+      cursor = input.index(after: cursor)
+    }
+    guard cursor < input.endIndex else { return nil }
+    let fenceChar = input[cursor]
+    guard fenceChar == "`" || fenceChar == "~" else { return nil }
+    var fenceLength = 0
+    while cursor < input.endIndex, input[cursor] == fenceChar {
+      fenceLength += 1
+      cursor = input.index(after: cursor)
+    }
+    guard fenceLength >= 3 else { return nil }
+    while cursor < input.endIndex, input[cursor] != "\n" {
+      cursor = input.index(after: cursor)
+    }
+    if cursor < input.endIndex {
+      cursor = input.index(after: cursor)
+    }
+    while cursor < input.endIndex {
+      let lineStart = cursor
+      var look = cursor
+      var lineIndent = 0
+      while look < input.endIndex, input[look] == " ", lineIndent < 3 {
+        lineIndent += 1
+        look = input.index(after: look)
+      }
+      var closeLength = 0
+      while look < input.endIndex, input[look] == fenceChar {
+        closeLength += 1
+        look = input.index(after: look)
+      }
+      if closeLength >= fenceLength {
+        while look < input.endIndex, input[look] == " " || input[look] == "\t" {
+          look = input.index(after: look)
+        }
+        if look == input.endIndex || input[look] == "\n" {
+          if look < input.endIndex {
+            look = input.index(after: look)
+          }
+          return (input[index..<look], look)
+        }
+      }
+      cursor = lineStart
+      while cursor < input.endIndex, input[cursor] != "\n" {
+        cursor = input.index(after: cursor)
+      }
+      if cursor < input.endIndex {
+        cursor = input.index(after: cursor)
+      }
+    }
+    return (input[index..<input.endIndex], input.endIndex)
+  }
+
+  private func consumeInlineCode(
+    _ input: String,
+    from index: String.Index
+  ) -> (text: Substring, next: String.Index)? {
+    guard input[index] == "`" else { return nil }
+    var cursor = index
+    var ticks = 0
+    while cursor < input.endIndex, input[cursor] == "`" {
+      ticks += 1
+      cursor = input.index(after: cursor)
+    }
+    guard ticks > 0 else { return nil }
+    var look = cursor
+    while look < input.endIndex {
+      if input[look] == "`" {
+        var close = 0
+        var closer = look
+        while closer < input.endIndex, input[closer] == "`" {
+          close += 1
+          closer = input.index(after: closer)
+        }
+        if close == ticks {
+          return (input[index..<closer], closer)
+        }
+        look = closer
+        continue
+      }
+      look = input.index(after: look)
+    }
+    return nil
+  }
+
+  private func consumeInlineDollar(
+    _ input: String,
+    from index: String.Index
+  ) -> (latex: Substring, next: String.Index)? {
+    let afterOpen = input.index(after: index)
+    guard afterOpen < input.endIndex else { return nil }
+    let nextChar = input[afterOpen]
+    if nextChar == "$" || nextChar.isWhitespace { return nil }
+
+    var cursor = afterOpen
+    while cursor < input.endIndex {
+      let char = input[cursor]
+      if char == "\n" { return nil }
+      if char == "\\" {
+        let escaped = input.index(after: cursor)
+        guard escaped < input.endIndex else { return nil }
+        cursor = input.index(after: escaped)
+        continue
+      }
+      if char == "$" {
+        let previous = input[input.index(before: cursor)]
+        if previous.isWhitespace {
+          cursor = input.index(after: cursor)
+          continue
+        }
+        let afterClose = input.index(after: cursor)
+        if afterClose < input.endIndex {
+          let following = input[afterClose]
+          if following.isASCII && following.isNumber {
+            cursor = afterClose
+            continue
+          }
+        }
+        let latex = input[afterOpen..<cursor]
+        guard !latex.isEmpty else { return nil }
+        return (latex, afterClose)
+      }
+      cursor = input.index(after: cursor)
+    }
+    return nil
   }
 
   // MARK: - Convenience overloads (default to every supported rule)

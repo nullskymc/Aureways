@@ -262,6 +262,85 @@ final class MarkdownStreamTests: XCTestCase {
         MarkdownDocumentCache.shared.store(source, parsed)
         XCTAssertEqual(MarkdownDocumentCache.shared.cached(source), parsed)
     }
+
+    func testInlineDollarMathBecomesALatexAttachment() async {
+        let source = #"Let $f_\beta(x)$ and $\theta$ hold."#
+        let document = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        guard case .paragraph(_, let content) = document.renderables.first else {
+            return XCTFail("expected a paragraph")
+        }
+        let payloads = latexPayloads(in: content)
+        XCTAssertEqual(payloads, [#"f_\beta(x)"#, #"\theta"#])
+        XCTAssertFalse(content.string.contains("$"))
+        XCTAssertFalse(content.string.contains("beta"))
+    }
+
+    func testInlineDollarMathInsideTableCells() async {
+        let source = """
+        | Loss |
+        | --- |
+        | $\\mathcal{L}(x_t, y_t)$ |
+        """
+        let document = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        guard case .table(_, _, let rows, _) = document.renderables.first else {
+            return XCTFail("expected a table, got \(document.renderables)")
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(latexPayloads(in: rows[0][0]), [#"\mathcal{L}(x_t, y_t)"#])
+    }
+
+    func testInlineDollarPreprocessorSkipsCurrencyAndFencedCode() {
+        let processor = LaTexPreProcessorImpl()
+        let source = """
+        Price is $5 and $10.
+
+        ```swift
+        let money = "$x$"
+        ```
+
+        Then $E = mc^2$.
+        """
+        let processed = processor.process(input: source)
+        XCTAssertTrue(processed.contains("$5"))
+        XCTAssertTrue(processed.contains("$10"))
+        XCTAssertTrue(processed.contains(#"let money = "$x$""#))
+        XCTAssertTrue(processed.contains(#"`\(E = mc^2\)`"#))
+        XCTAssertFalse(processed.contains("$E = mc^2$"))
+    }
+
+    func testSlashBracketInlineMathStillWorksAlongsideDollars() async {
+        let source = #"Both \(a + b\) and $c + d$."#
+        let document = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        guard case .paragraph(_, let content) = document.renderables.first else {
+            return XCTFail("expected a paragraph")
+        }
+        XCTAssertEqual(latexPayloads(in: content), ["a + b", "c + d"])
+    }
+}
+
+private func latexPayloads(in attributed: NSAttributedString) -> [String] {
+    var payloads: [String] = []
+    attributed.enumerateAttribute(
+        .attachment,
+        in: NSRange(location: 0, length: attributed.length)
+    ) { value, _, _ in
+        if let attachment = value as? LatexTextAttachment {
+            payloads.append(attachment.payload.latex)
+        }
+    }
+    return payloads
 }
 
 private actor MarkdownParseGate {

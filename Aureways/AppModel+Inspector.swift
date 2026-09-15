@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum PaneTab: Identifiable, Equatable {
@@ -30,7 +31,7 @@ struct FileTabState {
 }
 
 extension AppModel {
-    static let maxEditableFileSize: Int64 = 2 * 1024 * 1024
+    static let maxEditableFileSize: Int64 = TextFile.maxBytes
 
     // MARK: - Tab management
 
@@ -56,30 +57,57 @@ extension AppModel {
     }
 
     func openFileTab(path: String) {
+        let path = URL(fileURLWithPath: path).standardizedFileURL.path
         let tab = PaneTab.file(path: path)
         if paneTabs.contains(where: { $0.id == tab.id }) {
             activePaneTabId = tab.id
+            inspectorOpen = true
             return
         }
-        let url = URL(fileURLWithPath: path)
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-              let size = (attrs[.size] as? NSNumber)?.int64Value else {
-            errorMessage = "无法打开文件：%@".localized(url.lastPathComponent)
-            return
-        }
-        guard size <= Self.maxEditableFileSize else {
-            errorMessage = "文件超过 2MB，暂不支持打开".localized
-            return
-        }
-        guard let data = try? Data(contentsOf: url), !data.contains(0), let text = String(data: data, encoding: .utf8) else {
-            errorMessage = "无法打开：仅支持 UTF-8 文本文件".localized
-            return
-        }
-        var state = FileTabState()
-        state.baselineMtime = modificationDate(of: url)
-        fileTabStates[path] = state
-        editorDrafts[path] = text
+        guard ensureFileLoaded(path: path) else { return }
         insertPaneTab(tab)
+    }
+
+    @discardableResult
+    func ensureFileLoaded(path: String) -> Bool {
+        let path = URL(fileURLWithPath: path).standardizedFileURL.path
+        if fileTabStates[path] != nil { return true }
+        let url = URL(fileURLWithPath: path)
+        do {
+            let text = try TextFile.read(from: url, maxBytes: Self.maxEditableFileSize)
+            var state = FileTabState()
+            state.baselineMtime = modificationDate(of: url)
+            fileTabStates[path] = state
+            editorDrafts[path] = text
+            return true
+        } catch TextFile.ReadError.tooLarge {
+            errorMessage = "文件超过 2MB，暂不支持打开".localized
+        } catch TextFile.ReadError.binaryOrNotUTF8 {
+            errorMessage = "无法打开：仅支持 UTF-8 文本文件".localized
+        } catch {
+            errorMessage = "无法打开文件：%@".localized(url.lastPathComponent)
+        }
+        return false
+    }
+
+    func openMarkdownDocuments(urls: [URL]) {
+        AppActivation.openMarkdownURLs(urls)
+    }
+
+    func openMarkdownDocument(path: String) {
+        AppActivation.openMarkdownURLs([URL(fileURLWithPath: path)])
+    }
+
+    func pickAndOpenMarkdownDocuments() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = MarkdownFile.contentTypes
+        panel.message = "选择 Markdown 文件".localized
+        panel.prompt = "打开".localized
+        guard panel.runModal() == .OK else { return }
+        openMarkdownDocuments(urls: panel.urls)
     }
 
     func openTerminalTab() {

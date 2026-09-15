@@ -114,6 +114,9 @@
 		B10100000000000000000071 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000071 /* Localizable.xcstrings */; };
 		B20100000000000000000070 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000070 /* Localization.swift */; };
 		B20100000000000000000072 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000072 /* LocalizationTests.swift */; };
+		B10100000000000000000080 /* MarkdownFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000080 /* MarkdownFile.swift */; };
+		B10100000000000000000081 /* MarkdownDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000081 /* MarkdownDocumentView.swift */; };
+		B20100000000000000000080 /* MarkdownFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000080 /* MarkdownFileTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -204,6 +207,10 @@
 		F10100000000000000000070 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		F10100000000000000000071 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		F20100000000000000000072 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
+		F10100000000000000000080 /* MarkdownFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFile.swift; sourceTree = "<group>"; };
+		F10100000000000000000081 /* MarkdownDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocumentView.swift; sourceTree = "<group>"; };
+		F10100000000000000000082 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F20100000000000000000080 /* MarkdownFileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFileTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -249,6 +256,8 @@
 				F10100000000000000000042 /* PerfFixture.swift */,
 				F10100000000000000000044 /* ScrollProbe.swift */,
 				F10100000000000000000046 /* MarkdownDocumentCache.swift */,
+				F10100000000000000000080 /* MarkdownFile.swift */,
+				F10100000000000000000082 /* Info.plist */,
 				F10100000000000000000048 /* TranscriptVirtualizer.swift */,
 				F10100000000000000000055 /* TextDiff.swift */,
 				F10100000000000000000030 /* ComposerAttachment.swift */,
@@ -287,6 +296,7 @@
 				F10100000000000000000033 /* CompletionPopup.swift */,
 				F1010000000000000000000F /* SettingsView.swift */,
 				F10100000000000000000010 /* MarkdownBody.swift */,
+				F10100000000000000000081 /* MarkdownDocumentView.swift */,
 				F10100000000000000000013 /* EmptyWorkspace.swift */,
 				F10100000000000000000014 /* TranscriptBlocks.swift */,
 				F10100000000000000000015 /* ToolViews.swift */,
@@ -329,6 +339,7 @@
 				F20100000000000000000062 /* TextDiffTests.swift */,
 				F20100000000000000000063 /* GrokExtTests.swift */,
 				F20100000000000000000072 /* LocalizationTests.swift */,
+				F20100000000000000000080 /* MarkdownFileTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -491,6 +502,8 @@
 				B10100000000000000000043 /* PerfFixture.swift in Sources */,
 				B10100000000000000000045 /* ScrollProbe.swift in Sources */,
 				B10100000000000000000047 /* MarkdownDocumentCache.swift in Sources */,
+				B10100000000000000000080 /* MarkdownFile.swift in Sources */,
+				B10100000000000000000081 /* MarkdownDocumentView.swift in Sources */,
 				B10100000000000000000049 /* TranscriptVirtualizer.swift in Sources */,
 				B10100000000000000000055 /* TextDiff.swift in Sources */,
 				B10100000000000000000030 /* ComposerAttachment.swift in Sources */,
@@ -564,6 +577,7 @@
 				B20100000000000000000056 /* GrokExt.swift in Sources */,
 				B20100000000000000000070 /* Localization.swift in Sources */,
 				B20100000000000000000072 /* LocalizationTests.swift in Sources */,
+				B20100000000000000000080 /* MarkdownFileTests.swift in Sources */,
 				B20100000000000000000063 /* GrokExtTests.swift in Sources */,
 				B20100000000000000000023 /* Codex.swift in Sources */,
 				B20100000000000000000024 /* ClaudeCode.swift in Sources */,
@@ -639,6 +653,7 @@
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Aureways/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -669,6 +684,7 @@
 				CURRENT_PROJECT_VERSION = 12;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Aureways/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Aureways;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";

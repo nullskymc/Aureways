@@ -62,6 +62,12 @@ open .derived/Build/Products/Debug/Aureways.app
 
 改过代码必须重新 `make open` 或 Xcode Run，已打开的窗口不会热更新。
 
+`make open` 会 `lsregister` 刚编出来的包，Finder「打开方式」里才会出现 Aureways。双击 `.md` 仍走系统当前默认应用；要改成 Aureways，用偏好设置里的「设为默认 Markdown 打开方式」，或：
+
+```bash
+open -a Aureways README.md
+```
+
 ### Dock 仍是空图标
 
 同一 bundle id `ai.aureways.client` 只能有一个「官方」图标。若 `/Applications/Aureways.app` 是更早、没有 App Icon 的包，Launch Services 会用它的空白占位，即使刚 `make open` 的 `.derived` 包图标是对的。`make open` 发现 Applications 里已有同名包时会先换上这次编出来的包再打开。仍不刷新时：
