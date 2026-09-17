@@ -65,14 +65,18 @@ struct ParagraphView: NSViewRepresentable {
       context.coordinator.contentRevision = nsView.contentRevision
     }
 
-    let cacheKey = width
+    // Round fitting width to integer points to prevent sub-pixel misses during drag/resizing (PERF-09)
+    let cacheKey = width.rounded()
 
     if let cachedSize = context.coordinator.sizeCache[cacheKey] {
       return cachedSize
     }
 
-    let calculatedSize = nsView.measureSize(fittingWidth: width)
+    let calculatedSize = nsView.measureSize(fittingWidth: cacheKey)
 
+    if context.coordinator.sizeCache.count >= 32 {
+      context.coordinator.sizeCache.removeAll()
+    }
     context.coordinator.sizeCache[cacheKey] = calculatedSize
     return calculatedSize
   }

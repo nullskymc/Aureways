@@ -175,9 +175,48 @@ private struct AgentMessage: View {
     let markdown: String
     var isStreaming = false
 
+    @State private var isMessageHovered = false
+    @State private var isButtonHovered = false
+    @State private var copied = false
+
     var body: some View {
-        MarkdownBody(source: markdown, isStreaming: isStreaming)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
+            MarkdownBody(source: markdown, isStreaming: isStreaming)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !isStreaming && !markdown.isEmpty {
+                HStack {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(markdown, forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            copied = false
+                        }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(isButtonHovered || copied ? .primary : .secondary)
+                            .frame(width: 22, height: 22)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(isButtonHovered ? Color.primary.opacity(0.06) : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isButtonHovered = $0 }
+                    .help(copied ? "已复制".localized : "复制".localized)
+
+                    Spacer(minLength: 0)
+                }
+                .opacity(isMessageHovered || copied ? 1 : 0)
+                .animation(.easeInOut(duration: 0.12), value: isMessageHovered)
+                .animation(.easeInOut(duration: 0.12), value: copied)
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { isMessageHovered = $0 }
     }
 }
 

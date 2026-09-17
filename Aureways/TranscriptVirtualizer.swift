@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Visible slice of a virtualized transcript, plus spacer heights for everything
 /// above and below. Off-screen rows are not views — they are `Color.clear`
@@ -29,16 +30,26 @@ struct TranscriptWindow: Equatable {
 /// spacers read the cache the next time the window is recomputed.
 @MainActor
 final class TranscriptHeightCache {
+    private static let signposter = OSSignposter(subsystem: "ai.aureways.client", category: "Virtualizer")
+
     var lastOffset: CGFloat = 0
     var lastViewport: CGFloat = 720
     private var heights: [UUID: CGFloat] = [:]
+
+    // Cached prefix sums and row heights for entries (PERF-04)
+    private var cachedEntryIDs: [UUID] = []
+    private var cachedEntryVersions: [UInt64] = []
+    private var cachedRowHeights: [CGFloat] = []
+    private var cachedPrefixes: [CGFloat] = []
+    private var isIndexValid = false
 
     func height(for block: TranscriptBlock) -> CGFloat {
         heights[block.id] ?? Self.estimate(block)
     }
 
     func rowHeights(for entries: [TranscriptEntry]) -> [CGFloat] {
-        entries.map { height(for: $0.block) }
+        ensureIndex(for: entries)
+        return cachedRowHeights
     }
 
     @discardableResult
@@ -46,11 +57,99 @@ final class TranscriptHeightCache {
         let rounded = (height * 2).rounded() / 2
         guard rounded > 0, heights[id] != rounded else { return false }
         heights[id] = rounded
+        isIndexValid = false
         return true
     }
 
     func prune(keeping ids: Set<UUID>) {
+        guard heights.count > ids.count else { return }
         heights = heights.filter { ids.contains($0.key) }
+        isIndexValid = false
+    }
+
+    func window(
+        for entries: [TranscriptEntry],
+        offset: CGFloat,
+        viewport: CGFloat,
+        overscan: CGFloat = TranscriptVirtualizer.overscan,
+        spacing: CGFloat = TranscriptVirtualizer.spacing
+    ) -> TranscriptWindow {
+        ensureIndex(for: entries)
+        guard !cachedRowHeights.isEmpty else { return .empty }
+        return TranscriptVirtualizer.window(
+            rowHeights: cachedRowHeights,
+            offset: offset,
+            viewport: viewport,
+            overscan: overscan,
+            spacing: spacing,
+            prefixes: cachedPrefixes
+        )
+    }
+
+    private func ensureIndex(for entries: [TranscriptEntry]) {
+        if isIndexValid && entriesMatchCache(entries) {
+            return
+        }
+
+        let signpostID = Self.signposter.makeSignpostID()
+        let state = Self.signposter.beginInterval("RowHeightRecalc", id: signpostID)
+        defer { Self.signposter.endInterval("RowHeightRecalc", state) }
+
+        // Fast path: append of a single item to previous valid index
+        if isIndexValid,
+           entries.count == cachedEntryIDs.count + 1,
+           let last = entries.last,
+           cachedEntryIDs.elementsEqual(entries.dropLast().lazy.map(\.id)) {
+            let h = height(for: last.block)
+            cachedEntryIDs.append(last.id)
+            cachedEntryVersions.append(last.version)
+            cachedRowHeights.append(h)
+            let prevCount = cachedPrefixes.count - 1
+            var y = cachedPrefixes[prevCount]
+            if prevCount > 0 { y += TranscriptVirtualizer.spacing }
+            y += h
+            cachedPrefixes.append(y)
+            return
+        }
+
+        // Full rebuild
+        let count = entries.count
+        var rowHeights = [CGFloat]()
+        rowHeights.reserveCapacity(count)
+        var ids = [UUID]()
+        ids.reserveCapacity(count)
+        var versions = [UInt64]()
+        versions.reserveCapacity(count)
+        var prefixes = [CGFloat](repeating: 0, count: count + 1)
+
+        var y: CGFloat = 0
+        for index in 0..<count {
+            let entry = entries[index]
+            ids.append(entry.id)
+            versions.append(entry.version)
+            let h = height(for: entry.block)
+            rowHeights.append(h)
+            prefixes[index] = y
+            y += h
+            if index < count - 1 { y += TranscriptVirtualizer.spacing }
+        }
+        prefixes[count] = y
+
+        cachedEntryIDs = ids
+        cachedEntryVersions = versions
+        cachedRowHeights = rowHeights
+        cachedPrefixes = prefixes
+        isIndexValid = true
+    }
+
+    private func entriesMatchCache(_ entries: [TranscriptEntry]) -> Bool {
+        guard entries.count == cachedEntryIDs.count else { return false }
+        for index in 0..<entries.count {
+            if entries[index].id != cachedEntryIDs[index] || entries[index].version != cachedEntryVersions[index] {
+                return false
+            }
+        }
+        return true
     }
 
     /// Cheap stand-in used only until a row has been on screen once. Live
@@ -91,20 +190,29 @@ enum TranscriptVirtualizer {
         offset: CGFloat,
         viewport: CGFloat,
         overscan: CGFloat = overscan,
-        spacing: CGFloat = spacing
+        spacing: CGFloat = spacing,
+        prefixes: [CGFloat]? = nil
     ) -> TranscriptWindow {
         let count = rowHeights.count
         guard count > 0 else { return .empty }
 
-        var prefixes = [CGFloat](repeating: 0, count: count + 1)
-        var y: CGFloat = 0
-        for index in 0..<count {
-            prefixes[index] = y
-            y += rowHeights[index]
-            if index < count - 1 { y += spacing }
+        let pre: [CGFloat]
+        let contentHeight: CGFloat
+        if let prefixes, prefixes.count == count + 1 {
+            pre = prefixes
+            contentHeight = prefixes[count]
+        } else {
+            var computed = [CGFloat](repeating: 0, count: count + 1)
+            var y: CGFloat = 0
+            for index in 0..<count {
+                computed[index] = y
+                y += rowHeights[index]
+                if index < count - 1 { y += spacing }
+            }
+            computed[count] = y
+            pre = computed
+            contentHeight = y
         }
-        prefixes[count] = y
-        let contentHeight = y
 
         let viewportHeight = max(viewport, 1)
         let maxOffset = max(0, contentHeight - viewportHeight)
@@ -117,22 +225,35 @@ enum TranscriptVirtualizer {
         let viewTop = max(0, origin - overscan)
         let viewBottom = origin + viewportHeight + overscan
 
-        var start = 0
-        while start < count, prefixes[start] + rowHeights[start] < viewTop {
-            start += 1
+        // Binary search: find start (first row whose bottom edge reaches or passes viewTop)
+        var low = 0
+        var high = count
+        while low < high {
+            let mid = (low + high) / 2
+            if pre[mid] + rowHeights[mid] < viewTop {
+                low = mid + 1
+            } else {
+                high = mid
+            }
         }
-        var end = start
-        while end < count, prefixes[end] < viewBottom {
-            end += 1
+        var start = low
+
+        // Binary search: find end (first row whose top edge reaches or passes viewBottom)
+        low = start
+        high = count
+        while low < high {
+            let mid = (low + high) / 2
+            if pre[mid] < viewBottom {
+                low = mid + 1
+            } else {
+                high = mid
+            }
         }
+        var end = low
         if end <= start { end = min(start + 1, count) }
 
-        let topHeight = prefixes[start]
-        let gapCount = max(0, end - start - 1)
-        var innerHeight = CGFloat(gapCount) * spacing
-        for index in start..<end {
-            innerHeight += rowHeights[index]
-        }
+        let topHeight = pre[start]
+        let innerHeight = (pre[end - 1] + rowHeights[end - 1]) - pre[start]
         let bottomHeight = max(0, contentHeight - topHeight - innerHeight)
         return TranscriptWindow(
             start: start,

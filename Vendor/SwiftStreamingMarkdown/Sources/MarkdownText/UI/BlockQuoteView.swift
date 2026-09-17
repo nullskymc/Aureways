@@ -15,6 +15,7 @@ struct BlockQuoteView: View {
 
   var body: some View {
     InternalBlockQuoteView(item: item)
+      .textSelection(.enabled)
   }
 }
 
@@ -62,6 +63,7 @@ struct QuoteTextView: View {
     Text(text)
       .font(config.blockQuoteStyle.textFonts)
       .foregroundStyle(config.blockQuoteStyle.textColor)
+      .textSelection(.enabled)
       .padding(.vertical, 4.0)
       .fixedSize(horizontal: false, vertical: true)
   }

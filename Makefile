@@ -17,7 +17,7 @@ ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif
 
-.PHONY: build release test open clean
+.PHONY: build release test open clean perf-curve
 
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
 # command-line builds do not stall on approval. SwiftStreamingMarkdown pulls in
@@ -40,6 +40,10 @@ release:
 
 test:
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
+
+perf-curve:
+	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test -only-testing:AurewaysTests/TranscriptPerfTests/testMarkdownDocumentSizeCurve -only-testing:AurewaysTests/TranscriptPerfTests/testStreamingTickRatePerformance 2>&1 | grep -E "(PERF_CURVE|DATA:)"
+
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in
 # /Applications (this one had no icon) wins over the just-built Debug app,

@@ -56,6 +56,7 @@ struct TableView: View {
   private func headerView(colIdx: Int) -> some View {
     HStack(spacing: 0) {
       Text(headings[colIdx])
+        .textSelection(.enabled)
         .foregroundStyle(config.tableStyle.headerTextColor)
         .lineLimit(nil)
         .multilineTextAlignment(.leading)
@@ -86,6 +87,7 @@ struct TableView: View {
           }
         }
       }
+      .textSelection(.enabled)
     }
   }
 
@@ -137,6 +139,7 @@ struct TableView: View {
     case .text(let attributedString):
       HStack(spacing: 0) {
         Text(attributedString)
+          .textSelection(.enabled)
           .foregroundStyle(config.tableStyle.regularTextColor)
           .lineLimit(nil)
           .multilineTextAlignment(.leading)

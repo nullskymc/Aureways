@@ -5,6 +5,7 @@
 
 import Foundation
 import Markdown
+import os
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -16,6 +17,7 @@ import AppKit
 /// ready to be handed to a `MarkdownView` for rendering. Producing one is
 /// the heavyweight step; rendering it is cheap.
 public struct RenderableDocument: Equatable, Sendable {
+  private static let signposter = OSSignposter(subsystem: "ai.aureways.client", category: "Markdown")
   let renderables: [MarkdownRenderable]
 
   var containsCodeBlock: Bool {
@@ -26,7 +28,7 @@ public struct RenderableDocument: Equatable, Sendable {
     return renderables.contains(where: { $0.isBlockQuote })
   }
 
-  var isEmpty: Bool {
+  public var isEmpty: Bool {
     return renderables.isEmpty
   }
 
@@ -35,6 +37,9 @@ public struct RenderableDocument: Equatable, Sendable {
   ///   - document: The parsed markdown tree.
   ///   - config: Styling and behavior used during conversion.
   public init(document: Markdown.Document, config: MarkdownRenderConfig) async {
+    let signpostID = Self.signposter.makeSignpostID()
+    let state = Self.signposter.beginInterval("RenderableDocumentBuild", id: signpostID)
+    defer { Self.signposter.endInterval("RenderableDocumentBuild", state) }
     self.renderables = document.convert(with: config)
   }
 
@@ -60,6 +65,13 @@ public struct RenderableDocument: Equatable, Sendable {
   /// An empty document, equivalent to `RenderableDocument(plainText: "", …)`
   /// but allocation-free.
   public static let empty = RenderableDocument(renderables: [])
+
+  /// Combines two pre-parsed documents without reparsing (PERF-03).
+  public func appending(_ other: RenderableDocument) -> RenderableDocument {
+    if self.renderables.isEmpty { return other }
+    if other.renderables.isEmpty { return self }
+    return RenderableDocument(renderables: self.renderables + other.renderables)
+  }
 }
 
 extension RenderableDocument {
@@ -114,40 +126,153 @@ extension MarkdownRenderable {
     case .paragraph(let id, let content), .heading(let id, _, let content):
       return (id, content)
     case .orderedList(let id, let items):
-      return textList(id: id, items: items, ordered: true)
+      return attributedList(id: id, items: items, ordered: true)
     case .unorderedList(let id, let items, _):
-      return textList(id: id, items: items, ordered: false)
+      return attributedList(id: id, items: items, ordered: false)
+    case .blockQuote(let id, let item):
+      return formatBlockQuote(id: id, item: item)
+    case .thematicBreak(let id):
+      return formatThematicBreak(id: id)
     default:
       return nil
     }
   }
 
-  private func textList(
+  private func attributedList(
     id: String,
     items: [MarkdownListItem],
-    ordered: Bool
+    ordered: Bool,
+    indentDepth: Int = 0
   ) -> (id: String, content: NSAttributedString)? {
+    guard !items.isEmpty else { return (id, NSAttributedString()) }
     let result = NSMutableAttributedString()
+    let indentSpaces = String(repeating: "    ", count: indentDepth)
+
     for (index, item) in items.enumerated() {
-      guard item.children.count == 1,
-            case .paragraph(_, let content) = item.children[0] else { return nil }
-      if index > 0 { result.append(NSAttributedString(string: "\n")) }
+      if index > 0 || (indentDepth > 0 && result.length > 0) {
+        result.append(NSAttributedString(string: "\n"))
+      }
+
       let marker: String
       if ordered {
-        marker = "\(index + 1).  "
+        marker = "\(indentSpaces)\(index + 1).  "
       } else {
-        marker = switch item.checkbox {
+        let bullet: String = switch indentDepth {
+        case 0: "•  "
+        case 1: "◦  "
+        default: "▪  "
+        }
+        let prefix = switch item.checkbox {
         case .checked: "☑  "
         case .unchecked: "☐  "
-        case nil: "•  "
+        case nil: bullet
+        }
+        marker = "\(indentSpaces)\(prefix)"
+      }
+
+      var firstChild = true
+      for child in item.children {
+        switch child {
+        case .paragraph(_, let content), .heading(_, _, let content):
+          if firstChild {
+            var attributes: [NSAttributedString.Key: Any] = [:]
+            if content.length > 0 {
+              attributes = content.attributes(at: 0, effectiveRange: nil)
+            }
+            result.append(NSAttributedString(string: marker, attributes: attributes))
+            result.append(content)
+            firstChild = false
+          } else {
+            result.append(NSAttributedString(string: "\n\(indentSpaces)    "))
+            result.append(content)
+          }
+
+        case .orderedList(let subID, let subItems):
+          if let sub = attributedList(id: subID, items: subItems, ordered: true, indentDepth: indentDepth + 1) {
+            result.append(NSAttributedString(string: "\n"))
+            result.append(sub.content)
+          }
+
+        case .unorderedList(let subID, let subItems, _):
+          if let sub = attributedList(id: subID, items: subItems, ordered: false, indentDepth: indentDepth + 1) {
+            result.append(NSAttributedString(string: "\n"))
+            result.append(sub.content)
+          }
+
+        case .codeBlock(_, _, let code):
+          if firstChild {
+            result.append(NSAttributedString(string: marker))
+            firstChild = false
+          }
+          let codeLines = code.split(separator: "\n", omittingEmptySubsequences: false)
+          let indentedCode = codeLines.map { "\(indentSpaces)    \($0)" }.joined(separator: "\n")
+          let monoAttrs: [NSAttributedString.Key: Any] = [
+            .font: MDFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+          ]
+          result.append(NSAttributedString(string: "\n" + indentedCode, attributes: monoAttrs))
+
+        case .blockQuote(let subID, let subItem):
+          if firstChild {
+            result.append(NSAttributedString(string: marker))
+            firstChild = false
+          }
+          if let quote = formatBlockQuote(id: subID, item: subItem, indentSpaces: indentSpaces + "    ") {
+            result.append(NSAttributedString(string: "\n"))
+            result.append(quote.content)
+          }
+
+        default:
+          if let text = child.plainText, !text.isEmpty {
+            if firstChild {
+              result.append(NSAttributedString(string: marker))
+              firstChild = false
+            } else {
+              result.append(NSAttributedString(string: "\n\(indentSpaces)    "))
+            }
+            result.append(NSAttributedString(string: text))
+          }
         }
       }
-      var attributes: [NSAttributedString.Key: Any] = [:]
-      if content.length > 0 { attributes = content.attributes(at: 0, effectiveRange: nil) }
-      result.append(NSAttributedString(string: marker, attributes: attributes))
-      result.append(content)
+
+      if firstChild {
+        result.append(NSAttributedString(string: marker))
+      }
     }
+
     return (id, result)
+  }
+
+  private func formatBlockQuote(
+    id: String,
+    item: BlockQuoteRenderable,
+    indentSpaces: String = ""
+  ) -> (id: String, content: NSAttributedString)? {
+    let text = item.quoteType.plainText
+    guard !text.isEmpty else { return nil }
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    let formatted = lines.map { "\(indentSpaces)▎ \($0)" }.joined(separator: "\n")
+    #if canImport(AppKit)
+    let color = MDColor.secondaryLabelColor
+    #else
+    let color = MDColor.secondaryLabel
+    #endif
+    let attrs: [NSAttributedString.Key: Any] = [
+      .foregroundColor: color
+    ]
+    return (id, NSAttributedString(string: formatted, attributes: attrs))
+  }
+
+  private func formatThematicBreak(id: String) -> (id: String, content: NSAttributedString)? {
+    let divider = "────────────────────────────────────────"
+    #if canImport(AppKit)
+    let color = MDColor.separatorColor
+    #else
+    let color = MDColor.separator
+    #endif
+    let attrs: [NSAttributedString.Key: Any] = [
+      .foregroundColor: color
+    ]
+    return (id, NSAttributedString(string: divider, attributes: attrs))
   }
 
   /// A plain-text representation of this block, or `nil` for blocks that carry

@@ -87,8 +87,12 @@ enum TranscriptBlock: Identifiable, Equatable {
         func emitPendingAgentsAsBody() {
             guard !pendingAgents.isEmpty else { return }
             flushActivity()
-            for (id, text) in pendingAgents {
-                blocks.append(.agent(id, text))
+            if pendingAgents.count == 1 {
+                blocks.append(.agent(pendingAgents[0].0, pendingAgents[0].1))
+            } else {
+                let firstID = pendingAgents[0].0
+                let combinedText = pendingAgents.map(\.1).joined(separator: "\n\n")
+                blocks.append(.agent(firstID, combinedText))
             }
             pendingAgents = []
         }

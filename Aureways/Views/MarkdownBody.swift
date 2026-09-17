@@ -32,6 +32,16 @@ struct MarkdownBody: View {
         _document = State(initialValue: cached)
     }
 
+    private var coldPlaceholderText: Substring {
+        let prefix = source.prefix(1200)
+        let lines = prefix.split(separator: "\n", maxSplits: 25, omittingEmptySubsequences: false)
+        if lines.count > 24 {
+            let truncated = lines.prefix(24).joined(separator: "\n")
+            return prefix.prefix(truncated.count)
+        }
+        return prefix
+    }
+
     private var config: MarkdownRenderConfig {
         isStreaming ? AurewaysMarkdown.animated : AurewaysMarkdown.plain
     }
@@ -47,9 +57,11 @@ struct MarkdownBody: View {
             } else {
                 // 解析落地前用同字号明文占位。高度只是近似，但远好过 0——
                 // 高度 0 会让虚拟化的 stack 把这条消息当成不存在。
-                Text(source)
+                // PERF-06: 截断预览，避免数千行文档在冷缓存异步解析完成前造成主线程整篇排版卡顿
+                Text(coldPlaceholderText)
                     .font(.system(size: AurewaysMarkdown.body))
                     .foregroundStyle(.primary)
+                    .lineLimit(25)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -106,6 +118,72 @@ struct MarkdownBody: View {
     }
 }
 
+
+/// Detects safe top-level Markdown block boundaries for incremental streaming parses (PERF-03).
+/// A boundary is safe when preceded by a blank line and outside code fences or display math.
+enum MarkdownBlockBoundary {
+    static func lastSafeBoundary(in text: String) -> String.Index? {
+        guard !text.isEmpty else { return nil }
+
+        var inCodeFence: Character? = nil
+        var fenceLength = 0
+        var inMathDisplay = false
+        var lastSafeIndex: String.Index? = nil
+
+        var currentIndex = text.startIndex
+
+        while currentIndex < text.endIndex {
+            var lineEnd = currentIndex
+            while lineEnd < text.endIndex && text[lineEnd] != "\n" && text[lineEnd] != "\r" {
+                lineEnd = text.index(after: lineEnd)
+            }
+
+            let line = text[currentIndex..<lineEnd]
+
+            var nextLineStart = lineEnd
+            if nextLineStart < text.endIndex && text[nextLineStart] == "\r" {
+                nextLineStart = text.index(after: nextLineStart)
+            }
+            if nextLineStart < text.endIndex && text[nextLineStart] == "\n" {
+                nextLineStart = text.index(after: nextLineStart)
+            }
+
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if let fenceChar = inCodeFence {
+                if trimmed.starts(with: String(repeating: fenceChar, count: fenceLength)) {
+                    let remaining = trimmed.drop(while: { $0 == fenceChar }).trimmingCharacters(in: .whitespaces)
+                    if remaining.isEmpty {
+                        inCodeFence = nil
+                        fenceLength = 0
+                    }
+                }
+            } else if inMathDisplay {
+                if trimmed == "$$" || trimmed.hasSuffix("$$") {
+                    inMathDisplay = false
+                }
+            } else {
+                if trimmed.starts(with: "```") || trimmed.starts(with: "~~~") {
+                    let firstChar = trimmed.first!
+                    let count = trimmed.prefix(while: { $0 == firstChar }).count
+                    inCodeFence = firstChar
+                    fenceLength = count
+                } else if trimmed == "$$" {
+                    inMathDisplay = true
+                } else if trimmed.isEmpty {
+                    if nextLineStart < text.endIndex {
+                        lastSafeIndex = nextLineStart
+                    }
+                }
+            }
+
+            currentIndex = nextLineStart
+        }
+
+        return lastSafeIndex
+    }
+}
+
 struct MarkdownParseResult: Equatable {
     let source: String
     let generation: Int
@@ -139,6 +217,10 @@ final class MarkdownStreamParser: ObservableObject {
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
     #endif
 
+    // Incremental streaming parse state (PERF-03)
+    private var committedSource: String = ""
+    private var committedDocument: RenderableDocument?
+
     init(parse: @escaping Parse = MarkdownStreamParser.parse) {
         self.parse = parse
     }
@@ -166,6 +248,7 @@ final class MarkdownStreamParser: ObservableObject {
     func cancel() -> Int {
         generation += 1
         latest = nil
+        resetCommitted()
         pumpTask?.cancel()
         return generation
     }
@@ -175,8 +258,8 @@ final class MarkdownStreamParser: ObservableObject {
         let parse = parse
         pumpTask = Task { [weak self] in
             while let work = self?.takeLatest() {
-                let document = await parse(work.source, work.config)
                 guard let self else { return }
+                let document = await self.parseWork(work, parse: parse)
                 if Task.isCancelled { break }
                 guard work.generation == self.generation,
                       self.latest == nil
@@ -184,6 +267,7 @@ final class MarkdownStreamParser: ObservableObject {
                 let publishedDocument: RenderableDocument
                 if work.store {
                     publishedDocument = MarkdownDocumentCache.shared.store(work.source, document)
+                    self.resetCommitted()
                 } else {
                     publishedDocument = document
                 }
@@ -195,6 +279,47 @@ final class MarkdownStreamParser: ObservableObject {
             }
             self?.pumpFinished()
         }
+    }
+
+    private func parseWork(
+        _ work: Work,
+        parse: Parse
+    ) async -> RenderableDocument {
+        if !committedSource.isEmpty && !work.source.starts(with: committedSource) {
+            resetCommitted()
+        }
+
+        guard let boundary = MarkdownBlockBoundary.lastSafeBoundary(in: work.source) else {
+            resetCommitted()
+            return await parse(work.source, work.config)
+        }
+
+        let prefix = String(work.source[..<boundary])
+        let tail = String(work.source[boundary...])
+
+        if committedDocument != nil && prefix == committedSource {
+            let tailDoc = await parse(tail, work.config)
+            return (committedDocument?.appending(tailDoc)) ?? tailDoc
+        } else if committedDocument != nil && prefix.starts(with: committedSource) {
+            let newSlice = String(prefix.dropFirst(committedSource.count))
+            let sliceDoc = await parse(newSlice, work.config)
+            let updatedCommitted = (committedDocument?.appending(sliceDoc)) ?? sliceDoc
+            committedSource = prefix
+            committedDocument = updatedCommitted
+            let tailDoc = await parse(tail, work.config)
+            return updatedCommitted.appending(tailDoc)
+        } else {
+            let prefixDoc = await parse(prefix, work.config)
+            committedSource = prefix
+            committedDocument = prefixDoc
+            let tailDoc = await parse(tail, work.config)
+            return prefixDoc.appending(tailDoc)
+        }
+    }
+
+    private func resetCommitted() {
+        committedSource = ""
+        committedDocument = nil
     }
 
     private func takeLatest() -> Work? {

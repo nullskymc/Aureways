@@ -1,4 +1,7 @@
 import XCTest
+import SwiftStreamingMarkdown
+@testable import SwiftStreamingMarkdown
+@testable import Aureways
 
 /// Step-0 baseline for the transcript scrolling work. These are measurements,
 /// not assertions about behaviour: each one prints a number so the effect of a
@@ -174,4 +177,201 @@ final class TranscriptPerfTests: XCTestCase {
     private func report(_ label: String, _ ms: Double, extra: String = "") {
         print(String(format: "PERF  %-44@ %8.4f ms  %@", label as NSString, ms, extra as NSString))
     }
+
+    // MARK: - PERF-00 Size Curve & Streaming Benchmarks
+
+    /// Document size vs parse / renderable construction latency curve:
+    /// Tests 0.5 KB, 2 KB, 10 KB, 50 KB, 100 KB, 250 KB
+    func testMarkdownDocumentSizeCurve() async {
+        let sizesInKB = [0.5, 2.0, 10.0, 50.0, 100.0, 250.0]
+        let parser = MarkdownParserImpl()
+        let config = AurewaysMarkdown.plain
+
+        print("\n=== PERF_CURVE MARKDOWN_SIZE_VS_PARSE ===")
+        print("size_kb,chars,parse_ms,render_build_ms,total_ms")
+
+        for sizeKB in sizesInKB {
+            let targetBytes = Int(sizeKB * 1024)
+            let markdown = generateMarkdownSample(targetBytes: targetBytes)
+
+            // Warm up
+            _ = await parser.parse(text: markdown, option: .init(speculativeRewrite: false))
+
+            var totalParseNs: UInt64 = 0
+            var totalRenderNs: UInt64 = 0
+            let iterations = max(3, min(20, Int(200.0 / sizeKB)))
+
+            for _ in 0..<iterations {
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let parseResult = await parser.parse(text: markdown, option: .init(speculativeRewrite: false))
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                _ = await RenderableDocument(document: parseResult.document, config: config)
+                let t2 = DispatchTime.now().uptimeNanoseconds
+
+                totalParseNs += (t1 - t0)
+                totalRenderNs += (t2 - t1)
+            }
+
+            let parseMs = Double(totalParseNs) / Double(iterations) / 1_000_000
+            let renderMs = Double(totalRenderNs) / Double(iterations) / 1_000_000
+            let totalMs = parseMs + renderMs
+
+            print(String(format: "PERF_CURVE size=%6.1fKB chars=%6d parse=%8.3fms render=%8.3fms total=%8.3fms",
+                         sizeKB, markdown.count, parseMs, renderMs, totalMs))
+            print(String(format: "DATA:%.1f,%d,%.3f,%.3f,%.3f",
+                         sizeKB, markdown.count, parseMs, renderMs, totalMs))
+        }
+    }
+
+    /// Streaming append tick rates & processing cost:
+    /// Tests 10 Hz, 30 Hz, 60 Hz, 120 Hz tick simulation over growing markdown snapshots
+    func testStreamingTickRatePerformance() async {
+        print("\n=== PERF_CURVE STREAMING_TICK_RATE ===")
+        print("tick_hz,token_chunk_len,total_ticks,avg_tick_cost_ms,est_frame_budget_pct")
+
+        let testFrequencies = [10, 30, 60, 120]
+        let baseChunk = "The quick brown fox jumps over the lazy dog. Here is some math $E=mc^2$ and `code()`. "
+        let parser = MarkdownParserImpl()
+        let config = AurewaysMarkdown.animated
+
+        for hz in testFrequencies {
+            var doc = "# Streaming Benchmark Test\n\n"
+            let totalTicks = 30
+            var totalTickNs: UInt64 = 0
+
+            for _ in 0..<totalTicks {
+                doc += baseChunk
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                let result = await parser.parse(text: doc, option: .init(speculativeRewrite: false))
+                _ = await RenderableDocument(document: result.document, config: config)
+                let t1 = DispatchTime.now().uptimeNanoseconds
+                totalTickNs += (t1 - t0)
+            }
+
+            let avgTickMs = Double(totalTickNs) / Double(totalTicks) / 1_000_000
+            let frameBudgetMs = 1000.0 / Double(hz)
+            let budgetPct = (avgTickMs / frameBudgetMs) * 100.0
+
+            print(String(format: "PERF_CURVE hz=%3d ticks=%2d avg_tick=%7.3fms budget_consumed=%6.1f%%",
+                         hz, totalTicks, avgTickMs, budgetPct))
+            print(String(format: "DATA:%d,%d,%d,%.3f,%.1f%%",
+                         hz, baseChunk.count, totalTicks, avgTickMs, budgetPct))
+        }
+    }
+
+    private func generateMarkdownSample(targetBytes: Int) -> String {
+        var sample = "# Sample Document\n\n"
+        let paragraph = "This is a benchmark sample paragraph containing **bold text**, *italics*, inline math $\\alpha + \\beta = \\gamma$, and `code identifiers`. It simulates realistic LLM streaming text outputs.\n\n"
+        let codeBlock = "```swift\nfunc processData(values: [Int]) -> Int {\n    return values.reduce(0, +)\n}\n```\n\n"
+        let table = "| Col A | Col B | Col C |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n| $x$ | $y$ | $z$ |\n\n"
+
+        while sample.utf8.count < targetBytes {
+            sample += paragraph
+            if sample.utf8.count < targetBytes {
+                sample += codeBlock
+            }
+            if sample.utf8.count < targetBytes {
+                sample += table
+            }
+        }
+        return sample
+    }
+
+    /// Benchmark scaling curve for rowHeights calculation, window virtualizer queries, and prune
+    /// over 10, 50, and 100 conversational turns (PERF-04).
+    @MainActor
+    func testTranscriptVirtualizerScaleCurve() async {
+        print("\n=== PERF_CURVE TRANSCRIPT_VIRTUALIZER_SCALE ===")
+        print("turns,entries,row_heights_ms,scroll_60fps_ms,prune_ms")
+
+        let turnCounts = [10, 50, 100]
+        let cache = TranscriptHeightCache()
+
+        for turns in turnCounts {
+            var entries: [TranscriptEntry] = []
+            var liveIDs: Set<UUID> = []
+            for t in 0..<turns {
+                let uID = UUID()
+                let uEntry = TranscriptEntry(block: .user(uID, "User prompt turn " + String(t), []))
+                let aID = UUID()
+                let aEntry = TranscriptEntry(block: .agent(aID, "Agent response turn " + String(t) + " with detailed analysis and code."))
+                let sID = UUID()
+                let sEntry = TranscriptEntry(block: .status(sID, "Status update for turn " + String(t)))
+                entries.append(contentsOf: [uEntry, aEntry, sEntry])
+                liveIDs.insert(uID)
+                liveIDs.insert(aID)
+                liveIDs.insert(sID)
+                _ = cache.set(uID, 64)
+                _ = cache.set(aID, 120)
+                _ = cache.set(sID, 40)
+            }
+
+            // 1. rowHeights measurement
+            let iter = 50
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<iter {
+                _ = cache.rowHeights(for: entries)
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let rowHeightsMs = Double(t1 - t0) / Double(iter) / 1_000_000
+
+            // 2. 60 frames scroll window queries
+            let scrollFrames = 60
+            let t2 = DispatchTime.now().uptimeNanoseconds
+            for frame in 0..<scrollFrames {
+                let offset = CGFloat(frame * 20)
+                _ = cache.window(for: entries, offset: offset, viewport: 720)
+            }
+            let t3 = DispatchTime.now().uptimeNanoseconds
+            let scroll60fpsMs = Double(t3 - t2) / Double(scrollFrames) / 1_000_000
+
+            // 3. Prune measurement
+            let t4 = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<iter {
+                cache.prune(keeping: liveIDs)
+            }
+            let t5 = DispatchTime.now().uptimeNanoseconds
+            let pruneMs = Double(t5 - t4) / Double(iter) / 1_000_000
+
+            print(String(format: "PERF_CURVE turns=%3d entries=%3d rowHeights=%7.4fms scrollFrame=%7.4fms prune=%7.4fms",
+                         turns, entries.count, rowHeightsMs, scroll60fpsMs, pruneMs))
+            print(String(format: "DATA:%d,%d,%.4f,%.4f,%.4f",
+                         turns, entries.count, rowHeightsMs, scroll60fpsMs, pruneMs))
+        }
+    }
+
+
+    func testAdjacentAgentItemsMergeIntoOneAgentBlock() {
+        let u1 = UUID()
+        let a1 = UUID()
+        let a2 = UUID()
+        let t1 = UUID()
+        let a3 = UUID()
+
+        let items: [TranscriptItem] = [
+            .user(u1, "Hello", []),
+            .agent(a1, "First paragraph."),
+            .agent(a2, "Second paragraph."),
+            .thought(t1, "Thinking..."),
+            .agent(a3, "After thought.")
+        ]
+
+        let blocks = TranscriptBlock.group(items)
+        // Expected: user, agent (merged a1+a2), activity (thought t1), agent (a3)
+        XCTAssertEqual(blocks.count, 4)
+        if case .agent(let id, let text) = blocks[1] {
+            XCTAssertEqual(id, a1)
+            XCTAssertEqual(text, "First paragraph.\n\nSecond paragraph.")
+        } else {
+            XCTFail("Expected blocks[1] to be .agent")
+        }
+
+        if case .agent(let id, let text) = blocks[3] {
+            XCTAssertEqual(id, a3)
+            XCTAssertEqual(text, "After thought.")
+        } else {
+            XCTFail("Expected blocks[3] to be .agent")
+        }
+    }
+
 }

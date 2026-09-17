@@ -251,6 +251,40 @@ final class MarkdownStreamTests: XCTestCase {
         XCTAssertEqual(MarkdownDocumentCache.shared.cached(source), stored)
     }
 
+    func testCacheStoresNestedListsAndQuotesAsOneSelectableTextBlock() async {
+        let source = """
+        # Plan
+
+        1. First step:
+           - Sub-step A
+           - Sub-step B
+        2. Second step
+
+        > Important notice
+
+        ---
+
+        Final conclusion.
+        """
+        let parsed = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        let stored = MarkdownDocumentCache.shared.store(source, parsed)
+
+        XCTAssertEqual(stored.renderables.count, 1)
+        guard case .paragraph(_, let content) = stored.renderables.first else {
+            return XCTFail("expected one selectable text block")
+        }
+        XCTAssertTrue(content.string.contains("Plan"))
+        XCTAssertTrue(content.string.contains("1.  First step:"))
+        XCTAssertTrue(content.string.contains("Sub-step A"))
+        XCTAssertTrue(content.string.contains("2.  Second step"))
+        XCTAssertTrue(content.string.contains("Important notice"))
+        XCTAssertTrue(content.string.contains("Final conclusion."))
+    }
+
     func testStoreMakesTheNextReadACacheHit() async {
         let source = #"Cached \(x^2\) formula."#
         let parsed = await MarkdownDocumentCache.shared.document(

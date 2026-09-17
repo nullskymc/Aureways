@@ -10,19 +10,8 @@ struct TranscriptView: View {
     @State private var heightCache = TranscriptHeightCache()
     @State private var chrome = TranscriptChromeState()
 
-    private var displayedEntries: [TranscriptEntry] {
-        #if DEBUG
-        if PerfFixture.usesLegacyProjection {
-            return TranscriptBlock.group(session.items, runs: session.activityRuns).map {
-                TranscriptEntry(block: $0)
-            }
-        }
-        #endif
-        return session.transcriptEntries
-    }
-
     var body: some View {
-        let entries = displayedEntries
+        let entries = session.transcriptEntries
         let liveID = session.isStreaming ? entries.last?.id : nil
         let window = resolvedWindow(for: entries)
         ScrollView {
@@ -95,7 +84,7 @@ struct TranscriptView: View {
         }
         .onChange(of: composerHeight) { follow(entries) }
         .onChange(of: session.transcriptRevision) {
-            heightCache.prune(keeping: Set(entries.map(\.id)))
+            heightCache.prune(keeping: session.transcriptEntryIDs)
             applyWindow(
                 entries: entries,
                 offset: stickToBottom ? .infinity : heightCache.lastOffset,
@@ -142,8 +131,8 @@ struct TranscriptView: View {
 
     private func resolvedWindow(for entries: [TranscriptEntry]) -> TranscriptWindow {
         if rowWindow == .empty && !entries.isEmpty {
-            return TranscriptVirtualizer.window(
-                rowHeights: heightCache.rowHeights(for: entries),
+            return heightCache.window(
+                for: entries,
                 offset: .infinity,
                 viewport: heightCache.lastViewport
             )
@@ -152,8 +141,8 @@ struct TranscriptView: View {
     }
 
     private func applyWindow(entries: [TranscriptEntry], offset: CGFloat, viewport: CGFloat) {
-        let next = TranscriptVirtualizer.window(
-            rowHeights: heightCache.rowHeights(for: entries),
+        let next = heightCache.window(
+            for: entries,
             offset: offset,
             viewport: viewport
         )

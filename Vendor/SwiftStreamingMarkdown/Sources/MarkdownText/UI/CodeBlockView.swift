@@ -28,8 +28,10 @@ struct CodeBlockView: View {
 
   private func updateAttributedString(code: String, scheme: ColorScheme) async {
     let colors = config.codeBlockConfig.theme.highlightColors(for: scheme)
-    await taskManager.enqueueCode(code, colors: colors) { newAttributedString in
-      self.attributedString = newAttributedString
+    await taskManager.enqueueCode(code, language: language, colors: colors) { newAttributedString in
+      if self.attributedString != newAttributedString {
+        self.attributedString = newAttributedString
+      }
     }
   }
 
@@ -48,17 +50,21 @@ struct CodeBlockView: View {
         if #available(iOS 16.1, *) {  // Minimum version for HighlightSwift
           Text(attributedString ?? AttributedString(code))
             .font(config.codeBlockConfig.codeTextFonts)
+            .textSelection(.enabled)
             .transition(.opacity)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           Text(code)
             .font(config.codeBlockConfig.codeTextFonts)
+            .textSelection(.enabled)
             .foregroundStyle(Color.Theme.Component.CodeBlock.Foreground.FunctionParameter)
             .transition(.opacity)
         }
       }
-
-    }.transaction { transaction in
+      .textSelection(.enabled)
+    }
+    .textSelection(.enabled)
+    .transaction { transaction in
       // The horizontal scrollView resizing animation was causing the code block to animate
       // all janky.
       transaction.animation = nil
@@ -107,6 +113,7 @@ struct CodeBlockView: View {
             ))
         )
       codeblock
+        .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
         .scrollIndicators(.automatic)
         .if(backgroundColor != nil, content: { view in

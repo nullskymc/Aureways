@@ -4,9 +4,11 @@
 //
 
 import Markdown
+import os
 
 /// The built-in `MarkdownParser` implementation.
 public final class MarkdownParserImpl: MarkdownParser {
+  private static let signposter = OSSignposter(subsystem: "ai.aureways.client", category: "Markdown")
 
   private let rewriters: [MarkupPostParsingRewriter] = [
     PartialStrongMarkupPostParsingRewriter(),
@@ -24,6 +26,10 @@ public final class MarkdownParserImpl: MarkdownParser {
 
   /// Parse `text` into a `MarkdownParseResult`. See `MarkdownParser.parse(text:option:)`.
   public func parse(text: String, option: MarkdownParseOption) async -> MarkdownParseResult {
+    let signpostID = Self.signposter.makeSignpostID()
+    let state = Self.signposter.beginInterval("MarkdownParse", id: signpostID)
+    defer { Self.signposter.endInterval("MarkdownParse", state) }
+
     let targetString = latexPreprocessor.process(input: text, matchingRules: option.latexMatchingRules)
 
     var result: MarkdownParseResult = MarkdownParseResult(

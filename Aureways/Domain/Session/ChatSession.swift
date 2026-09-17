@@ -91,6 +91,7 @@ final class ChatSession: Identifiable {
     var title: String
     private(set) var items: [TranscriptItem] = []
     private(set) var transcriptEntries: [TranscriptEntry] = []
+    private(set) var transcriptEntryIDs: Set<UUID> = []
     private var transcriptEntryVersions: [UUID: UInt64] = [:]
     private var toolItemIndexByCallID: [String: Int] = [:]
     private var toolEntryIndexByItemID: [UUID: Int] = [:]
@@ -239,11 +240,22 @@ final class ChatSession: Identifiable {
     }
 
     private func rebuildTranscriptProjection(changedBlockID: UUID? = nil) {
+        #if DEBUG
+        if PerfFixture.usesLegacyProjection {
+            let blocks = TranscriptBlock.group(items, runs: activityRuns)
+            transcriptEntries = blocks.map { TranscriptEntry(block: $0) }
+            transcriptEntryIDs = Set(transcriptEntries.map(\.id))
+            rebuildToolIndex()
+            PerfCounters.countProjectionRebuild()
+            return
+        }
+        #endif
         let blocks = TranscriptBlock.group(items, runs: activityRuns, countPerformance: false)
         if let changedBlockID {
             transcriptEntryVersions[changedBlockID, default: 0] &+= 1
         }
         let liveIDs = Set(blocks.map(\.id))
+        transcriptEntryIDs = liveIDs
         transcriptEntryVersions = transcriptEntryVersions.filter { liveIDs.contains($0.key) }
         let existingEntries = Dictionary(uniqueKeysWithValues: transcriptEntries.map { ($0.id, $0) })
         transcriptEntries = blocks.map { block in
@@ -476,6 +488,9 @@ final class ChatSession: Identifiable {
     }
 
     private func updateProjectedTool(itemID: UUID, call: ToolCallView) -> Bool {
+        #if DEBUG
+        if PerfFixture.usesLegacyProjection { return false }
+        #endif
         guard let entryIndex = toolEntryIndexByItemID[itemID],
               transcriptEntries.indices.contains(entryIndex),
               case .activity(let blockID, var steps, let run) = transcriptEntries[entryIndex].block
@@ -628,6 +643,7 @@ final class ChatSession: Identifiable {
         usage = nil
         reportedMcpServers = []
         transcriptEntryVersions.removeAll()
+        transcriptEntryIDs.removeAll()
         rebuildTranscriptProjection()
         transcriptRevision += 1
     }
@@ -635,8 +651,10 @@ final class ChatSession: Identifiable {
     private func appendText(_ text: String, asThought: Bool) {
         guard !text.isEmpty else { return }
         if asThought {
-            if case .thought(let id, let existing) = items.last {
-                items[items.count - 1] = .thought(id, existing + text)
+            if case .thought(let id, var existing) = items.last {
+                existing.reserveCapacity(existing.count + text.count)
+                existing.append(text)
+                items[items.count - 1] = .thought(id, existing)
             } else {
                 let id = UUID()
                 beginRun(id)
@@ -644,8 +662,10 @@ final class ChatSession: Identifiable {
             }
         } else {
             endCurrentRun()
-            if case .agent(let id, let existing) = items.last {
-                items[items.count - 1] = .agent(id, existing + text)
+            if case .agent(let id, var existing) = items.last {
+                existing.reserveCapacity(existing.count + text.count)
+                existing.append(text)
+                items[items.count - 1] = .agent(id, existing)
             } else {
                 items.append(.agent(UUID(), text))
             }
@@ -696,7 +716,10 @@ final class ChatSession: Identifiable {
                 } else if existingText.isEmpty {
                     updatedText = text
                 } else {
-                    updatedText = existingText + text
+                    var merged = existingText
+                    merged.reserveCapacity(existingText.count + text.count)
+                    merged.append(text)
+                    updatedText = merged
                 }
             }
             if let attachment, !isDuplicateAttachment(attachment, in: existingAttachments) {

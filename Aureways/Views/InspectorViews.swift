@@ -10,13 +10,13 @@ struct InspectorPaneView: View {
     @StateObject private var resize = SplitResizeEngine()
 
     var body: some View {
-        // 拖动期间把内容的提议宽度钉在拖动开始那一刻：子树不再重新换行、重新测高、
+        // 拖动期间把内容的提案宽度钉在拖动开始那一刻：子树不再重新换行、重新测高、
         // 重排列宽，每帧只剩外层裁剪框在动。松手后 frozenWidth 归零，一次性按最终
         // 宽度排一遍——这才是"停手后再渲染"。
         //
         // 必须用 `FrozenWidthLayout` 而不是 `.frame(width:)`：后者会把固定宽度当成
         // 内容的理想宽度往上传，`NavigationSplitView` 的分栏据此把列宽钉死（拉到最大
-        // 宽度后拉不回来）。容器尺寸恒等于父级提议就不会有这个问题。
+        // 宽度后拉不回来）。容器尺寸恒等于父级提案就不会有这个问题。
         FrozenWidthLayout(frozenWidth: resize.frozenWidth) {
             ZStack {
                 // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
@@ -32,13 +32,12 @@ struct InspectorPaneView: View {
         .clipped()
         .background(Palette.inspectorBg)
         .overlay {
-            ZStack {
-                Palette.inspectorBg.opacity(0.45)
-                Rectangle().fill(.regularMaterial)
-            }
-            .opacity(resize.isResizing ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: resize.isResizing)
-            .allowsHitTesting(false)
+            // PERF-02: 纯色 scrim 替代 .regularMaterial，消除分栏拖动时 GPU 每帧全窗格材质重采样模糊
+            Palette.inspectorBg
+                .opacity(0.85)
+                .opacity(resize.isResizing ? 1 : 0)
+                .animation(.easeOut(duration: 0.12), value: resize.isResizing)
+                .allowsHitTesting(false)
         }
         .environment(\.inspectorResizing, resize.isResizing)
         .onGeometryChange(for: CGFloat.self) { proxy in

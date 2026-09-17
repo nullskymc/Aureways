@@ -18,8 +18,10 @@ enum ContentBlock: Codable, Sendable, Equatable {
     }
 
     func concatenating(_ other: ContentBlock) -> ContentBlock? {
-        guard case .text(let left) = self, case .text(let right) = other else { return nil }
-        return .text(left + right)
+        guard case .text(var left) = self, case .text(let right) = other else { return nil }
+        left.reserveCapacity(left.count + right.count)
+        left.append(right)
+        return .text(left)
     }
 
     init(json: JSONValue) {
