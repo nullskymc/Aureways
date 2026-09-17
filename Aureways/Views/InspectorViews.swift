@@ -5,38 +5,49 @@ import SwiftUI
 
 struct InspectorPaneView: View {
     @Environment(AppModel.self) private var model
-    @State private var isResizing = false
-    @State private var resizeGeneration = 0
-    @State private var lastWidth: CGFloat = 0
+    /// 拖动状态全部收进引用类型：连续拖动时不写 observable 状态，视图只在
+    /// 开始 / 结束两个边沿失效。详见 `SplitResizeEngine`。
+    @StateObject private var resize = SplitResizeEngine()
 
     var body: some View {
-        ZStack {
-            // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
-            ForEach(model.paneTabs) { tab in
-                let isActive = model.activePaneTabId == tab.id
-                tabContent(tab, isActive: isActive)
-                    .opacity(isActive ? 1 : 0)
-                    .allowsHitTesting(isActive)
-                    .zIndex(isActive ? 1 : 0)
+        // 拖动期间把内容的提议宽度钉在拖动开始那一刻：子树不再重新换行、重新测高、
+        // 重排列宽，每帧只剩外层裁剪框在动。松手后 frozenWidth 归零，一次性按最终
+        // 宽度排一遍——这才是"停手后再渲染"。
+        //
+        // 必须用 `FrozenWidthLayout` 而不是 `.frame(width:)`：后者会把固定宽度当成
+        // 内容的理想宽度往上传，`NavigationSplitView` 的分栏据此把列宽钉死（拉到最大
+        // 宽度后拉不回来）。容器尺寸恒等于父级提议就不会有这个问题。
+        FrozenWidthLayout(frozenWidth: resize.frozenWidth) {
+            ZStack {
+                // 所有标签页保持存活：切走只是隐藏，终端输出和编辑器文本不丢。
+                ForEach(model.paneTabs) { tab in
+                    let isActive = model.activePaneTabId == tab.id
+                    tabContent(tab, isActive: isActive)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .zIndex(isActive ? 1 : 0)
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .background(Palette.inspectorBg)
         .overlay {
             ZStack {
                 Palette.inspectorBg.opacity(0.45)
                 Rectangle().fill(.regularMaterial)
             }
-            .opacity(isResizing ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: isResizing)
+            .opacity(resize.isResizing ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: resize.isResizing)
             .allowsHitTesting(false)
         }
-        .environment(\.inspectorResizing, isResizing)
+        .environment(\.inspectorResizing, resize.isResizing)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { _, width in
-            noteColumnWidth(width)
+            resize.note(width: width)
         }
+        .onAppear { resize.beginMonitoring() }
+        .onDisappear { resize.reset() }
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Palette.splitDivider)
@@ -100,24 +111,6 @@ struct InspectorPaneView: View {
             Text("“%@” 有未保存的修改，从磁盘重新载入会丢弃它们。".localized(
                 model.pendingReloadPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
             ))
-        }
-    }
-
-    private func noteColumnWidth(_ width: CGFloat) {
-        guard width > 0 else { return }
-        if lastWidth == 0 {
-            lastWidth = width
-            return
-        }
-        guard abs(lastWidth - width) > 0.5 else { return }
-        lastWidth = width
-        if !isResizing { isResizing = true }
-        resizeGeneration += 1
-        let token = resizeGeneration
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(90))
-            guard token == resizeGeneration else { return }
-            isResizing = false
         }
     }
 

@@ -47,7 +47,7 @@
 
 长会话滚动的成本必须与**可见内容**成正比，不能与转录总长度成正比。这一节的每条约束都是为此存在的，改动前请先读。
 
-- **可见窗口 + 高度缓存，不要 eager `VStack`，也不要依赖 `LazyVStack` 的内部估算。** 屏幕内外各用一段 spacer（高度来自 `TranscriptHeightCache`），中间只放真正的行。拖检查器分栏时右侧蒙一层材质、预览宽度冻结，停手后再按新宽度排一次。工作台 Markdown 预览用 `LazyVStack`，且只有当前标签才挂预览。曾经一律 `LazyVStack`：解析高度为 0 时进会话空白；卡片展开时未放置行的估算塌掉，视口被拽回底部，于是退回 eager——单步滚动从 90 块 2.25 ms 涨到 300 块 23.02 ms。窗口化同时修这两头。展开状态放在 `TranscriptChromeState` 里，不跟视图走，回收上屏高度才能对得上。
+- **可见窗口 + 高度缓存，不要 eager `VStack`，也不要依赖 `LazyVStack` 的内部估算。** 屏幕内外各用一段 spacer（高度来自 `TranscriptHeightCache`），中间只放真正的行。工作台 Markdown 预览用 `LazyVStack`，且只有当前标签才挂预览。曾经一律 `LazyVStack`：解析高度为 0 时进会话空白；卡片展开时未放置行的估算塌掉，视口被拽回底部，于是退回 eager——单步滚动从 90 块 2.25 ms 涨到 300 块 23.02 ms。窗口化同时修这两头。展开状态放在 `TranscriptChromeState` 里，不跟视图走，回收上屏高度才能对得上。拖检查器分栏的行为见 §2.4「分栏拖动的冻结契约」。
 - **解析结果由 `MarkdownDocumentCache` 持有，不由视图持有。** `MarkdownBody` 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（视图内自己解析），并在 `init` 里同步查缓存，所以块一放上去就有真实高度——上面那条虚拟化的前提就靠这个成立。会话打开和每回合结束时后台预热（300 条约 54 ms）。
 - **流式 parse 单通道。** token 到达只记下最新快照；同一时刻只跑一次 cmark。取消的 `.task(id:)` 不会把过期文档写回视图。公式已经闭合后，vendored 库按 payload 比较 inline attachment、块公式跳过 `setLatex:`，段落只 append 后缀——已画出的 `MTMathUILabel` 不会被拆掉重建。
 - **位置跟随不读绝对偏移。** 用 `ScrollPosition` + `scrollTo(edge: .bottom)`，判据是 `onScrollTargetVisibilityChange` 报告的「最后一块是否可见」。`contentOffset` 只用来算可见窗口；拿它当「是否在底部」的阈值会随估算漂移（Apple 在 WWDC26 "Dive into lazy stacks and scrolling with SwiftUI" 里点名的反模式）。底部留白用 `.safeAreaPadding`，这样 `scrollTo(edge:)` 认安全区、最后一条消息停在输入卡上方。
@@ -80,6 +80,19 @@
 2. **文本文件标签**：NSTextView 编辑器（等宽字体 + 行号栏），脏标记 ●、`⌘S` 保存。`.md` / `.markdown` 等默认预览，顶栏可切回源码；预览复用对话区的 `MarkdownBody`，编辑器在切走时仍存活所以撤销栈不丢。三层冲突处理：保存时按 mtime 校验外部修改（覆盖 / 放弃 / 取消）；关闭未保存文件弹确认（保存 / 不保存 / 取消）；Agent 写已打开文件时，未脏自动重载、已脏显示「重载 / 保留我的」提示条。>2MB、非 UTF-8、含 NUL 的文件拒绝打开。Finder / `⌘O` 打开的 Markdown 也走这个标签，不另开窗口。
 3. **终端标签**：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 真实 PTY 交互终端，按登录 shell 启动并继承完整 PATH；背景 / 前景随浅色、深色切换（与检查器画布同色）。进程在 `openTerminalTab()` 创建，关标签即终止，shell 里敲 `exit` 同样关掉标签并回收 PTY，应用退出统一清理。
 4. **信息标签**：协议、Agent、工作区路径、ACP Session ID 与会话配置（`configOptions`）编辑。
+
+#### 分栏拖动的冻结契约
+
+拖动主对话栏与检查器之间的分栏，是**唯一会连续几十秒改写两个窗格宽度**的操作，它的成本必须与拖动帧数无关。这一节的约束改动前请先读。
+
+- **拖动期间冻结内容的提议宽度，不要盖住它。** `InspectorPaneView` 在 `frozenWidth != nil` 时用 `FrozenWidthLayout`（自定义 `Layout`）把子视图的**提议宽度**钉在拖动开始那一刻，外层只变裁剪框，松手后才按最终宽度排一次——表列宽、公式、编辑器与终端的布局在拖动中一次都不重算。蒙一层材质只能挡住视觉，**不会让 SwiftUI 跳过布局**（`.opacity(0)` 也一样），材质本身还是每帧重新采样背景的全窗格模糊。
+- **冻结必须用 `Layout`，不能用 `.frame(width:)`。** `.frame(width:)` 会把该宽度当成内容的*理想宽度*，并穿过外层的 `.frame(maxWidth: .infinity)` 继续向 `NavigationSplitView` 传播；分栏读到它就把列宽钉住——把分栏拉到最大宽度后就再也拉不回来，夹紧边界处反复夹紧/回弹。`Layout` 的容器尺寸恒等于父级提议，冻结与否都不改变自己占的空间，因此不会泄漏固定宽度。这一条是实测踩过的回归。
+- **不要在几何回调里写 `@State`。** 拖动状态由 `SplitResizeEngine`（`Views/SplitResize.swift`）持有：每帧喂进来的宽度只写 `lastWidth` 这类普通字段，`isResizing` / `frozenWidth` 只在**开始与结束两个边沿**变化，于是一个拖动周期只让视图失效两次。`@StateObject` 持有引用类型时，改它的普通属性不会触发更新——这是整条约束的实现基础。
+- **拖动起止只认指针按下 / 抬起，不要用"宽度多久没变"。** 宽度不变无法区分"用户中途停顿"和"用户松手"：按住鼠标停顿超过阈值就会提前解冻、内容重排，表现出来就是界面渲染跑在拖动前面。`SplitResizeEngine` 用 `NSEvent.addLocalMonitorForEvents` 监视 `.leftMouseDown` / `.leftMouseUp`，只有"指针按着 + 宽度真的在变"同时成立才冻结；抬起即解冻。它不去上层找 `NSSplitView`：`.inspector` / `NavigationSplitView` 内部用什么容器属于 SwiftUI 的实现细节，顺着视图树找分隔条更脆。剩下的 3 秒兜底计时器只负责在抬起事件丢失时自我恢复。
+
+曾经的实现违反前两条：`isResizing` / `resizeGeneration` / `lastWidth` 三个 `@State` 承接 `onGeometryChange` 回调，其中 `resizeGeneration` 每帧无条件自增——每拖一帧就让整个检查器面板（`ZStack` 内全部标签页）失效一次。这些失效在同一显示周期里把 `setNeedsUpdateConstraints` 反复顶到窗口，累积超过 AppKit 的限额后 `-[NSWindow _postWindowNeedsUpdateConstraints]` 抛 `NSInternalInconsistencyException`，被 `+[NSApplication _crashOnException:]` 终止。诊断报告（`~/Library/Logs/DiagnosticReports/Aureways-*.ips`，2026-09-15/16 共 6 次）的栈是 `NSHostingView.layout → CoreViewSetGeometry → NSView.setFrame → Auto Layout 依赖级联 → NSHostingView.didChangeValue → invalidateSafeAreaInsets → setNeedsUpdateConstraints → _postWindowNeedsUpdateConstraints`；统一日志里对应的判据行是 `Marking window ... as needing Update Constraints in Window (limit: 277, count: 279)`，两次实测的约束更新数与布局数之比恒为 2:1（278/139、310/155），即一次无法收敛的振荡。
+
+> 回归验证：连续来回拖动分栏 30 秒不应崩溃、不应掉帧。`AurewaysTests/SplitResizeEngineTests.swift` 锁住"连续拖动只翻转一次 observable 状态"这条契约。
 
 Aureways 以 **Editor / Alternate** 身份声明 `net.daringfireball.markdown`（扩展名 `.md` `.markdown` `.mdown` `.mkd` `.mkdn` `.mdwn`）。Finder「打开方式」、Dock 拖放、`open -a Aureways file.md`、以及菜单 **打开 Markdown…**（`⌘O`）都唤出主窗口，并在工作台打开对应文件标签。默认不抢系统双击；偏好设置 → Markdown 可「设为默认 Markdown 打开方式」。只改 Markdown UTI，不动 `public.plain-text`。
 
@@ -122,6 +135,7 @@ Aureways 以 **Editor / Alternate** 身份声明 `net.daringfireball.markdown`�
 | `Aureways/Views/Composer.swift` | 居中悬浮输入框、`+` 菜单（文件 / 工作区 / 指令）、会话模型/模式透传、权限切换 |
 | `Aureways/Views/Palette.swift` | 色彩、A 轨道平面标志 `BrandMark`、设置页 `AppIconImage` |
 | `Aureways/Views/InspectorViews.swift` | 右侧面板容器：标签页分发、保存冲突/关闭确认弹窗、信息标签 |
+| `Aureways/Views/SplitResize.swift` | 分栏拖动状态机：拖动期间冻结内容宽度，observable 状态只在开始 / 结束翻转 |
 | `Aureways/Views/PaneTabBar.swift` | 统一标签条与 `+` 新建菜单 |
 | `Aureways/Views/FileBrowserTab.swift` | 工作区递归目录树（懒加载） |
 | `Aureways/Views/FileEditorTab.swift` | NSTextView 编辑器、行号、保存与冲突处理；Markdown 源码/预览切换 |

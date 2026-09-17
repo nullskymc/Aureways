@@ -78,6 +78,7 @@ Aureways/                          # 仓库根
 │       ├── PermissionCard.swift   # 权限确认
 │       ├── PlanApprovalCard.swift # Grok 计划审批 + 选择题
 │       ├── InspectorViews.swift   # 右栏面板容器与信息标签
+│       ├── SplitResize.swift      # 分栏拖动状态机（按指针按下/抬起冻结内容宽度）
 │       ├── PaneTabBar.swift       # 面板统一标签条
 │       ├── FileBrowserTab.swift   # 工作区目录树
 │       ├── FileEditorTab.swift    # 文本编辑器（Markdown 可预览）
@@ -88,6 +89,7 @@ Aureways/                          # 仓库根
 └── AurewaysTests/
     ├── ProtocolTests.swift        # JSON-RPC 与 mock agent 集成测试
     ├── MarkdownFileTests.swift    # Markdown 扩展名与 UTF-8 读盘
+    ├── SplitResizeEngineTests.swift # 分栏拖动：指针判据 + 只在边沿翻转 observable 状态
     └── ComposerTextViewTests.swift
 ```
 
@@ -124,6 +126,7 @@ Aureways/                          # 仓库根
 | `AurewaysApp.swift` | 前端入口 | 窗口、暗色、⌘N |
 | `Views/*` | 前端 | 布局与交互 |
 | `Views/MarkdownBody.swift` | 前端 | vendored SwiftStreamingMarkdown 渲染 Agent 正文（配 `MarkdownDocumentCache` 解析缓存；流式单通道 parse） |
+| `Views/SplitResize.swift` | 前端 | 分栏拖动状态机：以指针按下/抬起为拖动判据；每帧宽度只写非 observable 字段，`isResizing` / `frozenWidth` 仅在开始与结束两个边沿变化 |
 | `Views/SettingsView.swift` | 前端 | 通用 / Agent / 工作区 / 权限 |
 | `AppModel.swift` 及 `AppModel+*` | 前后端交界 | 会话列表、connect/send/retry/cancel |
 | `ChatSession.swift` | 前后端交界 | 单会话 transcript |

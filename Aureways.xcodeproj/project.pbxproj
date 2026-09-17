@@ -45,6 +45,7 @@
 		B10100000000000000000055 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000055 /* TextDiff.swift */; };
 		B20100000000000000000055 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000055 /* TextDiff.swift */; };
 		B20100000000000000000062 /* TextDiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000062 /* TextDiffTests.swift */; };
+		B201000000000000000000A1 /* SplitResizeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F201000000000000000000A1 /* SplitResizeEngineTests.swift */; };
 		B20100000000000000000043 /* PerfFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000042 /* PerfFixture.swift */; };
 		B10100000000000000000030 /* ComposerAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000030 /* ComposerAttachment.swift */; };
 		B10100000000000000000031 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000031 /* ComposerTextView.swift */; };
@@ -54,6 +55,7 @@
 		B10100000000000000000014 /* TranscriptBlocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000014 /* TranscriptBlocks.swift */; };
 		B10100000000000000000015 /* ToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000015 /* ToolViews.swift */; };
 		B10100000000000000000016 /* InspectorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000016 /* InspectorViews.swift */; };
+		B101000000000000000000A1 /* SplitResize.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000A1 /* SplitResize.swift */; };
 		B10100000000000000000017 /* WorkspaceTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000017 /* WorkspaceTree.swift */; };
 		B10100000000000000000018 /* AgentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000018 /* AgentSheets.swift */; };
 		B10100000000000000000019 /* AppModel+Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000019 /* AppModel+Workspace.swift */; };
@@ -158,6 +160,7 @@
 		F10100000000000000000048 /* TranscriptVirtualizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptVirtualizer.swift; sourceTree = "<group>"; };
 		F10100000000000000000055 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
 		F20100000000000000000062 /* TextDiffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiffTests.swift; sourceTree = "<group>"; };
+		F201000000000000000000A1 /* SplitResizeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitResizeEngineTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000030 /* ComposerAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachment.swift; sourceTree = "<group>"; };
 		F10100000000000000000031 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		F10100000000000000000032 /* WorkspaceIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace/WorkspaceIndex.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		F10100000000000000000014 /* TranscriptBlocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptBlocks.swift; sourceTree = "<group>"; };
 		F10100000000000000000015 /* ToolViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolViews.swift; sourceTree = "<group>"; };
 		F10100000000000000000016 /* InspectorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorViews.swift; sourceTree = "<group>"; };
+		F101000000000000000000A1 /* SplitResize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitResize.swift; sourceTree = "<group>"; };
 		F10100000000000000000017 /* WorkspaceTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTree.swift; sourceTree = "<group>"; };
 		F10100000000000000000018 /* AgentSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSheets.swift; sourceTree = "<group>"; };
 		F10100000000000000000019 /* AppModel+Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Workspace.swift"; sourceTree = "<group>"; };
@@ -298,6 +302,7 @@
 				F10100000000000000000014 /* TranscriptBlocks.swift */,
 				F10100000000000000000015 /* ToolViews.swift */,
 				F10100000000000000000016 /* InspectorViews.swift */,
+				F101000000000000000000A1 /* SplitResize.swift */,
 				F1010000000000000000002C /* PaneTabBar.swift */,
 				F1010000000000000000002D /* FileBrowserTab.swift */,
 				F1010000000000000000002E /* FileEditorTab.swift */,
@@ -337,6 +342,7 @@
 				F20100000000000000000063 /* GrokExtTests.swift */,
 				F20100000000000000000072 /* LocalizationTests.swift */,
 				F20100000000000000000080 /* MarkdownFileTests.swift */,
+				F201000000000000000000A1 /* SplitResizeEngineTests.swift */,
 			);
 			path = AurewaysTests;
 			sourceTree = "<group>";
@@ -510,6 +516,7 @@
 				B10100000000000000000014 /* TranscriptBlocks.swift in Sources */,
 				B10100000000000000000015 /* ToolViews.swift in Sources */,
 				B10100000000000000000016 /* InspectorViews.swift in Sources */,
+				B101000000000000000000A1 /* SplitResize.swift in Sources */,
 				B1010000000000000000002C /* PaneTabBar.swift in Sources */,
 				B1010000000000000000002D /* FileBrowserTab.swift in Sources */,
 				B1010000000000000000002E /* FileEditorTab.swift in Sources */,
@@ -589,6 +596,7 @@
 				B20100000000000000000060 /* MarkdownStreamTests.swift in Sources */,
 				B20100000000000000000061 /* ToolCallNormalizationTests.swift in Sources */,
 				B20100000000000000000062 /* TextDiffTests.swift in Sources */,
+				B201000000000000000000A1 /* SplitResizeEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
