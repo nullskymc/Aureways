@@ -362,6 +362,510 @@ final class MarkdownStreamTests: XCTestCase {
         }
         XCTAssertEqual(latexPayloads(in: content), ["a + b", "c + d"])
     }
+
+    func testMarkdownBlockBoundaryDetectsCodeFencesAndMath() {
+        let fenced = """
+        Intro paragraph.
+
+        ```swift
+        let a = 1
+
+        let b = 2
+        ```
+
+        After the fence.
+        """
+        let fenceBoundary = MarkdownBlockBoundary.lastSafeBoundary(in: fenced)
+        XCTAssertNotNil(fenceBoundary)
+        if let index = fenceBoundary {
+            XCTAssertTrue(String(fenced[index...]).hasPrefix("After the fence."))
+            let prefix = String(fenced[..<index])
+            XCTAssertTrue(prefix.contains("let a = 1"))
+            XCTAssertTrue(prefix.contains("let b = 2"))
+            XCTAssertFalse(prefix.contains("After the fence"))
+        }
+
+        let math = """
+        Intro paragraph.
+
+        $$
+        a + b
+
+        = c
+        $$
+
+        After math.
+        """
+        let mathBoundary = MarkdownBlockBoundary.lastSafeBoundary(in: math)
+        XCTAssertNotNil(mathBoundary)
+        if let index = mathBoundary {
+            XCTAssertTrue(String(math[index...]).hasPrefix("After math."))
+            let prefix = String(math[..<index])
+            XCTAssertTrue(prefix.contains("a + b"))
+            XCTAssertTrue(prefix.contains("= c"))
+            XCTAssertFalse(prefix.contains("After math"))
+        }
+    }
+
+    func testMarkdownBlockBoundaryDoesNotSplitLooseLists() {
+        let loose = """
+        1. First.
+
+        2. Second.
+        """
+        XCTAssertNil(MarkdownBlockBoundary.lastSafeBoundary(in: loose))
+
+        let afterList = """
+        Intro paragraph.
+
+        1. First.
+
+        2. Second.
+
+        Closing paragraph.
+        """
+        let boundary = MarkdownBlockBoundary.lastSafeBoundary(in: afterList)
+        XCTAssertNotNil(boundary)
+        if let index = boundary {
+            XCTAssertTrue(String(afterList[index...]).hasPrefix("Closing paragraph."))
+            let prefix = String(afterList[..<index])
+            XCTAssertTrue(prefix.contains("Intro paragraph."))
+            XCTAssertTrue(prefix.contains("1. First."))
+            XCTAssertTrue(prefix.contains("2. Second."))
+        }
+
+        let paraThenList = """
+        Intro paragraph.
+
+        1. First item growing
+        """
+        let listStart = MarkdownBlockBoundary.lastSafeBoundary(in: paraThenList)
+        XCTAssertNotNil(listStart)
+        if let index = listStart {
+            XCTAssertTrue(String(paraThenList[index...]).hasPrefix("1. First item"))
+            XCTAssertFalse(String(paraThenList[..<index]).contains("1. First"))
+        }
+    }
+
+    func testAppendingRekeysTailIDs() async {
+        let prefix = await MarkdownDocumentCache.shared.document(
+            for: "Hello world.\n\n",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        let tail = await MarkdownDocumentCache.shared.document(
+            for: "Second paragraph.",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        XCTAssertFalse(prefix.renderables.isEmpty)
+        XCTAssertFalse(tail.renderables.isEmpty)
+        let combined = prefix.appending(tail)
+        let ids = combined.renderables.map(\.id)
+        XCTAssertEqual(ids.count, prefix.renderables.count + tail.renderables.count)
+        XCTAssertEqual(ids.count, Set(ids).count, "concatenated documents must not reuse cmark ids")
+        XCTAssertEqual(
+            prefix.renderables.map(\.id),
+            Array(ids.prefix(prefix.renderables.count))
+        )
+    }
+
+    func testMarkdownStreamParserIncrementalParsingReusesCommittedBlocks() async throws {
+        let parser = MarkdownStreamParser()
+        let snapshots = [
+            "Hello world.\n\nSecond",
+            "Hello world.\n\nSecond paragraph grows.",
+            "Hello world.\n\nSecond paragraph grows.\n\nThird."
+        ]
+        var committedID: String?
+        for source in snapshots {
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+            await parser.waitUntilIdle()
+            let document = try XCTUnwrap(parser.result?.document)
+            let ids = document.renderables.map(\.id)
+            XCTAssertEqual(ids.count, Set(ids).count)
+            let firstID = try XCTUnwrap(ids.first)
+            if let committedID {
+                XCTAssertEqual(firstID, committedID)
+            } else {
+                committedID = firstID
+            }
+        }
+
+        let incremental = try XCTUnwrap(parser.result?.document)
+        let full = await MarkdownDocumentCache.shared.document(
+            for: snapshots.last!,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        XCTAssertEqual(incremental.plainText, full.plainText)
+    }
+
+    func testIncrementalLooseListKeepsSingleOrderedList() async throws {
+        let source = """
+        Intro paragraph.
+
+        1. First.
+
+        2. Second.
+
+        Closing paragraph.
+        """
+        let parser = MarkdownStreamParser()
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        let document = try XCTUnwrap(parser.result?.document)
+        let listCounts = document.renderables.compactMap { renderable -> Int? in
+            if case .orderedList(_, let items) = renderable { return items.count }
+            return nil
+        }
+        XCTAssertEqual(listCounts, [2], "loose list must parse as one list, not two 1-item lists")
+        let ids = document.renderables.map(\.id)
+        XCTAssertEqual(ids.count, Set(ids).count)
+    }
+
+    func testStoreTrueFullParseMatchesMergedDocument() async throws {
+        let source = """
+        Intro paragraph.
+
+        1. First.
+
+        2. Second.
+
+        Closing paragraph.
+        """
+        let control = await MarkdownDocumentCache.shared.document(
+            for: source,
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        MarkdownDocumentCache.shared.removeAllForTests()
+
+        let parser = MarkdownStreamParser()
+        parser.request(
+            source: "Intro paragraph.\n\n1. First.",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: true)
+        await parser.waitUntilIdle()
+
+        let stored = try XCTUnwrap(MarkdownDocumentCache.shared.cached(source))
+        XCTAssertEqual(stored.plainText, control.mergingAdjacentTextBlocks.plainText)
+    }
+
+    func testStreamingClosedParagraphIsNotDuplicated() async throws {
+        let p1 = "它不会造成分栏拖动卡顿、长回答越来越贵、滚动掉帧——那些是 PERF-03/04/09 的事，而且合帧本身是在保护主线程。"
+        let p2 = "有影响，但和前面那批前端 PERF 不是一类问题。"
+        let parser = MarkdownStreamParser()
+        var source = p1
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+
+        source += "\n\n"
+        for character in p2 {
+            source.append(character)
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+            await parser.waitUntilIdle()
+        }
+        source += "\n\n下一段开始"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+
+        let text = try XCTUnwrap(parser.result?.document.plainText)
+        let copies = text.components(separatedBy: p2).count - 1
+        XCTAssertEqual(copies, 1, "closed paragraph duplicated \(copies) times in:\n\(text)")
+        XCTAssertEqual(
+            try XCTUnwrap(parser.result?.document.renderables.map(\.id).count),
+            Set(parser.result?.document.renderables.map(\.id) ?? []).count
+        )
+    }
+
+    func testBurstStreamingClosedParagraphIsNotDuplicated() async throws {
+        let p1 = "第一段已经写完。"
+        let p2 = "有影响，但和前面那批前端 PERF 不是一类问题。"
+        let parser = MarkdownStreamParser()
+        var source = p1 + "\n\n"
+        for character in p2 {
+            source.append(character)
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        }
+        source += "\n\n"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        source += "下一段"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+
+        let text = try XCTUnwrap(parser.result?.document.plainText)
+        let copies = text.components(separatedBy: p2).count - 1
+        XCTAssertEqual(copies, 1, "burst streaming duplicated paragraph \(copies) times in:\n\(text)")
+    }
+
+    func testAgentSnapshotChunksDoNotDuplicateParagraphs() {
+        let session = ChatSession(
+            agent: AgentProfile(
+                id: "test",
+                title: "Test",
+                subtitle: "",
+                command: "/usr/bin/true",
+                arguments: [],
+                builtIn: false,
+                notes: ""
+            ),
+            cwd: "/tmp"
+        )
+        let p1 = "它不会造成分栏拖动卡顿。"
+        let p2 = "有影响，但和前面那批前端 PERF 不是一类问题。"
+        let snapshots = [
+            p1,
+            p1 + "\n\n" + p2,
+            p1 + "\n\n" + p2,
+            p1 + "\n\n" + p2,
+            p1 + "\n\n" + p2,
+            p1 + "\n\n" + p2
+        ]
+        for snapshot in snapshots {
+            session.apply(SessionNotification(
+                sessionId: "s",
+                update: .agentMessageChunk(.text(snapshot))
+            ))
+        }
+        guard case .agent(_, let markdown) = session.items.last else {
+            return XCTFail("expected an agent message")
+        }
+        XCTAssertEqual(markdown, p1 + "\n\n" + p2)
+        XCTAssertEqual(markdown.components(separatedBy: p2).count - 1, 1)
+    }
+
+    func testDiscardedInFlightParseDoesNotDuplicateCommittedBlocks() async throws {
+        let parser = MarkdownStreamParser { source, config in
+            try? await Task.sleep(nanoseconds: 15_000_000)
+            return await MarkdownDocumentCache.shared.document(
+                for: source,
+                config: config,
+                store: false
+            )
+        }
+        let p1 = "两次提交"
+        let p2 = "c79c11c 引入遮罩，顺带修了拖动崩溃。"
+        let p3 = "拖动状态从三个 State 换成 SplitResizeEngine。"
+        var source = "## \(p1)\n\n"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        for character in p2 {
+            source.append(character)
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        }
+        source += "\n\n"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        for character in p3 {
+            source.append(character)
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        }
+        source += "\n\n收尾。"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: true)
+        await parser.waitUntilIdle()
+
+        let text = try XCTUnwrap(parser.result?.document.plainText)
+        XCTAssertEqual(text.components(separatedBy: p1).count - 1, 1, "heading duplicated in:\n\(text)")
+        XCTAssertEqual(text.components(separatedBy: p2).count - 1, 1, "paragraph duplicated in:\n\(text)")
+        let ids = try XCTUnwrap(parser.result?.document.renderables.map(\.id))
+        XCTAssertEqual(ids.count, Set(ids).count)
+    }
+
+    func testAgentDeltaChunksStillConcatenate() {
+        let session = ChatSession(
+            agent: AgentProfile(
+                id: "test",
+                title: "Test",
+                subtitle: "",
+                command: "/usr/bin/true",
+                arguments: [],
+                builtIn: false,
+                notes: ""
+            ),
+            cwd: "/tmp"
+        )
+        for token in ["有影响，", "但和前面", "那批前端 PERF 不是一类问题。"] {
+            session.apply(SessionNotification(
+                sessionId: "s",
+                update: .agentMessageChunk(.text(token))
+            ))
+        }
+        guard case .agent(_, let markdown) = session.items.last else {
+            return XCTFail("expected an agent message")
+        }
+        XCTAssertEqual(markdown, "有影响，但和前面那批前端 PERF 不是一类问题。")
+    }
+
+    func testUnclosedFenceAtStartIsACommitBoundary() {
+        let source = "```swift\nlet a = 1"
+        XCTAssertEqual(MarkdownBlockBoundary.lastSafeBoundary(in: source), source.startIndex)
+        let fence = MarkdownBlockBoundary.unclosedFence(in: source, from: source.startIndex)
+        XCTAssertEqual(fence?.language, "swift")
+        XCTAssertEqual(fence?.code, "let a = 1")
+        XCTAssertNil(MarkdownBlockBoundary.unclosedFence(in: source + "\n```", from: source.startIndex))
+    }
+
+    func testUnclosedFenceAfterIntroDoesNotReparsePrefix() async throws {
+        final class ParseLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private var _sources: [String] = []
+            func append(_ source: String) {
+                lock.lock()
+                _sources.append(source)
+                lock.unlock()
+            }
+            var sources: [String] {
+                lock.lock()
+                defer { lock.unlock() }
+                return _sources
+            }
+        }
+
+        let log = ParseLog()
+        let parser = MarkdownStreamParser { source, config in
+            log.append(source)
+            return await MarkdownDocumentCache.shared.document(
+                for: source,
+                config: config,
+                store: false
+            )
+        }
+        let intro = "Hello world.\n\n"
+        var source = intro + "```swift\nlet a"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        XCTAssertEqual(log.sources, [intro])
+        let first = try XCTUnwrap(parser.result?.document.renderables.first)
+        let firstID = first.id
+        guard case .codeBlock(_, let language, let code) = parser.result?.document.renderables.last else {
+            return XCTFail("expected synthesized code block")
+        }
+        XCTAssertEqual(language, "swift")
+        XCTAssertTrue(code.contains("let a"))
+
+        source += " = 1"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        XCTAssertEqual(log.sources, [intro], "growing unclosed fence must not reparse the committed prefix")
+        XCTAssertEqual(parser.result?.document.renderables.first?.id, firstID)
+        guard case .codeBlock(_, _, let grown) = parser.result?.document.renderables.last else {
+            return XCTFail("expected synthesized code block")
+        }
+        XCTAssertTrue(grown.contains("let a = 1"))
+    }
+
+    func testUnclosedFenceFromDocumentStartSkipsCmark() async throws {
+        final class ParseLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private var _sources: [String] = []
+            func append(_ source: String) {
+                lock.lock()
+                _sources.append(source)
+                lock.unlock()
+            }
+            var sources: [String] {
+                lock.lock()
+                defer { lock.unlock() }
+                return _sources
+            }
+        }
+
+        let log = ParseLog()
+        let parser = MarkdownStreamParser { source, config in
+            log.append(source)
+            return await MarkdownDocumentCache.shared.document(
+                for: source,
+                config: config,
+                store: false
+            )
+        }
+        parser.request(source: "```swift\nlet a", config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        XCTAssertTrue(log.sources.isEmpty)
+        let firstID = try XCTUnwrap(parser.result?.document.renderables.first?.id)
+        parser.request(source: "```swift\nlet a = 1", config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        XCTAssertTrue(log.sources.isEmpty)
+        XCTAssertEqual(parser.result?.document.renderables.first?.id, firstID)
+        guard case .codeBlock(_, let language, let code) = parser.result?.document.renderables.first else {
+            return XCTFail("expected synthesized code block")
+        }
+        XCTAssertEqual(language, "swift")
+        XCTAssertEqual(code, "let a = 1")
+    }
+
+    func testClosingFenceReturnsToCmarkAndDropsSyntheticID() async throws {
+        let parser = MarkdownStreamParser()
+        let intro = "Hello world.\n\n"
+        parser.request(
+            source: intro + "```swift\nlet a = 1",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        await parser.waitUntilIdle()
+        parser.request(
+            source: intro + "```swift\nlet a = 1\n```\n\nAfter the fence.",
+            config: AurewaysMarkdown.plain,
+            store: false
+        )
+        await parser.waitUntilIdle()
+        let ids = try XCTUnwrap(parser.result?.document.renderables.map(\.id))
+        XCTAssertFalse(ids.contains { $0.contains("open-fence") })
+        let text = try XCTUnwrap(parser.result?.document.plainText)
+        XCTAssertTrue(text.contains("Hello world."))
+        XCTAssertTrue(text.contains("let a = 1"))
+        XCTAssertTrue(text.contains("After the fence."))
+    }
+
+    func testOpenFenceStreamingCurveDoesNotParsePrefix() async {
+        print("\n=== PERF_CURVE OPEN_FENCE_STREAM ===")
+        final class ParseLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private var count = 0
+            func add() {
+                lock.lock()
+                count += 1
+                lock.unlock()
+            }
+            var value: Int {
+                lock.lock()
+                defer { lock.unlock() }
+                return count
+            }
+        }
+        let log = ParseLog()
+        let parser = MarkdownStreamParser { source, config in
+            log.add()
+            return await MarkdownDocumentCache.shared.document(
+                for: source,
+                config: config,
+                store: false
+            )
+        }
+        var source = "Intro paragraph.\n\n```swift\n"
+        parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+        await parser.waitUntilIdle()
+        let afterIntro = log.value
+        let ticks = 80
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        for index in 0..<ticks {
+            source += "let value\(index) = \(index)\n"
+            parser.request(source: source, config: AurewaysMarkdown.plain, store: false)
+            await parser.waitUntilIdle()
+        }
+        let t1 = DispatchTime.now().uptimeNanoseconds
+        let avgMs = Double(t1 - t0) / Double(ticks) / 1_000_000
+        print(String(
+            format: "PERF_CURVE ticks=%d prefix_parses=%d extra_parses=%d avg_tick=%7.4fms",
+            ticks,
+            afterIntro,
+            log.value - afterIntro,
+            avgMs
+        ))
+        XCTAssertEqual(log.value, afterIntro, "open fence growth must not reparse committed prefix")
+    }
 }
 
 private func latexPayloads(in attributed: NSAttributedString) -> [String] {

@@ -64,12 +64,10 @@ struct SingleBlockView: View, Equatable {
       switch renderable {
       case .heading(_, _, let contents):
         ParagraphView(contents: contents)
-          .transition(.opacity)
           .accessibilityAddTraits(.isHeader)
       case .paragraph(_, let contents):
         ParagraphView(contents: contents, lineSpacing: 5)
           .fixedSize(horizontal: false, vertical: true)
-          .transition(.opacity)
       case .latex(_, let latexString):
         ScrollView(.horizontal) {
           HStack(spacing: 0) {

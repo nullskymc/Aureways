@@ -34,7 +34,7 @@ Aureways/                          # 仓库根
 │   ├── AppModel+Workspace.swift   # 工作区目录
 │   ├── AppModel+Sessions.swift    # 会话列表 / 发送 / 关闭 / 删除
 │   ├── AppModel+Runtime.swift     # ACP 进程、prompt、权限桥
-│   ├── AppModel+Inspector.swift   # 面板标签状态与操作、编辑保存/冲突
+│   ├── AppModel+Inspector.swift   # 面板标签、编辑保存/冲突、超长粘贴草稿
 │   ├── ChatSession.swift          # 单会话 transcript 状态
 │   ├── SessionStore.swift         # sqlite 会话列表缓存
 │   ├── AppIcon.icon/              # macOS 26+ Icon Composer（A / 轨道 / 星）
@@ -72,8 +72,8 @@ Aureways/                          # 仓库根
 │       ├── TranscriptBlocks.swift # 用户/助手/思考块；展开状态不跟视图走
 │       ├── ToolViews.swift        # 工具卡片（命令 / 编辑 / 读取 / 搜索 / 抓取）
 │       ├── MarkdownBody.swift     # vendored SwiftStreamingMarkdown + 流式单通道 parse
-│       ├── Composer.swift         # 输入框
-│       ├── ComposerTextView.swift # NSTextView 输入与拖拽
+│       ├── Composer.swift         # 输入框（超长粘贴为字数占位卡）
+│       ├── ComposerTextView.swift # NSTextView 输入与拖拽；超长粘贴不进输入框
 │       ├── CompletionPopup.swift  # / 与 @ 补全
 │       ├── PermissionCard.swift   # 权限确认
 │       ├── PlanApprovalCard.swift # Grok 计划审批 + 选择题

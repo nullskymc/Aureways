@@ -86,7 +86,7 @@ extension AppModel {
     }
 
     func openWorkspaceInFinder(_ path: String? = nil) {
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path ?? workspacePath)
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path ?? inspectorRoot)
     }
 
     func bootstrapWorkspaces(currentPath: String) {

@@ -61,10 +61,16 @@ final class TranscriptHeightCache {
         return true
     }
 
-    func prune(keeping ids: Set<UUID>) {
-        guard heights.count > ids.count else { return }
+    @discardableResult
+    func prune(keeping ids: Set<UUID>) -> Int {
+        let before = heights.count
+        if before == 0 { return 0 }
+        if before <= ids.count, heights.keys.allSatisfy({ ids.contains($0) }) {
+            return 0
+        }
         heights = heights.filter { ids.contains($0.key) }
         isIndexValid = false
+        return before - heights.count
     }
 
     func window(
@@ -99,17 +105,50 @@ final class TranscriptHeightCache {
         if isIndexValid,
            entries.count == cachedEntryIDs.count + 1,
            let last = entries.last,
-           cachedEntryIDs.elementsEqual(entries.dropLast().lazy.map(\.id)) {
+           cachedEntryIDs.elementsEqual(entries.dropLast().lazy.map(\.id)),
+           cachedEntryVersions.elementsEqual(entries.dropLast().lazy.map(\.version)) {
+            let n = cachedEntryIDs.count
             let h = height(for: last.block)
             cachedEntryIDs.append(last.id)
             cachedEntryVersions.append(last.version)
             cachedRowHeights.append(h)
-            let prevCount = cachedPrefixes.count - 1
-            var y = cachedPrefixes[prevCount]
-            if prevCount > 0 { y += TranscriptVirtualizer.spacing }
-            y += h
-            cachedPrefixes.append(y)
+            // prefixes[n] currently stores content total. After a following
+            // row exists that becomes the start of the new row (old total +
+            // spacing). prefixes[0] stays 0 when n == 0.
+            if n > 0 {
+                cachedPrefixes[n] += TranscriptVirtualizer.spacing
+            }
+            cachedPrefixes.append(cachedPrefixes[n] + h)
             return
+        }
+
+        // Fast path: last row grew in place (streaming). Prefix rows unchanged.
+        if isIndexValid,
+           entries.count == cachedEntryIDs.count,
+           let last = entries.last,
+           last.id == cachedEntryIDs.last {
+            let lastIndex = entries.count - 1
+            var prefixMatches = true
+            if lastIndex > 0 {
+                for index in 0..<lastIndex {
+                    if entries[index].id != cachedEntryIDs[index]
+                        || entries[index].version != cachedEntryVersions[index] {
+                        prefixMatches = false
+                        break
+                    }
+                }
+            }
+            if prefixMatches {
+                let h = height(for: last.block)
+                let delta = h - cachedRowHeights[lastIndex]
+                cachedEntryVersions[lastIndex] = last.version
+                cachedRowHeights[lastIndex] = h
+                cachedPrefixes[lastIndex + 1] += delta
+                #if DEBUG
+                PerfCounters.countIndexLastRowUpdate()
+                #endif
+                return
+            }
         }
 
         // Full rebuild
@@ -140,6 +179,9 @@ final class TranscriptHeightCache {
         cachedRowHeights = rowHeights
         cachedPrefixes = prefixes
         isIndexValid = true
+        #if DEBUG
+        PerfCounters.countIndexFullRebuild()
+        #endif
     }
 
     private func entriesMatchCache(_ entries: [TranscriptEntry]) -> Bool {

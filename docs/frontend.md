@@ -29,7 +29,7 @@
 ### 2.1 侧边栏 (SidebarView)
 - **品牌菜单**：添加工作区、在 Finder 打开、偏好设置。
 - **新对话 (`⌘N`)**：进入空白画布。
-- **工作区树**：工作区与其下会话合为一棵树。点文件夹设为当前 `cwd`（新对话用），箭头展开/收起会话；`+` 添加工作区。行内标明会话绑定的 Agent。状态灯：绿=已连接，灰=已断开，金=连接中，红=失败。快捷键 `⌘1` ~ `⌘9`。
+- **工作区树**：工作区与其下会话合为一棵树。点文件夹设为新对话默认 `cwd`；点会话则打开该对话，并把检查器绑到该会话的 `cwd`（文件树、终端、已打开文件）。箭头展开/收起会话；`+` 添加工作区。行内标明会话绑定的 Agent。状态灯：绿=已连接，灰=已断开，金=连接中，红=失败。快捷键 `⌘1` ~ `⌘9`。
 - **Agent 与插件**：只在 **偏好设置（`⌘,`）** 里管理，不在侧栏重复入口。
 - **底栏**：用户名 + 齿轮直达偏好设置。
 
@@ -49,7 +49,8 @@
 
 - **可见窗口 + 高度缓存，不要 eager `VStack`，也不要依赖 `LazyVStack` 的内部估算。** 屏幕内外各用一段 spacer（高度来自 `TranscriptHeightCache`），中间只放真正的行。工作台 Markdown 预览用 `LazyVStack`，且只有当前标签才挂预览。曾经一律 `LazyVStack`：解析高度为 0 时进会话空白；卡片展开时未放置行的估算塌掉，视口被拽回底部，于是退回 eager——单步滚动从 90 块 2.25 ms 涨到 300 块 23.02 ms。窗口化同时修这两头。展开状态放在 `TranscriptChromeState` 里，不跟视图走，回收上屏高度才能对得上。拖检查器分栏的行为见 §2.4「分栏拖动的冻结契约」。
 - **解析结果由 `MarkdownDocumentCache` 持有，不由视图持有。** `MarkdownBody` 用 `DocumentView`（渲染已解析文档）而不是 `MarkdownView`（视图内自己解析），并在 `init` 里同步查缓存，所以块一放上去就有真实高度——上面那条虚拟化的前提就靠这个成立。会话打开和每回合结束时后台预热（300 条约 54 ms）。
-- **流式 parse 单通道。** token 到达只记下最新快照；同一时刻只跑一次 cmark。取消的 `.task(id:)` 不会把过期文档写回视图。公式已经闭合后，vendored 库按 payload 比较 inline attachment、块公式跳过 `setLatex:`，段落只 append 后缀——已画出的 `MTMathUILabel` 不会被拆掉重建。
+- **流式 parse 单通道。** token 到达只记下最新快照；同一时刻只跑一次 cmark。取消的 `.task(id:)` 不会把过期文档写回视图。公式已经闭合后，vendored 库按 payload 比较 inline attachment、块公式跳过 `setLatex:`，段落只 append 后缀——已画出的 `MTMathUILabel` 不会被拆掉重建。未闭合围栏从开行切分：已闭合前缀复用，开着的 fence 合成 `.codeBlock`，不把整段 fence 再送进 cmark。
+- **流式正文不得重扫 raw items。** agent / thought / user 续写只改 `transcriptEntries.last` 并 bump version（与工具的 `updateProjectedTool` 同一条局部路径）。新块或活动卡结构变化才 `TranscriptBlock.group()`。`transcriptRevision` 仍递增，高度索引对「最后一行 version +1」走 O(1) 快路径。
 - **位置跟随不读绝对偏移。** 用 `ScrollPosition` + `scrollTo(edge: .bottom)`，判据是 `onScrollTargetVisibilityChange` 报告的「最后一块是否可见」。`contentOffset` 只用来算可见窗口；拿它当「是否在底部」的阈值会随估算漂移（Apple 在 WWDC26 "Dive into lazy stacks and scrolling with SwiftUI" 里点名的反模式）。底部留白用 `.safeAreaPadding`，这样 `scrollTo(edge:)` 认安全区、最后一条消息停在输入卡上方。
 - **写 `@State` 前先比较。** 滚动相关的回调每秒触发多次，无条件写状态会让 `TranscriptView.body` 跟着重算。高度写入 `TranscriptHeightCache`（非 Observable），只有窗口范围真的变了才写 `rowWindow`。
 - **超长文本先在字符串层面截断再交给 `Text`。** `lineLimit` 只限制显示行数，`Text` 仍会把整个字符串排版；工具的输入 / 输出动辄是整个文件（见 `ToolViews.swift` 的 `clamped`）。
@@ -66,6 +67,7 @@
 
 ### 2.3 悬浮输入卡片 (ComposerCard)
 - **居中悬浮卡片 (`maxWidth: 780pt`)**：自然悬浮于主画布下方。
+- **超长粘贴不进输入框。** 超过 2000 个 UTF-16 单位的文本不会写入 `NSTextView`，也不交给测量用的隐藏 `Text`（`lineLimit` 挡不住整段排版，见 §2.2）。粘贴内容落到当前工作区 `{cwd}/.aureways/pastes/paste-*.txt`，输入卡只显示字数占位；点卡片在右侧检查器打开同一套文件编辑器（`⌘S` 保存，脏标记与外部冲突处理照旧）。发送前若该标签未保存，先把检查器草稿刷盘，再按普通文件附件走 `resource` / `resource_link`。回显或重放这条 `user_message_chunk` 时，`resource` 正文只当附件，不写进用户气泡。超过 2MB 拒绝粘贴。`.aureways` 不进文件树与 `@` 索引。
 - **环境状态胶囊**：显示当前项目名称、本地环境标签及实时 Git 分支名（自动过滤非 Git 目录的重复标签）。
 - **指令与操作整合**：
   - 移除原先横跨屏幕的 20+ 指令胶囊栏。`+` 菜单提供添加文件、添加工作区，以及当前会话的 Slash Commands（如 `/help`、`/review`）；输入框里打 `/` 仍走补全。
@@ -76,7 +78,7 @@
 ### 2.4 工作台面板 (InspectorPaneView)
 快捷键 `⌘B` / `⌥⌘I` 展开/折叠。窗口工具栏是系统分段选择器（`PaneTabBar`）：文件浏览器、每个打开的文本文件、每个终端各占一段。右键某一段弹出菜单关闭该标签（文件还有「关闭其它」「在 Finder 中显示」）；文件浏览器常驻不能关。标签条尾部 `+` 是选择菜单：新建终端、文件浏览器、会话信息、在 Finder 中显示工作区。切换标签只是隐藏视图，终端输出与编辑器文本不丢。
 
-1. **文件浏览器（常驻）**：当前工作区的递归目录树，懒加载；点击文件即在编辑器标签打开；Agent 写文件后自动刷新。
+1. **文件浏览器（常驻）**：跟着**当前会话的 `cwd`**（没有打开会话时才用侧栏选中的工作区）。点左侧文件夹只设定「下一条新对话」的默认路径，不会把正在看的会话的文件树拽走。打开的文件 / 终端标签按会话记住，切换会话时换回那一套。点击文件即在编辑器标签打开；Agent 写文件后自动刷新。
 2. **文本文件标签**：NSTextView 编辑器（等宽字体 + 行号栏），脏标记 ●、`⌘S` 保存。`.md` / `.markdown` 等默认预览，顶栏可切回源码；预览复用对话区的 `MarkdownBody`，编辑器在切走时仍存活所以撤销栈不丢。三层冲突处理：保存时按 mtime 校验外部修改（覆盖 / 放弃 / 取消）；关闭未保存文件弹确认（保存 / 不保存 / 取消）；Agent 写已打开文件时，未脏自动重载、已脏显示「重载 / 保留我的」提示条。>2MB、非 UTF-8、含 NUL 的文件拒绝打开。Finder / `⌘O` 打开的 Markdown 也走这个标签，不另开窗口。
 3. **终端标签**：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 真实 PTY 交互终端，按登录 shell 启动并继承完整 PATH；背景 / 前景随浅色、深色切换（与检查器画布同色）。进程在 `openTerminalTab()` 创建，关标签即终止，shell 里敲 `exit` 同样关掉标签并回收 PTY，应用退出统一清理。
 4. **信息标签**：协议、Agent、工作区路径、ACP Session ID 与会话配置（`configOptions`）编辑。
@@ -85,7 +87,7 @@
 
 拖动主对话栏与检查器之间的分栏，是**唯一会连续几十秒改写两个窗格宽度**的操作，它的成本必须与拖动帧数无关。这一节的约束改动前请先读。
 
-- **拖动期间冻结内容的提议宽度，不要盖住它。** `InspectorPaneView` 在 `frozenWidth != nil` 时用 `FrozenWidthLayout`（自定义 `Layout`）把子视图的**提议宽度**钉在拖动开始那一刻，外层只变裁剪框，松手后才按最终宽度排一次——表列宽、公式、编辑器与终端的布局在拖动中一次都不重算。蒙一层材质只能挡住视觉，**不会让 SwiftUI 跳过布局**（`.opacity(0)` 也一样），材质本身还是每帧重新采样背景的全窗格模糊。
+- **拖动期间冻结内容的提议宽度，不要盖住它。** `InspectorPaneView` 在 `frozenWidth != nil` 时用 `FrozenWidthLayout`（自定义 `Layout`）把子视图的**提议宽度**钉在拖动开始那一刻，外层只变裁剪框，松手后才按最终宽度排一次——表列宽、公式、编辑器与终端的布局在拖动中一次都不重算。遮罩只挡眼睛，**不会让 SwiftUI 跳过布局**。遮罩必须是不透明的 `Palette.inspectorBg`：同色半透明叠上去等于没盖；`.regularMaterial` 会在分栏每帧对整块面板重采样模糊（PERF-02）。
 - **冻结必须用 `Layout`，不能用 `.frame(width:)`。** `.frame(width:)` 会把该宽度当成内容的*理想宽度*，并穿过外层的 `.frame(maxWidth: .infinity)` 继续向 `NavigationSplitView` 传播；分栏读到它就把列宽钉住——把分栏拉到最大宽度后就再也拉不回来，夹紧边界处反复夹紧/回弹。`Layout` 的容器尺寸恒等于父级提议，冻结与否都不改变自己占的空间，因此不会泄漏固定宽度。这一条是实测踩过的回归。
 - **不要在几何回调里写 `@State`。** 拖动状态由 `SplitResizeEngine`（`Views/SplitResize.swift`）持有：每帧喂进来的宽度只写 `lastWidth` 这类普通字段，`isResizing` / `frozenWidth` 只在**开始与结束两个边沿**变化，于是一个拖动周期只让视图失效两次。`@StateObject` 持有引用类型时，改它的普通属性不会触发更新——这是整条约束的实现基础。
 - **拖动起止只认指针按下 / 抬起，不要用"宽度多久没变"。** 宽度不变无法区分"用户中途停顿"和"用户松手"：按住鼠标停顿超过阈值就会提前解冻、内容重排，表现出来就是界面渲染跑在拖动前面。`SplitResizeEngine` 用 `NSEvent.addLocalMonitorForEvents` 监视 `.leftMouseDown` / `.leftMouseUp`，只有"指针按着 + 宽度真的在变"同时成立才冻结；抬起即解冻。它不去上层找 `NSSplitView`：`.inspector` / `NavigationSplitView` 内部用什么容器属于 SwiftUI 的实现细节，顺着视图树找分隔条更脆。剩下的 3 秒兜底计时器只负责在抬起事件丢失时自我恢复。

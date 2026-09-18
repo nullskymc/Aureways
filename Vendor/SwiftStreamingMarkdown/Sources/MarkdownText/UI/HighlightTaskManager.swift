@@ -44,7 +44,15 @@ actor HighlightTaskManager: ObservableObject {
   private static let signposter = OSSignposter(subsystem: "ai.aureways.client", category: "Highlight")
 
   public static func cached(_ key: CacheKey) -> AttributedString? {
-    $cache.read(closure: { $0[key] })
+    let hit = $cache.read(closure: { $0[key] })
+    guard hit != nil else { return nil }
+    $cacheOrder.mutate { order in
+      if let index = order.firstIndex(of: key) {
+        order.remove(at: index)
+        order.append(key)
+      }
+    }
+    return hit
   }
 
   public static func store(_ value: AttributedString, for key: CacheKey) {

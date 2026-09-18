@@ -13,6 +13,8 @@ enum ComposerCommand {
 
 final class ComposerTextView: NSTextView {
     var attachmentHandler: (([ComposerAttachment]) -> Void)?
+    var overflowHandler: ((String) -> Void)?
+    var pasteTooLargeHandler: (() -> Void)?
 
     // 不覆写任何构造器（与文件编辑器的 SaveTextView 一致）：覆写 designated
     // init(frame:textContainer:) 后经它创建会绕开 NSTextView 默认 TextKit 装配，
@@ -41,14 +43,33 @@ final class ComposerTextView: NSTextView {
         return super.performKeyEquivalent(with: event)
     }
 
-    // ⌘V：剪贴板有图片/文件时转附件，否则走系统文本粘贴。
+    // ⌘V：剪贴板有图片/文件时转附件；超长文本不进 NSTextView，交给 overflowHandler。
     override func paste(_ sender: Any?) {
-        let attachments = ComposerAttachment.fromPasteboard(.general)
+        if handlePasteboard(.general) { return }
+        super.paste(sender)
+    }
+
+    override func pasteAsPlainText(_ sender: Any?) {
+        paste(sender)
+    }
+
+    @discardableResult
+    private func handlePasteboard(_ pasteboard: NSPasteboard) -> Bool {
+        let attachments = ComposerAttachment.fromPasteboard(pasteboard)
         if !attachments.isEmpty {
             attachmentHandler?(attachments)
-            return
+            return true
         }
-        super.paste(sender)
+        switch ComposerOverflow.classifyText(on: pasteboard) {
+        case .inline:
+            return false
+        case .overflow(let text):
+            overflowHandler?(text)
+            return true
+        case .tooLarge:
+            pasteTooLargeHandler?()
+            return true
+        }
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -73,6 +94,7 @@ final class ComposerTextView: NSTextView {
                 return true
             }
         }
+        if handlePasteboard(pasteboard) { return true }
         return super.performDragOperation(sender)
     }
 
@@ -86,6 +108,8 @@ struct ComposerTextRepresentable: NSViewRepresentable {
     @Binding var draft: String
     @Binding var isFocused: Bool
     let onAttachments: ([ComposerAttachment]) -> Void
+    var onOverflowText: (String) -> Void = { _ in }
+    var onPasteTooLarge: () -> Void = {}
     let onCommand: (ComposerCommand) -> Bool
     let coordinatorSink: (ComposerCoordinator) -> Void
 
@@ -128,6 +152,14 @@ struct ComposerTextRepresentable: NSViewRepresentable {
         textView.attachmentHandler = { [weak coordinator = context.coordinator] attachments in
             guard let coordinator else { return }
             coordinator.parent.onAttachments(attachments)
+        }
+        textView.overflowHandler = { [weak coordinator = context.coordinator] text in
+            guard let coordinator else { return }
+            coordinator.parent.onOverflowText(text)
+        }
+        textView.pasteTooLargeHandler = { [weak coordinator = context.coordinator] in
+            guard let coordinator else { return }
+            coordinator.parent.onPasteTooLarge()
         }
         coordinatorSink(context.coordinator)
         return scrollView

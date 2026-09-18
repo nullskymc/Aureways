@@ -110,13 +110,11 @@ transcript projection 重建、全量 row-height 数组与窗口重算、Markdow
 
 **B. 冷启动 `session/list` 挡住 `session/new`。** `ensureRuntime` 在返回前 `await pullList(from:)`（`Aureways/AppModel+Runtime.swift:233-247`），`pullList` 只刷新本客户端已有条目的 title 与 MCP 信息（`:189-209`），`listSessions` 最多串行 20 页（`Aureways/ACP/Connection.swift:146-159`）。若 list 首次返回 auth-required，会形成 list 失败 → authenticate → list 重试 → session/new。
 
-**C. 每个 update 固定等一帧。** 15–30Hz 的 pulse（`Aureways/AppModel+Runtime.swift:534-558`）：通常增加 0–33ms，display link 取 minimum 15Hz 时约 67ms；主线程忙时无硬上限。另外**每个原始 update 都会投一个 main queue closure**（`:338-342`），即使 pulse 已在运行，closure 仍会排队（`armSessionUpdatePump` 最后 no-op）。最终 response 到达时会主动 flush（`:161-174`），permission 前也会 flush（`:344-350`），尾事件不额外等帧。
+**C. 每个 update 固定等一帧。** 15–30Hz 的 pulse（`Aureways/AppModel+Runtime.swift` `DisplayPulse`）：通常增加 0–33ms，display link 取 minimum 15Hz 时约 67ms；主线程忙时无硬上限。inbox 只在空→非空时投一次 `armSessionUpdatePump` 闭包；pulse 已在跑时后续 push 不再排队。最终 response 到达时会主动 flush，permission 前也会 flush，尾事件不额外等帧。
 
 **D. 反向请求回复前等 MainActor。** 见 3.4。流式 update 已通过 inbox 与 MainActor 解耦，日志与 file-op 路径没有。
 
-**E. 长 transcript 每帧全量重建。** 普通 text/thought 更新走 `rebuildTranscriptProjection()`（`Aureways/Domain/Session/ChatSession.swift:357-362`）：`TranscriptBlock.group(items, ...)` 遍历全部 raw items（`Aureways/Domain/Session/TranscriptBlock.swift:60-130`），随后 `Set(blocks.map(\.id))`、按 id 过滤 `transcriptEntryVersions`、`Dictionary(uniqueKeysWithValues:)` 重建 entries、`rebuildToolIndex()`（`Aureways/Domain/Session/ChatSession.swift:236-260`）。视图侧 `resolvedWindow` / `applyWindow` 每次 `heightCache.rowHeights(for: entries)` 映射全部条目并构建完整 prefix 数组线性扫描（`Aureways/Views/Transcript.swift:27`、`:143-161`、`Aureways/TranscriptVirtualizer.swift:37-42`、`:99-136`），`transcriptRevision` 变化时还 `heightCache.prune(keeping: Set(entries.map(\.id)))`（`Aureways/Views/Transcript.swift:97-105`）。
-
-工具更新已有定点范式：`updateProjectedTool` 只改对应 entry 并 bump version，不重建（`Aureways/Domain/Session/ChatSession.swift:439-460`）；普通流式文本没有对应路径。虚拟化避免了离屏 Markdown 布局，但没有避免这些 O(history) 的数据处理。
+**E. 长 transcript 每帧全量重建。** 已由 `PERF-12` 补上文本局部路径：agent / thought / user 续写走 `updateProjectedLiveText` / `updateProjectedUser`，只改 last entry。新块或活动卡结构变化仍 `rebuildTranscriptProjection()` → `TranscriptBlock.group(items)`。高度索引对 last-row version +1 走 O(1)，不再每次全量前缀和。`transcriptRevision` 续写仍递增。
 
 历史 replay 更敏感：`session/load` 会快速灌入大量交错 update，`flushSessionUpdates()` 对合并后每个 event 逐个 `session.apply`（`Aureways/AppModel+Runtime.swift:466-475`），若一个 tick 内很多事件无法相互合并，会在 transcript 增长时反复完整 group。
 

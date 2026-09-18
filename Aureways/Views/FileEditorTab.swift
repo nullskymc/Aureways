@@ -156,7 +156,7 @@ private struct FileEditorHeader: View {
     }
 
     private var breadcrumbPath: String {
-        let workspace = model.workspacePath
+        let workspace = model.inspectorRoot
         let rootName = URL(fileURLWithPath: workspace).lastPathComponent
         let prefix = workspace.hasSuffix("/") ? workspace : workspace + "/"
         guard path.hasPrefix(prefix) else {

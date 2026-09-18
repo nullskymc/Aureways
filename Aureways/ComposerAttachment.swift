@@ -86,7 +86,7 @@ enum TranscriptImageStore {
 }
 
 struct ComposerAttachment: Identifiable {
-    enum Kind { case image, file }
+    enum Kind { case image, file, pastedText }
 
     let id = UUID()
     var kind: Kind
@@ -95,6 +95,79 @@ struct ComposerAttachment: Identifiable {
     var mimeType: String
     var imageData: Data?
     var thumbnail: NSImage?
+    /// UTF-16 length of a `.pastedText` draft, captured at paste time.
+    var characterCount: Int = 0
+}
+
+/// Huge composer pastes skip NSTextView / SwiftUI `Text` layout. The payload
+/// is written under `{cwd}/.aureways/pastes/` so the inspector editor can
+/// save it and `session/prompt` can send it as a file resource.
+enum ComposerOverflow {
+    /// Above this UTF-16 length, paste becomes a sidebar-editable draft.
+    static let inlineUTF16Limit = 2_000
+    /// Same ceiling as `TextFile.maxBytes` — the inspector editor will not open larger files.
+    static let maxBytes = 2 * 1024 * 1024
+
+    enum WriteError: Error, Equatable {
+        case empty
+        case tooLarge
+    }
+
+    static func utf16Count(_ text: String) -> Int {
+        (text as NSString).length
+    }
+
+    static func exceedsInlineLimit(_ text: String) -> Bool {
+        utf16Count(text) > inlineUTF16Limit
+    }
+
+    enum TextPaste: Equatable {
+        case inline
+        case overflow(String)
+        case tooLarge
+    }
+
+    static func classifyText(on pasteboard: NSPasteboard) -> TextPaste {
+        guard let text = pasteboard.string(forType: .string), !text.isEmpty else {
+            return .inline
+        }
+        if text.utf8.count > maxBytes { return .tooLarge }
+        if exceedsInlineLimit(text) { return .overflow(text) }
+        return .inline
+    }
+
+    static func pasteDirectory(inWorkspace root: String) -> URL {
+        URL(fileURLWithPath: root, isDirectory: true)
+            .appendingPathComponent(".aureways", isDirectory: true)
+            .appendingPathComponent("pastes", isDirectory: true)
+    }
+
+    static func isPastePath(_ path: String) -> Bool {
+        path.contains("/.aureways/pastes/")
+    }
+
+    static func write(_ text: String, inWorkspace root: String) throws -> URL {
+        guard !text.isEmpty else { throw WriteError.empty }
+        guard text.utf8.count <= maxBytes else { throw WriteError.tooLarge }
+        let directory = pasteDirectory(inWorkspace: root)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let short = String(UUID().uuidString.prefix(8)).lowercased()
+        let url = directory.appendingPathComponent("paste-\(short).txt")
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        return url.standardizedFileURL
+    }
+
+    static func pastedAttachment(url: URL, characterCount: Int) -> ComposerAttachment {
+        ComposerAttachment(
+            kind: .pastedText,
+            name: url.lastPathComponent,
+            url: url,
+            mimeType: "text/plain",
+            imageData: nil,
+            thumbnail: nil,
+            characterCount: characterCount
+        )
+    }
 }
 
 struct TranscriptAttachment: Codable, Equatable, Sendable, Identifiable {

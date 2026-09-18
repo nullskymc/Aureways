@@ -336,9 +336,10 @@ extension AppModel {
         let bridge = AgentBridge(agentId: agentId, model: self)
         return ACPHandlers(
             onUpdate: { notification in
-                inbox.push(SessionUpdateInbox.Event(agentId: agentId, notification: notification))
-                DispatchQueue.main.async {
-                    AppModel.shared?.armSessionUpdatePump()
+                if inbox.push(SessionUpdateInbox.Event(agentId: agentId, notification: notification)) {
+                    DispatchQueue.main.async {
+                        AppModel.shared?.armSessionUpdatePump()
+                    }
                 }
             },
             onPermission: { prompt in
@@ -550,10 +551,16 @@ final class SessionUpdateInbox: @unchecked Sendable {
         return events.isEmpty
     }
 
-    func push(_ event: Event) {
+    /// Returns `true` when the inbox was empty, so the caller should arm the
+    /// display pulse. Later pushes while a pulse is already draining the queue
+    /// must not enqueue extra main-thread work.
+    @discardableResult
+    func push(_ event: Event) -> Bool {
         lock.lock()
+        let wasEmpty = events.isEmpty
         events.append(event)
         lock.unlock()
+        return wasEmpty
     }
 
     func take() -> [Event] {
@@ -568,13 +575,14 @@ final class SessionUpdateInbox: @unchecked Sendable {
         var result: [Event] = []
         result.reserveCapacity(events.count)
         for event in events {
-            if let last = result.last,
-               last.agentId == event.agentId,
-               let merged = last.notification.merging(event.notification) {
-                result[result.count - 1] = Event(agentId: last.agentId, notification: merged)
-            } else {
-                result.append(event)
+            if var last = result.popLast() {
+                if last.agentId == event.agentId, last.notification.absorb(event.notification) {
+                    result.append(last)
+                    continue
+                }
+                result.append(last)
             }
+            result.append(event)
         }
         return result
     }

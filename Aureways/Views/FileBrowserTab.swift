@@ -84,14 +84,14 @@ struct FileBrowserTabView: View {
 
     var body: some View {
         let isFiltering = !trimmedQuery.isEmpty
-        let displayedNodes = isFiltering ? filterResults : tree.visibleNodes(root: model.workspacePath)
+        let displayedNodes = isFiltering ? filterResults : tree.visibleNodes(root: model.inspectorRoot)
 
         VStack(alignment: .leading, spacing: 0) {
             WorkspaceControlBar(
                 query: $filterQuery,
                 isActive: isActive,
                 onReload: {
-                    tree.invalidateAll(root: model.workspacePath)
+                    tree.invalidateAll(root: model.inspectorRoot)
                     scheduleFilter(filterQuery)
                 },
                 onCollapseAll: {
@@ -117,7 +117,7 @@ struct FileBrowserTabView: View {
                                     withAnimation(.easeInOut(duration: 0.12)) {
                                         if isFiltering {
                                             filterQuery = ""
-                                            tree.expandTo(item.node.path, root: model.workspacePath)
+                                            tree.expandTo(item.node.path, root: model.inspectorRoot)
                                         } else {
                                             tree.toggle(item.node)
                                         }
@@ -135,14 +135,14 @@ struct FileBrowserTabView: View {
 
             WorkspaceStatusBar(count: displayedNodes.count, isFiltering: isFiltering)
         }
-        .onAppear { tree.reload(root: model.workspacePath) }
-        .onChange(of: model.workspacePath) { _, newValue in
+        .onAppear { tree.reload(root: model.inspectorRoot) }
+        .onChange(of: model.inspectorRoot) { _, newValue in
             tree.reload(root: newValue)
             filterResults = []
             scheduleFilter(filterQuery)
         }
         .onChange(of: model.browserInvalidationToken) {
-            tree.invalidateAll(root: model.workspacePath)
+            tree.invalidateAll(root: model.inspectorRoot)
             scheduleFilter(filterQuery)
         }
         .onChange(of: filterQuery) { _, newValue in
@@ -185,7 +185,7 @@ struct FileBrowserTabView: View {
             return
         }
         isFilterPending = true
-        let root = model.workspacePath
+        let root = model.inspectorRoot
         filterTask = Task {
             // 连续输入时不扫盘，停 150ms 再跑一次。
             try? await Task.sleep(for: .milliseconds(150))
@@ -321,7 +321,7 @@ private struct FileNodeRow: View {
     @State private var isHovered = false
 
     private var relativePath: String {
-        let prefix = model.workspacePath + "/"
+        let prefix = model.inspectorRoot + "/"
         return node.path.hasPrefix(prefix) ? String(node.path.dropFirst(prefix.count)) : node.path
     }
 

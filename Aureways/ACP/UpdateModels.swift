@@ -18,10 +18,20 @@ enum ContentBlock: Codable, Sendable, Equatable {
     }
 
     func concatenating(_ other: ContentBlock) -> ContentBlock? {
-        guard case .text(var left) = self, case .text(let right) = other else { return nil }
+        var copy = self
+        guard copy.consumeAppend(other) else { return nil }
+        return copy
+    }
+
+    /// Drops `self`'s reference before appending so CoW does not copy the
+    /// accumulated buffer on every pulse merge.
+    mutating func consumeAppend(_ other: ContentBlock) -> Bool {
+        guard case .text(var left) = self, case .text(let right) = other else { return false }
+        self = .text("")
         left.reserveCapacity(left.count + right.count)
         left.append(right)
-        return .text(left)
+        self = .text(left)
+        return true
     }
 
     init(json: JSONValue) {
@@ -252,41 +262,55 @@ struct SessionNotification: Sendable, Equatable {
     }
 
     func merging(_ next: SessionNotification) -> SessionNotification? {
-        guard sessionId == next.sessionId else { return nil }
+        var copy = self
+        guard copy.absorb(next) else { return nil }
+        return copy
+    }
+
+    /// Consumes `self` then appends `next` in place. Caller must uniquely own
+    /// `self` (e.g. via `popLast()`) or CoW still copies.
+    mutating func absorb(_ next: SessionNotification) -> Bool {
+        guard sessionId == next.sessionId else { return false }
         switch (update, next.update) {
-        case (.agentMessageChunk(let left), .agentMessageChunk(let right)):
-            guard let combined = left.concatenating(right) else { return nil }
-            return SessionNotification(sessionId: sessionId, update: .agentMessageChunk(combined), messageId: next.messageId ?? messageId)
-        case (.agentThoughtChunk(let left), .agentThoughtChunk(let right)):
-            guard let combined = left.concatenating(right) else { return nil }
-            return SessionNotification(sessionId: sessionId, update: .agentThoughtChunk(combined), messageId: next.messageId ?? messageId)
-        case (.userMessageChunk(let left), .userMessageChunk(let right)):
-            guard let combined = left.concatenating(right) else { return nil }
-            return SessionNotification(sessionId: sessionId, update: .userMessageChunk(combined), messageId: next.messageId ?? messageId)
-        case (.toolCallUpdate(let left), .toolCallUpdate(let right)) where left.toolCallId == right.toolCallId:
-            var merged = left
-            merged.merge(right)
-            return SessionNotification(sessionId: sessionId, update: .toolCallUpdate(merged), messageId: next.messageId ?? messageId)
-        case (.usage, .usage):
-            return next
-        case (.availableCommands, .availableCommands):
-            return next
-        case (.sessionInfo, .sessionInfo):
-            return next
+        case (.agentMessageChunk(var left), .agentMessageChunk(let right)):
+            guard case .text = left, case .text = right else { return false }
+            update = .agentMessageChunk(.text(""))
+            guard left.consumeAppend(right) else { return false }
+            update = .agentMessageChunk(left)
+        case (.agentThoughtChunk(var left), .agentThoughtChunk(let right)):
+            guard case .text = left, case .text = right else { return false }
+            update = .agentThoughtChunk(.text(""))
+            guard left.consumeAppend(right) else { return false }
+            update = .agentThoughtChunk(left)
+        case (.userMessageChunk(var left), .userMessageChunk(let right)):
+            guard case .text = left, case .text = right else { return false }
+            update = .userMessageChunk(.text(""))
+            guard left.consumeAppend(right) else { return false }
+            update = .userMessageChunk(left)
+        case (.toolCallUpdate(var left), .toolCallUpdate(let right)) where left.toolCallId == right.toolCallId:
+            left.merge(right)
+            update = .toolCallUpdate(left)
+        case (.usage, .usage), (.availableCommands, .availableCommands), (.sessionInfo, .sessionInfo):
+            update = next.update
         default:
-            return nil
+            return false
         }
+        messageId = next.messageId ?? messageId
+        return true
     }
 
     static func coalesced(_ notes: [SessionNotification]) -> [SessionNotification] {
         var result: [SessionNotification] = []
         result.reserveCapacity(notes.count)
         for note in notes {
-            if let last = result.last, let merged = last.merging(note) {
-                result[result.count - 1] = merged
-            } else {
-                result.append(note)
+            if var last = result.popLast() {
+                if last.absorb(note) {
+                    result.append(last)
+                    continue
+                }
+                result.append(last)
             }
+            result.append(note)
         }
         return result
     }

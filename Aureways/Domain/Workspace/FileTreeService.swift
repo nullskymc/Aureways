@@ -131,7 +131,7 @@ enum FileFilterScan: Sendable {
     static let maxResults = 80
 
     private static let excludedDirectories: Set<String> = [
-        ".git", "node_modules", ".build", "DerivedData", "dist", "target", ".next", "Pods",
+        ".git", ".aureways", "node_modules", ".build", "DerivedData", "dist", "target", ".next", "Pods",
     ]
     private static let maxVisited = 20_000
     private static let maxCollected = 400

@@ -9,7 +9,7 @@ struct IndexedFile: Identifiable, Equatable {
 
 // 大仓库全量枚举无意义：目录深度与文件数封顶，重目录直接跳过。
 private let excludedDirectoryNames: Set<String> = [
-    ".git", "node_modules", ".build", "DerivedData", "dist", "target", ".next", "Pods",
+    ".git", ".aureways", "node_modules", ".build", "DerivedData", "dist", "target", ".next", "Pods",
 ]
 private let scanMaxDepth = 6
 private let scanMaxFiles = 4000

@@ -54,6 +54,10 @@ struct MarkdownBody: View {
                     config: config,
                     lazyBlocks: lazyBlocks
                 )
+                // Stable during streaming so paragraph views can append.
+                // Flip identity when the turn ends so leftover incremental
+                // blocks cannot linger the way they do until a session switch.
+                .id(isStreaming ? "streaming" : source)
             } else {
                 // 解析落地前用同字号明文占位。高度只是近似，但远好过 0——
                 // 高度 0 会让虚拟化的 stack 把这条消息当成不存在。
@@ -80,10 +84,12 @@ struct MarkdownBody: View {
             enqueueParse()
         }
         .onChange(of: streamParser.result) { _, result in
-            guard let result,
-                  result.source == source,
-                  result.generation == requestedGeneration
-            else { return }
+            guard let result, result.source == source else { return }
+            // While streaming, ignore stale generations. Once the turn ends,
+            // accept the matching source even if a later enqueueParse bumped
+            // requestedGeneration — otherwise the incremental duplicate stays
+            // on screen until the view is recreated (session switch).
+            if isStreaming, result.generation != requestedGeneration { return }
             if document?.document != result.document { document = result }
         }
     }
@@ -99,17 +105,6 @@ struct MarkdownBody: View {
             if document?.document != cached { document = result }
             return
         }
-        if !isStreaming, let currentDocument = document, currentDocument.source == source {
-            requestedGeneration = streamParser.cancel()
-            let finalDocument = MarkdownDocumentCache.shared.store(source, currentDocument.document)
-            let result = MarkdownParseResult(
-                source: source,
-                generation: requestedGeneration,
-                document: finalDocument
-            )
-            if currentDocument.document != finalDocument { document = result }
-            return
-        }
         requestedGeneration = streamParser.request(
             source: source,
             config: config,
@@ -120,67 +115,224 @@ struct MarkdownBody: View {
 
 
 /// Detects safe top-level Markdown block boundaries for incremental streaming parses (PERF-03).
-/// A boundary is safe when preceded by a blank line and outside code fences or display math.
+///
+/// A candidate is a blank line outside fences / display math. It is only safe
+/// when the following non-empty line cannot continue the construct above it
+/// (loose lists, indented list continuations, quotes, tables, setext
+/// underlines, link reference definitions).
 enum MarkdownBlockBoundary {
     static func lastSafeBoundary(in text: String) -> String.Index? {
         guard !text.isEmpty else { return nil }
 
-        var inCodeFence: Character? = nil
+        var inCodeFence: Character?
         var fenceLength = 0
         var inMathDisplay = false
-        var lastSafeIndex: String.Index? = nil
-
+        var lastSafeIndex: String.Index?
+        var openConstructStart: String.Index?
+        var previousNonEmpty: Substring?
         var currentIndex = text.startIndex
 
         while currentIndex < text.endIndex {
-            var lineEnd = currentIndex
-            while lineEnd < text.endIndex && text[lineEnd] != "\n" && text[lineEnd] != "\r" {
-                lineEnd = text.index(after: lineEnd)
-            }
-
-            let line = text[currentIndex..<lineEnd]
-
-            var nextLineStart = lineEnd
-            if nextLineStart < text.endIndex && text[nextLineStart] == "\r" {
-                nextLineStart = text.index(after: nextLineStart)
-            }
-            if nextLineStart < text.endIndex && text[nextLineStart] == "\n" {
-                nextLineStart = text.index(after: nextLineStart)
-            }
-
+            let (line, nextLineStart) = nextLine(in: text, from: currentIndex)
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let indent = leadingIndent(line)
 
             if let fenceChar = inCodeFence {
-                if trimmed.starts(with: String(repeating: fenceChar, count: fenceLength)) {
-                    let remaining = trimmed.drop(while: { $0 == fenceChar }).trimmingCharacters(in: .whitespaces)
+                if indent < 4,
+                   trimmed.starts(with: String(repeating: fenceChar, count: fenceLength)) {
+                    let remaining = trimmed.drop(while: { $0 == fenceChar })
+                        .trimmingCharacters(in: .whitespaces)
                     if remaining.isEmpty {
                         inCodeFence = nil
                         fenceLength = 0
+                        openConstructStart = nil
+                        previousNonEmpty = line
                     }
                 }
             } else if inMathDisplay {
                 if trimmed == "$$" || trimmed.hasSuffix("$$") {
                     inMathDisplay = false
+                    openConstructStart = nil
+                    previousNonEmpty = line
+                }
+            } else if indent < 4, isFenceOpener(trimmed) {
+                let firstChar = trimmed.first!
+                inCodeFence = firstChar
+                fenceLength = trimmed.prefix(while: { $0 == firstChar }).count
+                openConstructStart = currentIndex
+                previousNonEmpty = line
+            } else if indent < 4, isMathOpener(trimmed) {
+                if isSingleLineDisplayMath(trimmed) {
+                    previousNonEmpty = line
+                } else {
+                    inMathDisplay = true
+                    openConstructStart = currentIndex
+                    previousNonEmpty = line
+                }
+            } else if trimmed.isEmpty {
+                if let previous = previousNonEmpty,
+                   let next = nextNonEmptyLine(in: text, from: nextLineStart),
+                   isSafeBlockBreak(previous: previous, next: next) {
+                    lastSafeIndex = nextLineStart
                 }
             } else {
-                if trimmed.starts(with: "```") || trimmed.starts(with: "~~~") {
-                    let firstChar = trimmed.first!
-                    let count = trimmed.prefix(while: { $0 == firstChar }).count
-                    inCodeFence = firstChar
-                    fenceLength = count
-                } else if trimmed == "$$" {
-                    inMathDisplay = true
-                } else if trimmed.isEmpty {
-                    if nextLineStart < text.endIndex {
-                        lastSafeIndex = nextLineStart
-                    }
-                }
+                previousNonEmpty = line
             }
 
             currentIndex = nextLineStart
         }
 
+        if inCodeFence != nil || inMathDisplay {
+            return openConstructStart
+        }
         return lastSafeIndex
+    }
+
+    /// Unclosed fenced code from `start` through EOF. `start` must be the
+    /// opener line. Returns nil when this is not a fence or the fence closed.
+    static func unclosedFence(
+        in source: String,
+        from start: String.Index
+    ) -> (language: String?, code: String)? {
+        guard start < source.endIndex else { return nil }
+        let (line, bodyStart) = nextLine(in: source, from: start)
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard leadingIndent(line) < 4, isFenceOpener(trimmed) else { return nil }
+        let firstChar = trimmed.first!
+        let fenceLength = trimmed.prefix(while: { $0 == firstChar }).count
+        let language = fenceLanguage(trimmed)
+
+        var current = bodyStart
+        while current < source.endIndex {
+            let (bodyLine, next) = nextLine(in: source, from: current)
+            let bodyTrimmed = bodyLine.trimmingCharacters(in: .whitespaces)
+            if leadingIndent(bodyLine) < 4,
+               bodyTrimmed.starts(with: String(repeating: firstChar, count: fenceLength)) {
+                let remaining = bodyTrimmed.drop(while: { $0 == firstChar })
+                    .trimmingCharacters(in: .whitespaces)
+                if remaining.isEmpty {
+                    return nil
+                }
+            }
+            current = next
+        }
+        return (language, String(source[bodyStart...]))
+    }
+
+    private static func fenceLanguage(_ opener: String) -> String? {
+        guard let first = opener.first else { return nil }
+        let rest = opener.drop(while: { $0 == first }).trimmingCharacters(in: .whitespaces)
+        guard !rest.isEmpty else { return nil }
+        return rest.split(whereSeparator: \.isWhitespace).first.map(String.init)
+    }
+
+    private static func nextLine(
+        in text: String,
+        from start: String.Index
+    ) -> (Substring, String.Index) {
+        var lineEnd = start
+        while lineEnd < text.endIndex && text[lineEnd] != "\n" && text[lineEnd] != "\r" {
+            lineEnd = text.index(after: lineEnd)
+        }
+        return (text[start..<lineEnd], skipNewline(in: text, from: lineEnd))
+    }
+
+    private static func skipNewline(in text: String, from index: String.Index) -> String.Index {
+        var next = index
+        if next < text.endIndex && text[next] == "\r" {
+            next = text.index(after: next)
+        }
+        if next < text.endIndex && text[next] == "\n" {
+            next = text.index(after: next)
+        }
+        return next
+    }
+
+    private static func nextNonEmptyLine(in text: String, from start: String.Index) -> Substring? {
+        var index = start
+        while index < text.endIndex {
+            let (line, next) = nextLine(in: text, from: index)
+            if !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                return line
+            }
+            if next == index { break }
+            index = next
+        }
+        return nil
+    }
+
+    private static func isSafeBlockBreak(previous: Substring, next: Substring) -> Bool {
+        let prev = previous.trimmingCharacters(in: .whitespaces)
+        let nxt = next.trimmingCharacters(in: .whitespaces)
+        let nextIndent = leadingIndent(next)
+        let prevIndent = leadingIndent(previous)
+
+        if nextIndent >= 4 { return false }
+        if isSetextUnderline(nxt) { return false }
+        if isLinkReferenceDefinition(nxt) { return false }
+
+        if isListMarker(nxt) {
+            return !isListMarker(prev) && prevIndent < 4 && !prev.hasPrefix(">")
+        }
+        if nxt.hasPrefix("|") {
+            return !prev.hasPrefix("|")
+        }
+        if nxt.hasPrefix(">") {
+            return !prev.hasPrefix(">")
+        }
+        return true
+    }
+
+    private static func leadingIndent(_ line: Substring) -> Int {
+        var count = 0
+        for character in line {
+            if character == " " { count += 1 }
+            else if character == "\t" { count += 4 }
+            else { break }
+        }
+        return count
+    }
+
+    private static func isFenceOpener(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+    }
+
+    private static func isMathOpener(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix("$$")
+    }
+
+    private static func isSingleLineDisplayMath(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix("$$") && trimmed.hasSuffix("$$") && trimmed.count > 4
+    }
+
+    private static func isSetextUnderline(_ trimmed: String) -> Bool {
+        guard !trimmed.isEmpty else { return false }
+        return trimmed.allSatisfy { $0 == "=" } || trimmed.allSatisfy { $0 == "-" }
+    }
+
+    private static func isListMarker(_ trimmed: String) -> Bool {
+        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
+            return true
+        }
+        var index = trimmed.startIndex
+        var digits = 0
+        while index < trimmed.endIndex, trimmed[index].isNumber {
+            digits += 1
+            if digits > 9 { return false }
+            index = trimmed.index(after: index)
+        }
+        guard digits > 0, index < trimmed.endIndex else { return false }
+        let marker = trimmed[index]
+        guard marker == "." || marker == ")" else { return false }
+        let after = trimmed.index(after: index)
+        return after == trimmed.endIndex || trimmed[after].isWhitespace
+    }
+
+    private static func isLinkReferenceDefinition(_ trimmed: String) -> Bool {
+        guard trimmed.first == "[" else { return false }
+        guard let close = trimmed.firstIndex(of: "]") else { return false }
+        let after = trimmed.index(after: close)
+        return after < trimmed.endIndex && trimmed[after] == ":"
     }
 }
 
@@ -259,17 +411,19 @@ final class MarkdownStreamParser: ObservableObject {
         pumpTask = Task { [weak self] in
             while let work = self?.takeLatest() {
                 guard let self else { return }
-                let document = await self.parseWork(work, parse: parse)
+                let outcome = await self.parseWork(work, parse: parse)
                 if Task.isCancelled { break }
                 guard work.generation == self.generation,
                       self.latest == nil
                 else { continue }
+                self.committedSource = outcome.committedSource
+                self.committedDocument = outcome.committedDocument
                 let publishedDocument: RenderableDocument
                 if work.store {
-                    publishedDocument = MarkdownDocumentCache.shared.store(work.source, document)
+                    publishedDocument = MarkdownDocumentCache.shared.store(work.source, outcome.display)
                     self.resetCommitted()
                 } else {
-                    publishedDocument = document
+                    publishedDocument = outcome.display
                 }
                 self.publish(
                     source: work.source,
@@ -281,40 +435,99 @@ final class MarkdownStreamParser: ObservableObject {
         }
     }
 
+    private struct ParseOutcome {
+        var display: RenderableDocument
+        var committedSource: String
+        var committedDocument: RenderableDocument?
+    }
+
+    /// Pure with respect to parser state: a discarded in-flight snapshot must
+    /// not append into `committedDocument`. The pump applies the outcome only
+    /// when this work is still the latest generation.
     private func parseWork(
         _ work: Work,
         parse: Parse
-    ) async -> RenderableDocument {
+    ) async -> ParseOutcome {
+        if work.store {
+            let document = await parse(work.source, work.config)
+            return ParseOutcome(display: document, committedSource: "", committedDocument: nil)
+        }
+
+        var committedSource = self.committedSource
+        var committedDocument = self.committedDocument
+
         if !committedSource.isEmpty && !work.source.starts(with: committedSource) {
-            resetCommitted()
+            committedSource = ""
+            committedDocument = nil
         }
 
         guard let boundary = MarkdownBlockBoundary.lastSafeBoundary(in: work.source) else {
-            resetCommitted()
-            return await parse(work.source, work.config)
+            let document = await parse(work.source, work.config)
+            return ParseOutcome(display: document, committedSource: "", committedDocument: nil)
         }
 
-        let prefix = String(work.source[..<boundary])
-        let tail = String(work.source[boundary...])
+        let prefix = work.source[..<boundary]
 
-        if committedDocument != nil && prefix == committedSource {
-            let tailDoc = await parse(tail, work.config)
-            return (committedDocument?.appending(tailDoc)) ?? tailDoc
-        } else if committedDocument != nil && prefix.starts(with: committedSource) {
-            let newSlice = String(prefix.dropFirst(committedSource.count))
-            let sliceDoc = await parse(newSlice, work.config)
-            let updatedCommitted = (committedDocument?.appending(sliceDoc)) ?? sliceDoc
-            committedSource = prefix
-            committedDocument = updatedCommitted
-            let tailDoc = await parse(tail, work.config)
-            return updatedCommitted.appending(tailDoc)
-        } else {
-            let prefixDoc = await parse(prefix, work.config)
-            committedSource = prefix
-            committedDocument = prefixDoc
-            let tailDoc = await parse(tail, work.config)
-            return prefixDoc.appending(tailDoc)
+        if prefix.isEmpty {
+            let tailDoc = await parseTail(work.source, from: boundary, config: work.config, parse: parse)
+            return ParseOutcome(display: tailDoc, committedSource: "", committedDocument: nil)
         }
+
+        if let committed = committedDocument,
+           !committedSource.isEmpty,
+           prefix == committedSource {
+            let tailDoc = await parseTail(work.source, from: boundary, config: work.config, parse: parse)
+            return ParseOutcome(
+                display: committed.appending(tailDoc),
+                committedSource: committedSource,
+                committedDocument: committed
+            )
+        }
+
+        if let committed = committedDocument,
+           !committedSource.isEmpty,
+           prefix.starts(with: committedSource) {
+            let newSlice = prefix.dropFirst(committedSource.count)
+            if newSlice.isEmpty {
+                let tailDoc = await parseTail(work.source, from: boundary, config: work.config, parse: parse)
+                return ParseOutcome(
+                    display: committed.appending(tailDoc),
+                    committedSource: committedSource,
+                    committedDocument: committed
+                )
+            }
+            let sliceDoc = await parse(String(newSlice), work.config)
+            let updatedCommitted = committed.appending(sliceDoc)
+            let tailDoc = await parseTail(work.source, from: boundary, config: work.config, parse: parse)
+            return ParseOutcome(
+                display: updatedCommitted.appending(tailDoc),
+                committedSource: String(prefix),
+                committedDocument: updatedCommitted
+            )
+        }
+
+        let prefixDoc = await parse(String(prefix), work.config)
+        let tailDoc = await parseTail(work.source, from: boundary, config: work.config, parse: parse)
+        return ParseOutcome(
+            display: prefixDoc.appending(tailDoc),
+            committedSource: String(prefix),
+            committedDocument: prefixDoc
+        )
+    }
+
+    private func parseTail(
+        _ source: String,
+        from start: String.Index,
+        config: MarkdownRenderConfig,
+        parse: Parse
+    ) async -> RenderableDocument {
+        if start >= source.endIndex {
+            return .empty
+        }
+        if let fence = MarkdownBlockBoundary.unclosedFence(in: source, from: start) {
+            return .synthesizedCodeBlock(language: fence.language, code: fence.code)
+        }
+        return await parse(String(source[start...]), config)
     }
 
     private func resetCommitted() {

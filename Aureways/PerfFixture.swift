@@ -9,10 +9,14 @@ enum PerfCounters {
     private static let groupCallCount = Atomic<Int>(0)
     private static let projectionRebuildCount = Atomic<Int>(0)
     private static let projectionUpdateCount = Atomic<Int>(0)
+    private static let indexFullRebuildCount = Atomic<Int>(0)
+    private static let indexLastRowUpdateCount = Atomic<Int>(0)
 
     static var groupCalls: Int { groupCallCount.load(ordering: .relaxed) }
     static var projectionRebuilds: Int { projectionRebuildCount.load(ordering: .relaxed) }
     static var projectionUpdates: Int { projectionUpdateCount.load(ordering: .relaxed) }
+    static var indexFullRebuilds: Int { indexFullRebuildCount.load(ordering: .relaxed) }
+    static var indexLastRowUpdates: Int { indexLastRowUpdateCount.load(ordering: .relaxed) }
 
     static func countGroupCall() {
         groupCallCount.add(1, ordering: .relaxed)
@@ -26,10 +30,20 @@ enum PerfCounters {
         projectionUpdateCount.add(1, ordering: .relaxed)
     }
 
+    static func countIndexFullRebuild() {
+        indexFullRebuildCount.add(1, ordering: .relaxed)
+    }
+
+    static func countIndexLastRowUpdate() {
+        indexLastRowUpdateCount.add(1, ordering: .relaxed)
+    }
+
     static func reset() {
         groupCallCount.store(0, ordering: .relaxed)
         projectionRebuildCount.store(0, ordering: .relaxed)
         projectionUpdateCount.store(0, ordering: .relaxed)
+        indexFullRebuildCount.store(0, ordering: .relaxed)
+        indexLastRowUpdateCount.store(0, ordering: .relaxed)
     }
 }
 

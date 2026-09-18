@@ -13,6 +13,8 @@ final class ComposerTextViewTests: XCTestCase {
         var focused = false
         var attachments: [[ComposerAttachment]] = []
         var commands: [ComposerCommand] = []
+        var overflowTexts: [String] = []
+        var pasteTooLargeCount = 0
         weak var coordinator: ComposerCoordinator?
     }
 
@@ -23,6 +25,8 @@ final class ComposerTextViewTests: XCTestCase {
                 draft: Binding(get: { box.draft }, set: { box.draft = $0 }),
                 isFocused: Binding(get: { box.focused }, set: { box.focused = $0 }),
                 onAttachments: { box.attachments.append($0) },
+                onOverflowText: { box.overflowTexts.append($0) },
+                onPasteTooLarge: { box.pasteTooLargeCount += 1 },
                 onCommand: { command in
                     box.commands.append(command)
                     return true
@@ -212,6 +216,63 @@ final class ComposerTextViewTests: XCTestCase {
         XCTAssertEqual(textView.string, "plain text", "纯文本粘贴应走系统默认路径")
         XCTAssertEqual(box.draft, "plain text")
         XCTAssertTrue(box.attachments.isEmpty)
+        XCTAssertTrue(box.overflowTexts.isEmpty)
+    }
+
+    func testOverflowThresholdAndWorkspaceDraft() throws {
+        XCTAssertFalse(ComposerOverflow.exceedsInlineLimit(String(repeating: "a", count: ComposerOverflow.inlineUTF16Limit)))
+        XCTAssertTrue(ComposerOverflow.exceedsInlineLimit(String(repeating: "a", count: ComposerOverflow.inlineUTF16Limit + 1)))
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("aureways-paste-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let text = String(repeating: "字", count: ComposerOverflow.inlineUTF16Limit + 10)
+        let url = try ComposerOverflow.write(text, inWorkspace: root.path)
+        XCTAssertTrue(ComposerOverflow.isPastePath(url.path))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), text)
+
+        let attachment = ComposerOverflow.pastedAttachment(url: url, characterCount: ComposerOverflow.utf16Count(text))
+        XCTAssertEqual(attachment.kind, .pastedText)
+        XCTAssertEqual(attachment.transcriptAttachment.kind, "file")
+        XCTAssertEqual(attachment.transcriptAttachment.path, url.path)
+        XCTAssertEqual(attachment.transcriptAttachment.mimeType, "text/plain")
+
+        let tooLarge = String(repeating: "a", count: ComposerOverflow.maxBytes + 1)
+        XCTAssertThrowsError(try ComposerOverflow.write(tooLarge, inWorkspace: root.path)) { error in
+            XCTAssertEqual(error as? ComposerOverflow.WriteError, .tooLarge)
+        }
+    }
+
+    func testPasteOverflowDoesNotEnterTextView() throws {
+        let (textView, box) = try makeHostedTextView()
+        window.makeFirstResponder(textView)
+        textView.insertText("keep")
+        drainRunloop()
+        XCTAssertEqual(box.draft, "keep")
+
+        let overflow = String(repeating: "x", count: ComposerOverflow.inlineUTF16Limit + 25)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(overflow, forType: .string)
+        defer { pasteboard.clearContents() }
+
+        textView.paste(nil)
+        drainRunloop()
+
+        XCTAssertEqual(textView.string, "keep", "超长粘贴不得写入 NSTextView")
+        XCTAssertEqual(box.draft, "keep")
+        XCTAssertEqual(box.overflowTexts, [overflow])
+        XCTAssertTrue(box.attachments.isEmpty)
+        XCTAssertEqual(box.pasteTooLargeCount, 0)
+    }
+
+    func testClassifyTextTooLarge() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(String(repeating: "a", count: ComposerOverflow.maxBytes + 1), forType: .string)
+        defer { pasteboard.clearContents() }
+        XCTAssertEqual(ComposerOverflow.classifyText(on: pasteboard), .tooLarge)
     }
 
     func testPasteImageFileURLBecomesAttachment() throws {

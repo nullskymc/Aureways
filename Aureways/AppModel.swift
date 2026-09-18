@@ -46,6 +46,11 @@ final class AppModel {
     var inspectorOpen = false
     var paneTabs: [PaneTab] = [.browser]
     var activePaneTabId = PaneTab.browser.id
+    /// Open files / terminals belong to a session (or the new-chat landing).
+    var inspectorBySession: [UUID: SessionInspectorState] = [:]
+    var untitledInspector = SessionInspectorState()
+    /// Session that currently owns the live `paneTabs` / drafts / terminals.
+    var inspectorOwner: UUID?
     var fileTabStates: [String: FileTabState] = [:]
     var interactiveTerminals: [UUID: InteractiveTerminal] = [:]
     var browserInvalidationToken = 0
@@ -56,6 +61,8 @@ final class AppModel {
     var editorDrafts: [String: String] = [:]
     var terminalTitles: [UUID: String] = [:]
     var searchQuery = ""
+    @ObservationIgnored
+    var sidebarListingCache: (signature: SidebarListing.Signature, snapshot: SidebarListing.Snapshot)?
     var draftPrompt = ""
     var fileIndex = WorkspaceFileIndex()
     var errorMessage: String?
@@ -84,6 +91,13 @@ final class AppModel {
 
     var selectedSession: ChatSession? {
         sessions.first(where: { $0.id == selectedSessionID })
+    }
+
+    /// Directory the inspector is bound to: the open session's cwd, or the
+    /// folder chosen for a new chat. File browser, new terminals, and @-files
+    /// follow this — not the last folder click in the sidebar.
+    var inspectorRoot: String {
+        selectedSession?.cwd ?? workspacePath
     }
 
     var selectedAgent: AgentProfile {

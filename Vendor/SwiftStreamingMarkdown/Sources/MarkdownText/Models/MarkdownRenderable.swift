@@ -75,6 +75,38 @@ indirect enum MarkdownRenderable: Identifiable, Equatable, @unchecked Sendable {
     }
   }
 
+  /// Prefixes this block's id (and nested list child ids) so concatenated
+  /// documents cannot collide in `ForEach(renderables)`.
+  func prefixed(with prefix: String) -> MarkdownRenderable {
+    let newID = prefix + id
+    switch self {
+    case .paragraph(_, let content):
+      return .paragraph(id: newID, content: content)
+    case .latex(_, let content):
+      return .latex(id: newID, content: content)
+    case .heading(_, let level, let content):
+      return .heading(id: newID, level: level, content: content)
+    case .orderedList(_, let items):
+      return .orderedList(id: newID, items: items.map { $0.prefixed(with: prefix) })
+    case .unorderedList(_, let items, let nestedLevel):
+      return .unorderedList(
+        id: newID,
+        items: items.map { $0.prefixed(with: prefix) },
+        nestedLevel: nestedLevel
+      )
+    case .codeBlock(_, let language, let code):
+      return .codeBlock(id: newID, language: language, code: code)
+    case .table(_, let headers, let rows, let rawMarkdown):
+      return .table(id: newID, headers: headers, rows: rows, rawMarkdown: rawMarkdown)
+    case .thematicBreak:
+      return .thematicBreak(id: newID)
+    case .blockQuote(_, let item):
+      return .blockQuote(id: newID, item: item)
+    case .image(_, let data):
+      return .image(id: newID, data: data)
+    }
+  }
+
   /// Content identity that survives a fresh parse of the same source.
   /// `Equatable` on paragraphs uses `NSAttributedString.isEqual`, which fails
   /// across parses because `NSColor(Color.primary)` is a new catalog color
@@ -143,5 +175,13 @@ struct MarkdownListItem: Equatable {
     self.children = children
     self.startsWithBold = startsWithBold
     self.checkbox = checkbox
+  }
+
+  func prefixed(with prefix: String) -> MarkdownListItem {
+    MarkdownListItem(
+      children: children.map { $0.prefixed(with: prefix) },
+      startsWithBold: startsWithBold,
+      checkbox: checkbox
+    )
   }
 }

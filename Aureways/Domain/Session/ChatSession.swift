@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 struct FileOpRecord: Identifiable, Sendable, Equatable {
     let id = UUID()
@@ -93,6 +94,10 @@ final class ChatSession: Identifiable {
     private(set) var transcriptEntries: [TranscriptEntry] = []
     private(set) var transcriptEntryIDs: Set<UUID> = []
     private var transcriptEntryVersions: [UUID: UInt64] = [:]
+    /// Unique growing buffer for the in-flight agent/thought/user text so each
+    /// chunk is O(delta) instead of a CoW copy of the whole message.
+    private let liveText = NSMutableString()
+    private var liveTextOwner: UUID?
     private var toolItemIndexByCallID: [String: Int] = [:]
     private var toolEntryIndexByItemID: [UUID: Int] = [:]
     var isStreaming = false
@@ -179,6 +184,7 @@ final class ChatSession: Identifiable {
     func replaceTranscript(_ newItems: [TranscriptItem], runs: [UUID: ActivityRun]) {
         items = newItems
         activityRuns = runs
+        resetLiveText()
         rebuildTranscriptProjection()
     }
 
@@ -239,7 +245,15 @@ final class ChatSession: Identifiable {
         }
     }
 
+    private static let projectionSignposter = OSSignposter(
+        subsystem: "ai.aureways.client",
+        category: "Projection"
+    )
+
     private func rebuildTranscriptProjection(changedBlockID: UUID? = nil) {
+        let signpostID = Self.projectionSignposter.makeSignpostID()
+        let state = Self.projectionSignposter.beginInterval("TranscriptProjectionRebuild", id: signpostID)
+        defer { Self.projectionSignposter.endInterval("TranscriptProjectionRebuild", state) }
         #if DEBUG
         if PerfFixture.usesLegacyProjection {
             let blocks = TranscriptBlock.group(items, runs: activityRuns)
@@ -296,14 +310,25 @@ final class ChatSession: Identifiable {
         switch notification.update {
         case .agentMessageChunk(let content):
             currentUserMessageId = nil
-            appendAgentContent(content)
-            visual = true
+            noteLiveText(
+                appendAgentContent(content),
+                asThought: false,
+                visual: &visual,
+                projectionUpdated: &projectionUpdated
+            )
         case .agentThoughtChunk(let content):
-            appendText(content.text ?? "", asThought: true)
-            visual = true
+            noteLiveText(
+                appendText(content.text ?? "", asThought: true),
+                asThought: true,
+                visual: &visual,
+                projectionUpdated: &projectionUpdated
+            )
         case .userMessageChunk(let content):
-            applyUserChunk(content, messageId: notification.messageId)
-            visual = true
+            noteUserChunk(
+                applyUserChunk(content, messageId: notification.messageId),
+                visual: &visual,
+                projectionUpdated: &projectionUpdated
+            )
         case .toolCall(let call):
             currentUserMessageId = nil
             appendTool(call, incrementsRevision: false)
@@ -380,29 +405,30 @@ final class ChatSession: Identifiable {
     }
 
     /// Agent 图片不要把 base64 写进 Markdown：流式重解析会把整段历史拖垮。
-    private func appendAgentContent(_ content: ContentBlock) {
+    private func appendAgentContent(_ content: ContentBlock) -> LiveTextApply {
         switch content {
         case .image(_, _, let uri):
             if let uri, !uri.isEmpty {
                 let name = URL(string: uri)?.lastPathComponent ?? "image"
-                appendText("\n\n![\(name)](\(uri))\n\n", asThought: false)
-            } else {
-                appendText("\n\n" + "(图片)".localized + "\n\n", asThought: false)
+                return appendText("\n\n![\(name)](\(uri))\n\n", asThought: false)
             }
+            return appendText("\n\n" + "(图片)".localized + "\n\n", asThought: false)
         case .resourceLink(let uri, let name):
-            appendText("[\(name)](\(uri))", asThought: false)
+            return appendText("[\(name)](\(uri))", asThought: false)
         case .resource(let uri, _, let text, _):
             if let text, !text.isEmpty {
-                appendText(text, asThought: false)
-            } else if !uri.isEmpty {
-                appendText(uri, asThought: false)
+                return appendText(text, asThought: false)
             }
+            if !uri.isEmpty {
+                return appendText(uri, asThought: false)
+            }
+            return .ignored
         case .audio:
-            appendText("\n\n" + "(音频)".localized + "\n\n", asThought: false)
+            return appendText("\n\n" + "(音频)".localized + "\n\n", asThought: false)
         case .text(let value):
-            appendText(value, asThought: false)
+            return appendText(value, asThought: false)
         case .other:
-            appendText(content.text ?? "", asThought: false)
+            return appendText(content.text ?? "", asThought: false)
         }
     }
 
@@ -512,6 +538,104 @@ final class ChatSession: Identifiable {
             return true
         }
         return false
+    }
+
+    private enum LiveTextApply {
+        case ignored
+        case created
+        case continued(id: UUID, text: String)
+    }
+
+    private enum UserChunkApply {
+        case ignored
+        case created
+        case continued(id: UUID, text: String, attachments: [TranscriptAttachment])
+    }
+
+    private func noteLiveText(
+        _ result: LiveTextApply,
+        asThought: Bool,
+        visual: inout Bool,
+        projectionUpdated: inout Bool
+    ) {
+        switch result {
+        case .ignored:
+            break
+        case .created:
+            visual = true
+        case .continued(let id, let text):
+            visual = true
+            if updateProjectedLiveText(itemID: id, text: text, asThought: asThought) {
+                projectionUpdated = true
+            }
+        }
+    }
+
+    private func noteUserChunk(
+        _ result: UserChunkApply,
+        visual: inout Bool,
+        projectionUpdated: inout Bool
+    ) {
+        switch result {
+        case .ignored:
+            break
+        case .created:
+            visual = true
+        case .continued(let id, let text, let attachments):
+            visual = true
+            if updateProjectedUser(itemID: id, text: text, attachments: attachments) {
+                projectionUpdated = true
+            }
+        }
+    }
+
+    private func updateProjectedLiveText(itemID: UUID, text: String, asThought: Bool) -> Bool {
+        #if DEBUG
+        if PerfFixture.usesLegacyProjection { return false }
+        #endif
+        guard let last = transcriptEntries.last else { return false }
+        if asThought {
+            guard case .activity(let blockID, var steps, let run) = last.block,
+                  let stepIndex = steps.lastIndex(where: {
+                      if case .thought(let id, _) = $0 { return id == itemID }
+                      return false
+                  })
+            else { return false }
+            steps[stepIndex] = .thought(itemID, text)
+            last.block = .activity(blockID, steps, run)
+            last.version &+= 1
+            transcriptEntryVersions[blockID] = last.version
+        } else {
+            guard case .agent(let id, _) = last.block, id == itemID else { return false }
+            last.block = .agent(id, text)
+            last.version &+= 1
+            transcriptEntryVersions[id] = last.version
+        }
+        #if DEBUG
+        PerfCounters.countProjectionUpdate()
+        #endif
+        return true
+    }
+
+    private func updateProjectedUser(
+        itemID: UUID,
+        text: String,
+        attachments: [TranscriptAttachment]
+    ) -> Bool {
+        #if DEBUG
+        if PerfFixture.usesLegacyProjection { return false }
+        #endif
+        guard let last = transcriptEntries.last,
+              case .user(let id, _, _) = last.block,
+              id == itemID
+        else { return false }
+        last.block = .user(id, text, attachments)
+        last.version &+= 1
+        transcriptEntryVersions[id] = last.version
+        #if DEBUG
+        PerfCounters.countProjectionUpdate()
+        #endif
+        return true
     }
 
     private func transcriptBlockID(containingItemID itemID: UUID) -> UUID? {
@@ -644,41 +768,87 @@ final class ChatSession: Identifiable {
         reportedMcpServers = []
         transcriptEntryVersions.removeAll()
         transcriptEntryIDs.removeAll()
+        resetLiveText()
         rebuildTranscriptProjection()
         transcriptRevision += 1
     }
 
-    private func appendText(_ text: String, asThought: Bool) {
-        guard !text.isEmpty else { return }
-        if asThought {
-            if case .thought(let id, var existing) = items.last {
-                existing.reserveCapacity(existing.count + text.count)
-                existing.append(text)
-                items[items.count - 1] = .thought(id, existing)
-            } else {
-                let id = UUID()
-                beginRun(id)
-                items.append(.thought(id, text))
-            }
-        } else {
-            endCurrentRun()
-            if case .agent(let id, var existing) = items.last {
-                existing.reserveCapacity(existing.count + text.count)
-                existing.append(text)
-                items[items.count - 1] = .agent(id, existing)
-            } else {
-                items.append(.agent(UUID(), text))
-            }
-        }
+    private func resetLiveText() {
+        liveText.setString("")
+        liveTextOwner = nil
     }
 
-    private func applyUserChunk(_ content: ContentBlock, messageId: String? = nil) {
+    private func snapshotLiveText() -> String {
+        String(liveText)
+    }
+
+    private func appendLiveText(_ text: String, owner: UUID, existing: String) {
+        if liveTextOwner != owner {
+            liveText.setString(existing)
+            liveTextOwner = owner
+        }
+        liveText.append(text)
+    }
+
+    /// ACP chunks are usually deltas. Some harnesses (and retries) resend the
+    /// whole buffer; treating those as deltas duplicates the last paragraphs.
+    /// Returns nil when the live buffer did not change.
+    private func mergeLiveText(existing: String, chunk: String, owner: UUID) -> String? {
+        if chunk == existing || existing.hasPrefix(chunk) {
+            return nil
+        }
+        if chunk.hasPrefix(existing) {
+            liveText.setString(chunk)
+            liveTextOwner = owner
+            return chunk
+        }
+        appendLiveText(chunk, owner: owner, existing: existing)
+        return snapshotLiveText()
+    }
+
+    private func appendText(_ text: String, asThought: Bool) -> LiveTextApply {
+        guard !text.isEmpty else { return .ignored }
+        if asThought {
+            if case .thought(let id, let existing) = items.last {
+                guard let merged = mergeLiveText(existing: existing, chunk: text, owner: id) else {
+                    return .ignored
+                }
+                items[items.count - 1] = .thought(id, merged)
+                return .continued(id: id, text: merged)
+            }
+            let id = UUID()
+            liveText.setString(text)
+            liveTextOwner = id
+            beginRun(id)
+            items.append(.thought(id, text))
+            return .created
+        }
+        endCurrentRun()
+        if case .agent(let id, let existing) = items.last {
+            guard let merged = mergeLiveText(existing: existing, chunk: text, owner: id) else {
+                return .ignored
+            }
+            items[items.count - 1] = .agent(id, merged)
+            return .continued(id: id, text: merged)
+        }
+        let id = UUID()
+        liveText.setString(text)
+        liveTextOwner = id
+        items.append(.agent(id, text))
+        return .created
+    }
+
+    @discardableResult
+    private func applyUserChunk(_ content: ContentBlock, messageId: String? = nil) -> UserChunkApply {
         endCurrentRun()
 
         let attachment = TranscriptAttachment(contentBlock: content)
-        let text = content.text ?? ""
+        // Image / file / paste drafts are attachments. `ContentBlock.text` on a
+        // `resource` is the embedded payload — putting it in the bubble typesets
+        // the whole paste in history, which is what the composer card avoided.
+        let text = attachment == nil ? (content.text ?? "") : ""
 
-        guard !text.isEmpty || attachment != nil else { return }
+        guard !text.isEmpty || attachment != nil else { return .ignored }
 
         func isDuplicateAttachment(_ a: TranscriptAttachment, in existing: [TranscriptAttachment]) -> Bool {
             existing.contains { b in
@@ -708,32 +878,44 @@ final class ChatSession: Identifiable {
                 currentUserMessageId = messageId
             }
             var updatedText = existingText
+            var changed = false
             if !text.isEmpty {
-                if text == existingText || existingText.hasPrefix(text) {
-                    // Already contains or prefix, no-op
-                } else if text.hasPrefix(existingText) {
-                    updatedText = text
-                } else if existingText.isEmpty {
-                    updatedText = text
-                } else {
-                    var merged = existingText
-                    merged.reserveCapacity(existingText.count + text.count)
-                    merged.append(text)
+                if let merged = mergeLiveText(existing: existingText, chunk: text, owner: id) {
                     updatedText = merged
+                    changed = true
+                } else if existingText.isEmpty {
+                    liveText.setString(text)
+                    liveTextOwner = id
+                    updatedText = text
+                    changed = true
                 }
             }
             if let attachment, !isDuplicateAttachment(attachment, in: existingAttachments) {
                 if attachment.kind == "image" { TranscriptImageStore.prefetch(attachment) }
                 existingAttachments.append(attachment)
+                changed = true
             }
+            if !isReplaying, SessionTitle.isPlaceholder(title) {
+                let source = text.isEmpty ? (attachment?.name ?? text) : text
+                if !source.isEmpty {
+                    title = SessionTitle.derived(from: source)
+                }
+            }
+            guard changed else { return .ignored }
             items[items.count - 1] = .user(id, updatedText, existingAttachments)
-        } else {
-            if let messageId {
-                currentUserMessageId = messageId
-            }
-            let attachments = attachment.map { [$0] } ?? []
-            items.append(.user(UUID(), text, attachments))
+            return .continued(id: id, text: updatedText, attachments: existingAttachments)
         }
+
+        if let messageId {
+            currentUserMessageId = messageId
+        }
+        let attachments = attachment.map { [$0] } ?? []
+        let id = UUID()
+        if !text.isEmpty {
+            liveText.setString(text)
+            liveTextOwner = id
+        }
+        items.append(.user(id, text, attachments))
 
         if !isReplaying, SessionTitle.isPlaceholder(title) {
             let source = text.isEmpty ? (attachment?.name ?? text) : text
@@ -741,6 +923,7 @@ final class ChatSession: Identifiable {
                 title = SessionTitle.derived(from: source)
             }
         }
+        return .created
     }
 
     private func coalesceUser(_ text: String) {

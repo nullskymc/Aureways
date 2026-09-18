@@ -5233,6 +5233,86 @@
           }
         }
       }
+    },
+    "粘贴的文本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasted text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴的文本"
+          }
+        }
+      }
+    },
+    "%lld 字 · 点此在侧栏编辑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld characters · Click to edit in the sidebar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 字 · 点此在侧栏编辑"
+          }
+        }
+      }
+    },
+    "在右侧检查器中编辑此文本，发送时会一并交给 Agent。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit this text in the inspector. It is included when you send."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在右侧检查器中编辑此文本，发送时会一并交给 Agent。"
+          }
+        }
+      }
+    },
+    "粘贴内容超过 2MB，暂不支持在编辑器中打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasted text is over 2MB and cannot be opened in the editor"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴内容超过 2MB，暂不支持在编辑器中打开"
+          }
+        }
+      }
+    },
+    "无法保存粘贴的文本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save pasted text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存粘贴的文本"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

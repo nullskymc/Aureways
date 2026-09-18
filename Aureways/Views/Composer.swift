@@ -194,6 +194,20 @@ struct ComposerCard: View {
     private var cardStack: some View {
         VStack(alignment: .leading, spacing: 0) {
 
+            if !pastedTextAttachments.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(pastedTextAttachments) { attachment in
+                        PastedTextCard(
+                            attachment: attachment,
+                            onOpen: { openPastedText(attachment) },
+                            onRemove: { removeAttachment(attachment) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
+
             ZStack(alignment: .topLeading) {
                 Text(draft.isEmpty ? " " : draft)
                     .font(.system(size: 13.5))
@@ -217,6 +231,10 @@ struct ComposerCard: View {
                     draft: $draft,
                     isFocused: Binding(get: { isFocused }, set: { isFocused = $0 }),
                     onAttachments: { attachments.append(contentsOf: $0) },
+                    onOverflowText: captureOverflowText,
+                    onPasteTooLarge: {
+                        model.errorMessage = "粘贴内容超过 2MB，暂不支持在编辑器中打开".localized
+                    },
                     onCommand: handleCommand,
                     coordinatorSink: { editor.coordinator = $0 }
                 )
@@ -327,16 +345,18 @@ struct ComposerCard: View {
     }
 
     /// 附件行：静态出现/消失，不做动画——dock 高度动画会抖动 transcript（既往实测约束）。
+    /// 超长粘贴走上方占位卡，不进这一行，避免再拿正文去排版。
     @ViewBuilder
     private var attachmentsRow: some View {
-        if !attachments.isEmpty {
+        let chips = attachments.filter { $0.kind != .pastedText }
+        if !chips.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(attachments) { attachment in
+                    ForEach(chips) { attachment in
                         ComposerAttachmentChip(
                             attachment: attachment,
                             unsupported: attachment.kind == .image && imageSupport == false,
-                            onRemove: { attachments.removeAll { $0.id == attachment.id } }
+                            onRemove: { removeAttachment(attachment) }
                         )
                     }
                 }
@@ -345,6 +365,10 @@ struct ComposerCard: View {
                 .padding(.bottom, 6)
             }
         }
+    }
+
+    private var pastedTextAttachments: [ComposerAttachment] {
+        attachments.filter { $0.kind == .pastedText }
     }
 
     /// nil = 未知（无 session 或尚未握手），照发；false = 明确不支持，图片禁发。
@@ -546,7 +570,7 @@ struct ComposerCard: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
-        panel.directoryURL = URL(fileURLWithPath: model.workspacePath)
+        panel.directoryURL = URL(fileURLWithPath: model.inspectorRoot)
         panel.prompt = "添加".localized
         guard panel.runModal() == .OK else { return }
         attachments.append(contentsOf: ComposerAttachment.fromFileURLs(panel.urls))
@@ -564,12 +588,31 @@ struct ComposerCard: View {
 
     private func submit() {
         guard canSend else { return }
+        guard model.flushPastedTextAttachments(attachments) else { return }
         let text = draft
         let pendingAttachments = attachments
         draft = ""
         attachments = []
         isShowingQuotaCard = false
         model.sendFromComposer(text: text, attachments: pendingAttachments)
+    }
+
+    private func captureOverflowText(_ text: String) {
+        if let attachment = model.capturePastedText(text) {
+            attachments.append(attachment)
+        }
+    }
+
+    private func openPastedText(_ attachment: ComposerAttachment) {
+        guard let path = attachment.url?.path else { return }
+        model.openFileTab(path: path)
+    }
+
+    private func removeAttachment(_ attachment: ComposerAttachment) {
+        if attachment.kind == .pastedText {
+            model.discardPastedTextDraft(attachment)
+        }
+        attachments.removeAll { $0.id == attachment.id }
     }
 
     private func handleCommand(_ command: ComposerCommand) -> Bool {
@@ -645,7 +688,7 @@ struct ComposerCard: View {
             .split(omittingEmptySubsequences: false, whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" })
             .last ?? Substring()
         if segment.hasPrefix("@") {
-            model.fileIndex.ensureScanned(root: model.workspacePath)
+            model.fileIndex.ensureScanned(root: model.inspectorRoot)
             completionMode = .mention(query: String(segment.dropFirst()))
         } else {
             completionMode = .none
@@ -673,7 +716,7 @@ struct ComposerCard: View {
                 return
             }
             editor.coordinator?.insert("\(file.relativePath) ", replacing: NSRange(location: cursor - segment.count, length: segment.count))
-            let absolutePath = URL(fileURLWithPath: model.workspacePath).appendingPathComponent(file.relativePath).path
+            let absolutePath = URL(fileURLWithPath: model.inspectorRoot).appendingPathComponent(file.relativePath).path
             attachments.append(ComposerAttachment(
                 kind: .file,
                 name: (file.relativePath as NSString).lastPathComponent,
@@ -690,6 +733,55 @@ struct ComposerCard: View {
     }
 }
 
+private struct PastedTextCard: View {
+    let attachment: ComposerAttachment
+    let onOpen: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Palette.sky)
+                    .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("粘贴的文本".localized)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text("%lld 字 · 点此在侧栏编辑".localized(attachment.characterCount))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("在右侧检查器中编辑此文本，发送时会一并交给 Agent。".localized)
+        .overlay(alignment: .topTrailing) {
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 15, height: 15)
+                    .background(Color.black.opacity(0.55), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help("移除附件".localized)
+            .offset(x: 5, y: -5)
+        }
+    }
+}
+
 private struct ComposerAttachmentChip: View {
     let attachment: ComposerAttachment
     let unsupported: Bool
@@ -700,7 +792,7 @@ private struct ComposerAttachmentChip: View {
             switch attachment.kind {
             case .image:
                 imageThumb
-            case .file:
+            case .file, .pastedText:
                 fileChip
             }
         }

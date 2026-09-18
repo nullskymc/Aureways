@@ -62,15 +62,25 @@ public struct RenderableDocument: Equatable, Sendable {
     self.renderables = renderables
   }
 
+  /// Growing unclosed fence: skip cmark and publish a single code block.
+  public static func synthesizedCodeBlock(language: String?, code: String) -> RenderableDocument {
+    RenderableDocument(renderables: [.codeBlock(id: "open-fence", language: language, code: code)])
+  }
+
   /// An empty document, equivalent to `RenderableDocument(plainText: "", …)`
   /// but allocation-free.
   public static let empty = RenderableDocument(renderables: [])
 
   /// Combines two pre-parsed documents without reparsing (PERF-03).
+  /// Tail block ids are prefixed so `ForEach` identity stays unique — cmark
+  /// ids restart at `"0"` in every independent parse.
   public func appending(_ other: RenderableDocument) -> RenderableDocument {
     if self.renderables.isEmpty { return other }
     if other.renderables.isEmpty { return self }
-    return RenderableDocument(renderables: self.renderables + other.renderables)
+    let prefix = "\(renderables.count)."
+    return RenderableDocument(
+      renderables: renderables + other.renderables.map { $0.prefixed(with: prefix) }
+    )
   }
 }
 

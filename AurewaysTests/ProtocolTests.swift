@@ -1347,6 +1347,78 @@ final class ProtocolTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testUserResourceChunkStaysAttachmentAndDoesNotExpandBubble() {
+        let profile = AgentProfile(
+            id: "test", title: "Test", subtitle: "", command: "test",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let path = "/tmp/.aureways/pastes/paste-abc.txt"
+        let paste = String(repeating: "字", count: 2500)
+        session.appendUser("请看这段", attachments: [
+            TranscriptAttachment(
+                id: UUID(),
+                kind: "file",
+                name: "paste-abc.txt",
+                path: path,
+                mimeType: "text/plain",
+                imageBase64: nil
+            )
+        ])
+
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.resource(
+                uri: "file://\(path)",
+                mimeType: "text/plain",
+                text: paste,
+                blob: nil
+            )),
+            messageId: "msg_paste"
+        ))
+
+        XCTAssertEqual(session.items.count, 1)
+        guard case .user(_, let text, let attachments) = session.items.first else {
+            return XCTFail("expected user item")
+        }
+        XCTAssertEqual(text, "请看这段")
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments.first?.kind, "file")
+        XCTAssertEqual(attachments.first?.path, path)
+        XCTAssertFalse(text.contains("字"))
+    }
+
+    @MainActor
+    func testReplayResourceOnlyUserMessageDoesNotDumpTextIntoBubble() {
+        let profile = AgentProfile(
+            id: "test", title: "Test", subtitle: "", command: "test",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let paste = String(repeating: "段", count: 2500)
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.resource(
+                uri: "file:///tmp/.aureways/pastes/paste-replay.txt",
+                mimeType: "text/plain",
+                text: paste,
+                blob: nil
+            )),
+            messageId: "msg_replay"
+        ))
+
+        XCTAssertEqual(session.items.count, 1)
+        guard case .user(_, let text, let attachments) = session.items.first else {
+            return XCTFail("expected user item")
+        }
+        XCTAssertEqual(text, "")
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments.first?.kind, "file")
+        XCTAssertEqual(attachments.first?.name, "paste-replay.txt")
+        XCTAssertEqual(attachments.first?.path, "/tmp/.aureways/pastes/paste-replay.txt")
+    }
+
     func testSpecShapedExecuteToolCall() throws {
         let toolJSON = try JSONValue.decode(from: #"""
         {

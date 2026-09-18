@@ -32,9 +32,11 @@ struct InspectorPaneView: View {
         .clipped()
         .background(Palette.inspectorBg)
         .overlay {
-            // PERF-02: 纯色 scrim 替代 .regularMaterial，消除分栏拖动时 GPU 每帧全窗格材质重采样模糊
+            // Cover frozen content completely. Same color as the pane background,
+            // fully opaque — overlaying inspectorBg at 0.85 on itself left the
+            // stale layout showing through, and .regularMaterial would resample
+            // the whole pane every drag frame (PERF-02).
             Palette.inspectorBg
-                .opacity(0.85)
                 .opacity(resize.isResizing ? 1 : 0)
                 .animation(.easeOut(duration: 0.12), value: resize.isResizing)
                 .allowsHitTesting(false)

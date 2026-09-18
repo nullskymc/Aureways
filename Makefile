@@ -42,7 +42,7 @@ test:
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 perf-curve:
-	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test -only-testing:AurewaysTests/TranscriptPerfTests/testMarkdownDocumentSizeCurve -only-testing:AurewaysTests/TranscriptPerfTests/testStreamingTickRatePerformance 2>&1 | grep -E "(PERF_CURVE|DATA:)"
+	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test -only-testing:AurewaysTests/TranscriptPerfTests/testMarkdownDocumentSizeCurve -only-testing:AurewaysTests/TranscriptPerfTests/testStreamingTickRatePerformance -only-testing:AurewaysTests/TranscriptPerfTests/testLiveTextProjectionScaleCurve -only-testing:AurewaysTests/MarkdownStreamTests/testOpenFenceStreamingCurveDoesNotParsePrefix 2>&1 | grep -E "(PERF_CURVE|DATA:)"
 
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in

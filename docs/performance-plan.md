@@ -27,16 +27,19 @@
 | D-04 | 拉到最大宽度后拉不回来 | `.frame(width:)` 把固定宽度当理想宽度传给 `NavigationSplitView` |
 | PERF-00 | 测量基础设施缺口 | 4 处 signposts（`MarkdownParse`、`RenderableDocumentBuild`、`HighlightQueueWait`、`RowHeightRecalc`）；`make perf-curve` 输出尺寸耗时曲线与流式 tick 率基准 |
 | PERF-01 | 代码高亮 auto-detect + 无缓存 | `HighlightTaskManager` 添加进程级 bounded 静态 LRU 缓存（上限 512）；`CodeBlockView` 转发语言标识，避免无序重跑 |
-| PERF-02 | 拖动期间蒙层材质每帧重采样 | `InspectorViews.swift` 移除 `.regularMaterial` 动态模糊采样，改为静态纯色 scrim（`Palette.inspectorBg.opacity(0.85)`） |
+| PERF-02 | 拖动期间蒙层材质每帧重采样 | `InspectorViews.swift` 移除 `.regularMaterial` 动态模糊采样，改为不透明纯色 scrim（`Palette.inspectorBg`） |
 | PERF-06 | 解析落地前用 `Text` 排整段原文 | `MarkdownBody.swift` 冷缓存占位改为限制至多 24 行 / 1200 字符预览（`.lineLimit(25)`），避免冷启动整段全量排版 |
 | PERF-07 | 代码块正文重排 + `onChange(of: config)` 空转 | `CodeBlockView` 消除冗余 text state 变更并统一由 `HighlightTaskManager` 静态缓存管理 |
 | PERF-08 | `TranscriptView.body` 每次求值重算投影 | 移除 `TranscriptView.displayedEntries` 计算属性，`body` 直接读取 `session.transcriptEntries`；旧投影基准逻辑内聚至 `ChatSession` |
-| PERF-04 | 转录每帧 O(history) 数据处理 | `TranscriptHeightCache` 引入前缀和与行高缓存，`TranscriptVirtualizer` 窗口计算采用 O(log N) 二分查找；`ChatSession.transcriptEntryIDs` 消除每帧 `Set(entries.map(\.id))` 分配；`prune` 增量守卫 |
-| PERF-03 | 流式 Markdown 全量重解析（O(n²)） | `RenderableDocument.appending(_:)` 实现已闭合块复用；`MarkdownBlockBoundary` 识别安全顶层块切分点；`MarkdownStreamParser` 仅对开尾块增量解析并拼接 |
+| PERF-04 | 转录每帧 O(history) 数据处理 | 视图侧：`TranscriptHeightCache` 前缀和与行高缓存，窗口 O(log N) 二分；`transcriptEntryIDs` 直传。模型侧全量 `group()` 见 `PERF-12`。 |
+| PERF-03 | 流式 Markdown 全量重解析（O(n²)） | `RenderableDocument.appending(_:)` 实现已闭合块复用；`MarkdownBlockBoundary` 识别安全顶层块切分点；`MarkdownStreamParser` 仅对开尾块增量解析并拼接。有块边界才线性；开围栏见 `PERF-13`。 |
 | PERF-05 | 流式文本累计拼接 | `ChatSession.appendText` / `applyUserChunk` 与 `ContentBlock.concatenating` 引入 `reserveCapacity` 与就地缓冲追加，消除二次中间分配 |
 | PERF-09 | 拖动分栏时转录换行测量抖动 | `ParagraphView+macOS.swift` 的 `sizeThatFits` 对排版宽度按整数点四舍五入（`width.rounded()`），并建立 32 项有界宽度尺寸缓存，彻底消除亚像素抖动失配 |
+| PERF-12 | 流式正文全量投影 | `updateProjectedLiveText` / `updateProjectedUser` 只改 last entry；续写不再 `TranscriptBlock.group()` |
+| PERF-13 | 未闭合围栏全量 parse | 开围栏 / 开公式起点可提交；未闭合 fence 合成 `.codeBlock`，跳过 cmark |
+| PERF-14 | 侧边栏重复过滤 | `SidebarListing` 一次快照；inbox 仅在空→非空时 arm pulse |
 
-回归用例：`AurewaysTests/SplitResizeEngineTests.swift`（8 个）、`AurewaysTests/MarkdownStreamTests.swift`（16 个）、`AurewaysTests/TranscriptPerfTests.swift`（12 个），共 173 个用例全部通过。
+回归用例：`AurewaysTests/SplitResizeEngineTests.swift`、`MarkdownStreamTests.swift`、`TranscriptPerfTests.swift`。
 
 ---
 
@@ -70,7 +73,7 @@
 
 - **现象**：拖动分栏时 GPU 仍做全窗口材质模糊。
 - **位置**：`Aureways/Views/InspectorViews.swift`。
-- **实现**：将拖拽遮罩中的 `.regularMaterial` 替换为 `Palette.inspectorBg.opacity(0.85)` 纯色 scrim。
+- **实现**：将拖拽遮罩中的 `.regularMaterial` 替换为不透明 `Palette.inspectorBg` 纯色 scrim（半透明同色叠在面板底上等于没盖住冻结内容）。
 - **验收结果**：分栏调整大小时无需反复重采样背景模糊纹理，保持平滑响应。
 
 ### PERF-03 流式 Markdown 全量重解析（O(n²)）（已完成）
@@ -167,7 +170,28 @@
 | K | 文件与终端服务的全量读写 | 未处理 |
 | L | 主线程同步 SQLite 与串行 quota | 未处理 |
 
-C 与前端体感最相关（它决定了流式更新的节奏上限），建议在 `PERF-03` 之后单独评估。
+C 与前端体感最相关（它决定了流式更新的节奏上限），建议在 `PERF-03` 之后单独评估。inbox 已改为空队列才 arm（`PERF-14`），pulse 频率本身未改。
+
+### PERF-12 流式正文局部投影（已完成）
+
+- **现象**：每个 agent/thought token 都 `rebuildTranscriptProjection()` → `TranscriptBlock.group(items)`。
+- **位置**：`Aureways/Domain/Session/ChatSession.swift`。
+- **实现**：续写走 `updateProjectedLiveText` / `updateProjectedUser`，只改 `transcriptEntries.last` 并 bump version。新块退回全量 `group()`。高度索引对 last-row version +1 走 O(1)（`TranscriptHeightCache`）。
+- **验收**：`testLiveTextProjectionScaleCurve` 续写 200 chunk：`rebuilds=0`，`updates=200`。
+
+### PERF-13 开围栏提交（已完成）
+
+- **现象**：`lastSafeBoundary` 为 nil 时整篇 `parse(work.source)`。全文从围栏起、或围栏前没有空行时最明显。
+- **位置**：`Aureways/Views/MarkdownBody.swift`。
+- **实现**：扫描结束仍在围栏 / `$$` 内则把开块起点当切分点。未闭合 fence 合成 `.codeBlock(id: "open-fence")`，不把 fence body 送进 cmark。
+- **验收**：`testUnclosedFenceAfterIntroDoesNotReparsePrefix`、`testOpenFenceStreamingCurveDoesNotParsePrefix`。
+
+### PERF-14 侧边栏快照与 inbox arm（已完成）
+
+- **现象**：每个 `SessionNavItem` 重建完整 `sidebarOrderedSessions`；每条 ACP update 投一个 main queue arm 闭包。
+- **位置**：`AppModel+Sessions.swift`、`AppModel+Runtime.swift`。
+- **实现**：`SidebarListing` 按 sessions/workspaces/search 签名缓存；`SessionUpdateInbox.push` 仅在空→非空时返回 true 并 arm。
+- **验收**：`testSidebarListingOrdersShortcutsAndOrphans`、`testInboxPushArmsOnlyFromEmpty`。不作为流式卡顿验收。
 
 ---
 
@@ -181,6 +205,7 @@ C 与前端体感最相关（它决定了流式更新的节奏上限），建议
 | 阶段 3 | `PERF-04` 转录数据处理（O(log N) 窗口二分、前缀和与行高缓存、ID 集合直传） | **已完成** | 阶段 0 |
 | 阶段 4 | `PERF-03` 块级增量解析（RenderableDocument.appending、安全边界扫描、增量流式泵） | **已完成** | 阶段 0 |
 | 阶段 5 | `PERF-05` 内存缓冲预分配、`PERF-09` 段落测高取整与有界缓存、`PERF-11/C` 帧脉冲基准 | **已完成** | 阶段 4 |
+| 阶段 6 | `PERF-12` 文本局部投影、`PERF-13` 开围栏提交、`PERF-14` 侧栏快照 / inbox arm | **已完成** | 阶段 3–4 |
 | 观察 | `PERF-10` TextKit 2 重写 | 观察中 | 阶段 0-5 落地后各项指标已大幅超越帧预算要求 |
 
 ---
@@ -212,6 +237,9 @@ C 与前端体感最相关（它决定了流式更新的节奏上限），建议
 | PERF-09 | 拖动时转录换行测量 | 5 | **已完成** | 宽度整数点取整 + 32 项有界尺寸缓存 |
 | PERF-10 | TextKit 1 双栈 | 观察 | 不计划 | — |
 | PERF-11 | 协议层候选点 | 5+ | 未处理 | 见 `protocol-latency.md` §4 |
+| PERF-12 | 流式正文局部投影 | 6 | **已完成** | 续写 200 chunk：`rebuilds=0` |
+| PERF-13 | 开围栏提交 / 合成 codeBlock | 6 | **已完成** | 开围栏增长不 parse 已闭合前缀 |
+| PERF-14 | 侧栏快照 + inbox 空→非空 arm | 6 | **已完成** | 快捷键 / orphan / push 返回值 |
 
 ---
 
@@ -219,6 +247,7 @@ C 与前端体感最相关（它决定了流式更新的节奏上限），建议
 
 | 日期 | 变更 |
 | --- | --- |
+| 2026-09-18 | 阶段 6：`PERF-12` 文本局部投影、`PERF-13` 开围栏提交、`PERF-14` 侧栏快照与 inbox arm。`PERF-03` 注明有块边界才线性；`PERF-04` 注明当时只修了视图侧。 |
 | 2026-09-17 | 全面完成阶段 3 (`PERF-04`)、阶段 4 (`PERF-03`) 与阶段 5 (`PERF-05`, `PERF-09`, `PERF-11/C`)。全部 173 个单元测试全绿通过。 |
 | 2026-09-17 | 完成阶段 0 (`PERF-00`)、阶段 1 (`PERF-02`, `PERF-01`, `PERF-07`) 与阶段 2 (`PERF-08`, `PERF-06`)。 |
 | 2026-09-17 | 移除预估工期（分期表格中的预计耗时与各任务条目的具体工期估算），保留分期与依赖关系。 |

@@ -62,28 +62,48 @@ struct ParagraphView: NSViewRepresentable {
     synchronize(nsView)
     if context.coordinator.contentRevision != nsView.contentRevision {
       context.coordinator.sizeCache.removeAll()
+      context.coordinator.cacheOrder.removeAll()
       context.coordinator.contentRevision = nsView.contentRevision
     }
 
     // Round fitting width to integer points to prevent sub-pixel misses during drag/resizing (PERF-09)
     let cacheKey = width.rounded()
+    let coordinator = context.coordinator
 
-    if let cachedSize = context.coordinator.sizeCache[cacheKey] {
+    if let cachedSize = coordinator.sizeCache[cacheKey] {
+      coordinator.promote(cacheKey)
       return cachedSize
     }
 
     let calculatedSize = nsView.measureSize(fittingWidth: cacheKey)
-
-    if context.coordinator.sizeCache.count >= 32 {
-      context.coordinator.sizeCache.removeAll()
-    }
-    context.coordinator.sizeCache[cacheKey] = calculatedSize
+    coordinator.store(calculatedSize, for: cacheKey)
     return calculatedSize
   }
 
   class Coordinator {
     var sizeCache: [CGFloat: CGSize] = [:]
+    var cacheOrder: [CGFloat] = []
     var contentRevision: UInt64?
+    private let cacheLimit = 32
+
+    func promote(_ key: CGFloat) {
+      if let index = cacheOrder.firstIndex(of: key) {
+        cacheOrder.remove(at: index)
+        cacheOrder.append(key)
+      }
+    }
+
+    func store(_ size: CGSize, for key: CGFloat) {
+      if sizeCache[key] == nil, sizeCache.count >= cacheLimit, let oldest = cacheOrder.first {
+        sizeCache.removeValue(forKey: oldest)
+        cacheOrder.removeFirst()
+      }
+      sizeCache[key] = size
+      if let index = cacheOrder.firstIndex(of: key) {
+        cacheOrder.remove(at: index)
+      }
+      cacheOrder.append(key)
+    }
   }
 }
 

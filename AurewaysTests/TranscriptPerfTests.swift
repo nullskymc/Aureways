@@ -164,7 +164,250 @@ final class TranscriptPerfTests: XCTestCase {
         XCTAssertEqual(window, .empty)
     }
 
+    @MainActor
+    func testHeightCachePruneRemovesStaleKeysWhenCountsMatch() {
+        let cache = TranscriptHeightCache()
+        let stale = UUID()
+        let live = UUID()
+        _ = cache.set(stale, 40)
+        XCTAssertEqual(cache.prune(keeping: [live]), 1)
+        XCTAssertEqual(cache.prune(keeping: [live]), 0)
+    }
+
+    @MainActor
+    func testHeightCacheAppendFastPathMatchesFullPrefixSums() {
+        let cache = TranscriptHeightCache()
+        let first = TranscriptEntry(block: .agent(UUID(), "one"))
+        let second = TranscriptEntry(block: .agent(UUID(), "two"))
+        _ = cache.set(first.id, 100)
+        _ = cache.set(second.id, 50)
+        _ = cache.window(for: [first], offset: 0, viewport: 720, overscan: 0)
+        let fast = cache.window(for: [first, second], offset: 0, viewport: 40, overscan: 0)
+        let expected = TranscriptVirtualizer.window(
+            rowHeights: [100, 50],
+            offset: 0,
+            viewport: 40,
+            overscan: 0,
+            spacing: TranscriptVirtualizer.spacing
+        )
+        XCTAssertEqual(fast, expected)
+    }
+
+    @MainActor
+    func testHeightCacheLastRowVersionBumpUsesFastPath() {
+        let cache = TranscriptHeightCache()
+        var entries: [TranscriptEntry] = []
+        for index in 0..<10 {
+            let entry = TranscriptEntry(block: .agent(UUID(), "row \(index)"))
+            _ = cache.set(entry.id, 40)
+            entries.append(entry)
+        }
+        _ = cache.window(for: entries, offset: 0, viewport: 100, overscan: 0)
+        PerfCounters.reset()
+
+        let last = entries[9]
+        for step in 1...100 {
+            last.version = UInt64(step)
+            last.block = .agent(last.id, String(repeating: "x", count: step * 8))
+            _ = cache.window(for: entries, offset: 0, viewport: 100, overscan: 0)
+        }
+
+        XCTAssertEqual(PerfCounters.indexLastRowUpdates, 100)
+        XCTAssertEqual(PerfCounters.indexFullRebuilds, 0)
+        let window = cache.window(for: entries, offset: 0, viewport: 100, overscan: 0)
+        let expected = TranscriptVirtualizer.window(
+            rowHeights: Array(repeating: 40, count: 10),
+            offset: 0,
+            viewport: 100,
+            overscan: 0,
+            spacing: TranscriptVirtualizer.spacing
+        )
+        XCTAssertEqual(window, expected)
+    }
+
+    @MainActor
+    func testLiveTextProjectionScaleCurve() {
+        print("\n=== PERF_CURVE LIVE_TEXT_PROJECTION ===")
+        print("turns,rebuilds,updates,apply_ms")
+        let chunk = "The quick brown fox jumps over the lazy dog. "
+        for turns in [10, 50, 100] {
+            let session = ChatSession(agent: Self.perfProfile, cwd: "/tmp", phase: .ready)
+            let items = PerfFixture.items(turns: turns)
+            session.replaceTranscript(items, runs: PerfFixture.runs(for: items))
+            PerfCounters.reset()
+            let iterations = 200
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<iterations {
+                session.apply(SessionNotification(
+                    sessionId: "perf",
+                    update: .agentMessageChunk(.text(chunk))
+                ))
+            }
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let applyMs = Double(t1 - t0) / Double(iterations) / 1_000_000
+            print(String(
+                format: "PERF_CURVE turns=%3d rebuilds=%3d updates=%3d apply=%7.4fms",
+                turns,
+                PerfCounters.projectionRebuilds,
+                PerfCounters.projectionUpdates,
+                applyMs
+            ))
+            print(String(
+                format: "DATA:%d,%d,%d,%.4f",
+                turns,
+                PerfCounters.projectionRebuilds,
+                PerfCounters.projectionUpdates,
+                applyMs
+            ))
+            XCTAssertEqual(PerfCounters.projectionRebuilds, 0)
+            XCTAssertEqual(PerfCounters.projectionUpdates, iterations)
+        }
+    }
+
+    @MainActor
+    func testLiveTextProjectionMatchesFullGroupingAndPreservesEarlierEntries() {
+        let session = ChatSession(agent: Self.perfProfile, cwd: "/tmp", phase: .ready)
+        let items = PerfFixture.items(turns: 20)
+        session.replaceTranscript(items, runs: PerfFixture.runs(for: items))
+        let priorIDs = session.transcriptEntries.dropLast().map(\.id)
+        let priorVersions = session.transcriptEntries.dropLast().map(\.version)
+        let priorObjects = session.transcriptEntries.dropLast().map { ObjectIdentifier($0) }
+
+        for step in 0..<40 {
+            session.apply(SessionNotification(
+                sessionId: "perf",
+                update: .agentMessageChunk(.text(" token-\(step)"))
+            ))
+            let expected = TranscriptBlock.group(session.items, runs: session.activityRuns)
+            XCTAssertEqual(session.transcriptEntries.map(\.block), expected)
+        }
+
+        XCTAssertEqual(session.transcriptEntries.dropLast().map(\.id), Array(priorIDs))
+        XCTAssertEqual(session.transcriptEntries.dropLast().map(\.version), Array(priorVersions))
+        XCTAssertEqual(session.transcriptEntries.dropLast().map { ObjectIdentifier($0) }, Array(priorObjects))
+    }
+
+    @MainActor
+    func testNewAgentMessageRebuildsThenContinuesLocally() {
+        let session = ChatSession(agent: Self.perfProfile, cwd: "/tmp", phase: .ready)
+        session.appendUser("hello")
+        PerfCounters.reset()
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentMessageChunk(.text("First token"))
+        ))
+        XCTAssertEqual(PerfCounters.projectionRebuilds, 1)
+        XCTAssertEqual(PerfCounters.projectionUpdates, 0)
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentMessageChunk(.text(" more"))
+        ))
+        XCTAssertEqual(PerfCounters.projectionRebuilds, 1)
+        XCTAssertEqual(PerfCounters.projectionUpdates, 1)
+        guard case .agent(_, let text) = session.transcriptEntries.last?.block else {
+            return XCTFail("expected agent block")
+        }
+        XCTAssertEqual(text, "First token more")
+    }
+
+    @MainActor
+    func testThoughtLiveProjectionUpdatesActivityStep() {
+        let session = ChatSession(agent: Self.perfProfile, cwd: "/tmp", phase: .ready)
+        session.appendUser("hello")
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentThoughtChunk(.text("Considering"))
+        ))
+        PerfCounters.reset()
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentThoughtChunk(.text(" the layout"))
+        ))
+        XCTAssertEqual(PerfCounters.projectionRebuilds, 0)
+        XCTAssertEqual(PerfCounters.projectionUpdates, 1)
+        let expected = TranscriptBlock.group(session.items, runs: session.activityRuns)
+        XCTAssertEqual(session.transcriptEntries.map(\.block), expected)
+        guard case .activity(_, let steps, _) = session.transcriptEntries.last?.block,
+              case .thought(_, let text) = steps.last else {
+            return XCTFail("expected thought step")
+        }
+        XCTAssertEqual(text, "Considering the layout")
+    }
+
+    @MainActor
+    func testDuplicateAgentChunkDoesNotRevise() {
+        let session = ChatSession(agent: Self.perfProfile, cwd: "/tmp", phase: .ready)
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentMessageChunk(.text("Hello"))
+        ))
+        let revision = session.transcriptRevision
+        session.apply(SessionNotification(
+            sessionId: "perf",
+            update: .agentMessageChunk(.text("Hello"))
+        ))
+        XCTAssertEqual(session.transcriptRevision, revision)
+    }
+
+    @MainActor
+    func testSidebarListingOrdersShortcutsAndOrphans() {
+        let agent = Aureways.AgentProfile(
+            id: "perf", title: "Perf", subtitle: "", command: "true",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let added = Date(timeIntervalSince1970: 1)
+        let wsA = Aureways.WorkspaceRecord(path: "/tmp/alpha", addedAt: added, lastUsedAt: added)
+        let wsB = Aureways.WorkspaceRecord(path: "/tmp/beta", addedAt: added, lastUsedAt: added)
+        let s1 = Aureways.ChatSession(agent: agent, cwd: "/tmp/alpha", title: "One", phase: .ready)
+        let s2 = Aureways.ChatSession(agent: agent, cwd: "/tmp/beta", title: "Two", phase: .ready)
+        let orphan = Aureways.ChatSession(agent: agent, cwd: "/tmp/orphan", title: "Orphan", phase: .ready)
+        let closed = Aureways.ChatSession(agent: agent, cwd: "/tmp/alpha", title: "Gone", phase: .ready)
+        closed.isClosed = true
+
+        let snap = SidebarListing.make(
+            sessions: [s1, s2, orphan, closed],
+            workspaces: [wsA, wsB],
+            searchQuery: ""
+        )
+        XCTAssertEqual(snap.filtered.map(\.id), [s1.id, s2.id, orphan.id])
+        XCTAssertEqual(snap.ordered.map(\.id), [s1.id, s2.id, orphan.id])
+        XCTAssertEqual(snap.shortcutByID[s1.id], "⌘1")
+        XCTAssertEqual(snap.shortcutByID[s2.id], "⌘2")
+        XCTAssertEqual(snap.shortcutByID[orphan.id], "⌘3")
+        XCTAssertNil(snap.shortcutByID[closed.id])
+
+        let search = SidebarListing.make(
+            sessions: [s1, s2, orphan, closed],
+            workspaces: [wsA, wsB],
+            searchQuery: "Orph"
+        )
+        XCTAssertEqual(search.ordered.map(\.id), [orphan.id])
+        XCTAssertEqual(search.shortcutByID[orphan.id], "⌘1")
+        XCTAssertTrue(search.visibleWorkspaces.isEmpty)
+    }
+
+    @MainActor
+    func testInboxPushArmsOnlyFromEmpty() {
+        let inbox = SessionUpdateInbox()
+        let event = SessionUpdateInbox.Event(
+            agentId: "a",
+            notification: Aureways.SessionNotification(
+                sessionId: "s",
+                update: .agentMessageChunk(.text("x"))
+            )
+        )
+        XCTAssertTrue(inbox.push(event))
+        XCTAssertFalse(inbox.push(event))
+        XCTAssertEqual(inbox.take().count, 2)
+        XCTAssertTrue(inbox.push(event))
+    }
+
     // MARK: - Helpers
+
+    private static let perfProfile = AgentProfile(
+        id: "perf", title: "Perf", subtitle: "", command: "true",
+        arguments: [], builtIn: false, notes: ""
+    )
 
     private func time(iterations: Int, _ body: () -> Void) -> Double {
         body()

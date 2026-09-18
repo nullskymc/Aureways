@@ -1,6 +1,13 @@
 import AppKit
 import Foundation
 
+struct SessionInspectorState {
+    var paneTabs: [PaneTab] = [.browser]
+    var activePaneTabId: String = PaneTab.browser.id
+    var fileTabStates: [String: FileTabState] = [:]
+    var editorDrafts: [String: String] = [:]
+}
+
 enum PaneTab: Identifiable, Equatable {
     case browser
     case info
@@ -32,6 +39,90 @@ struct FileTabState {
 
 extension AppModel {
     static let maxEditableFileSize: Int64 = TextFile.maxBytes
+
+    // MARK: - Session-bound inspector
+
+    func persistInspectorState() {
+        let snapshot = SessionInspectorState(
+            paneTabs: paneTabs,
+            activePaneTabId: activePaneTabId,
+            fileTabStates: fileTabStates,
+            editorDrafts: editorDrafts
+        )
+        if let inspectorOwner {
+            inspectorBySession[inspectorOwner] = snapshot
+        } else {
+            untitledInspector = snapshot
+        }
+    }
+
+    func restoreInspectorState(for sessionID: UUID?) {
+        inspectorOwner = sessionID
+        let snapshot = sessionID.flatMap { inspectorBySession[$0] } ?? (sessionID == nil ? untitledInspector : SessionInspectorState())
+        applyInspectorSnapshot(snapshot)
+    }
+
+    /// Keep the landing-page tabs when the first message creates a session
+    /// in the same folder, instead of resetting the inspector.
+    func adoptInspectorForNewSession(_ sessionID: UUID) {
+        persistInspectorState()
+        inspectorOwner = sessionID
+        inspectorBySession[sessionID] = SessionInspectorState(
+            paneTabs: paneTabs,
+            activePaneTabId: activePaneTabId,
+            fileTabStates: fileTabStates,
+            editorDrafts: editorDrafts
+        )
+        untitledInspector = SessionInspectorState()
+    }
+
+    func discardInspectorState(_ sessionID: UUID) {
+        let snapshot = inspectorBySession.removeValue(forKey: sessionID)
+        if inspectorOwner == sessionID {
+            inspectorOwner = nil
+        }
+        guard let snapshot else { return }
+        for tab in snapshot.paneTabs {
+            if case .terminal(let id) = tab {
+                interactiveTerminals[id]?.terminate()
+                interactiveTerminals[id] = nil
+                terminalTitles[id] = nil
+            }
+        }
+    }
+
+    private func applyInspectorSnapshot(_ snapshot: SessionInspectorState) {
+        var tabs = snapshot.paneTabs.filter { tab in
+            switch tab {
+            case .terminal(let id):
+                return interactiveTerminals[id] != nil
+            case .file(let path):
+                return snapshot.editorDrafts[path] != nil || snapshot.fileTabStates[path] != nil
+            case .browser, .info:
+                return true
+            }
+        }
+        if !tabs.contains(.browser) {
+            tabs.insert(.browser, at: 0)
+        }
+        paneTabs = tabs
+        fileTabStates = snapshot.fileTabStates
+        editorDrafts = snapshot.editorDrafts
+        activePaneTabId = tabs.contains(where: { $0.id == snapshot.activePaneTabId })
+            ? snapshot.activePaneTabId
+            : PaneTab.browser.id
+    }
+
+    func switchSelectedSession(to newID: UUID?) {
+        guard newID != selectedSessionID else { return }
+        persistInspectorState()
+        selectedSessionID = newID
+        restoreInspectorState(for: newID)
+        if let cwd = selectedSession?.cwd,
+           WorkspaceRecord.normalized(cwd) != WorkspaceRecord.normalized(workspacePath) {
+            selectWorkspace(cwd)
+        }
+    }
 
     // MARK: - Tab management
 
@@ -66,6 +157,48 @@ extension AppModel {
         }
         guard ensureFileLoaded(path: path) else { return }
         insertPaneTab(tab)
+    }
+
+    /// Persist an oversize composer paste as a workspace draft so the inspector
+    /// editor can save it and `session/prompt` can send it as a file resource.
+    func capturePastedText(_ text: String) -> ComposerAttachment? {
+        do {
+            let url = try ComposerOverflow.write(text, inWorkspace: inspectorRoot)
+            return ComposerOverflow.pastedAttachment(
+                url: url,
+                characterCount: ComposerOverflow.utf16Count(text)
+            )
+        } catch ComposerOverflow.WriteError.tooLarge {
+            errorMessage = "粘贴内容超过 2MB，暂不支持在编辑器中打开".localized
+            return nil
+        } catch {
+            errorMessage = "无法保存粘贴的文本".localized
+            return nil
+        }
+    }
+
+    /// Write dirty pasted-text drafts to disk before send so the agent reads
+    /// the inspector buffer, not the file as it was at paste time.
+    @discardableResult
+    func flushPastedTextAttachments(_ attachments: [ComposerAttachment]) -> Bool {
+        for attachment in attachments where attachment.kind == .pastedText {
+            guard let path = attachment.url?.standardizedFileURL.path,
+                  fileTabStates[path]?.isDirty == true,
+                  let content = editorDrafts[path] else { continue }
+            writeFileTab(path: path, content: content)
+            if errorMessage != nil { return false }
+        }
+        return true
+    }
+
+    func discardPastedTextDraft(_ attachment: ComposerAttachment) {
+        guard attachment.kind == .pastedText, let path = attachment.url?.standardizedFileURL.path else { return }
+        if paneTabs.contains(where: { $0.id == PaneTab.file(path: path).id }) {
+            performClosePaneTab(.file(path: path))
+        }
+        if ComposerOverflow.isPastePath(path) {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: path))
+        }
     }
 
     @discardableResult
@@ -117,7 +250,7 @@ extension AppModel {
     }
 
     func openTerminalTab() {
-        let terminal = InteractiveTerminal(index: nextTerminalIndex, cwd: workspacePath)
+        let terminal = InteractiveTerminal(index: nextTerminalIndex, cwd: inspectorRoot)
         interactiveTerminals[terminal.id] = terminal
         terminalTitles[terminal.id] = terminal.title
         terminal.onExited = { [weak self, weak terminal] _ in
@@ -276,7 +409,7 @@ extension AppModel {
         if (path as NSString).isAbsolutePath {
             return URL(fileURLWithPath: path).standardizedFileURL.path
         }
-        return URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: workspacePath, isDirectory: true)).standardizedFileURL.path
+        return URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: inspectorRoot, isDirectory: true)).standardizedFileURL.path
     }
 
     private func modificationDate(of url: URL) -> Date? {
