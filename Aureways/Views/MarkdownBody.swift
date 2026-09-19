@@ -623,12 +623,14 @@ enum AurewaysMarkdown {
             ),
             orderedListStyle: .init(textFonts: bodyFonts, textColor: .primary),
             paragraphStyle: .init(textFonts: bodyFonts, textColor: .primary),
+            // ChatGPT-like tables: bold header, no fill, soft horizontal rules only
+            // (vertical + outer borders removed in Vendor TableView).
             tableStyle: .init(
                 textFonts: tableFonts,
                 headerTextColor: .primary,
                 regularTextColor: .primary,
-                headerBackgroundColor: Palette.badgeBg,
-                borderColor: Palette.border,
+                headerBackgroundColor: .clear,
+                borderColor: Color(nsColor: .separatorColor).opacity(0.55),
                 actionButtonColor: Palette.accent
             ),
             inlineStyle: .init(
@@ -638,7 +640,8 @@ enum AurewaysMarkdown {
                 linkUnderlineStyle: [],
                 codeTextFont: mono(code),
                 codeTextColor: .primary,
-                codeBackgroundColor: Palette.badgeBg,
+                // Flat soft chip; underline stays clear so vendor won't draw patternDot "shadow".
+                codeBackgroundColor: Color.primary.opacity(0.08),
                 codeUnderlineColor: .clear
             ),
             textContextMenu: defaults.textContextMenu,

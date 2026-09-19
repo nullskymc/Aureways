@@ -562,36 +562,71 @@ struct ToolCallView: Sendable, Equatable {
     }
 
     var terminalOutput: String? {
-        if !contentText.isEmpty {
-            return contentText
-        }
+        // content / rawOutput 常被 harness 塞成整段 shell 结果 JSON
+        // ({kind, stdout, stderr, …})——先抽 stdout/stderr，别整坨贴出来。
+        if let text = Self.shellPlainOutput(from: contentText) { return text }
+        if !contentText.isEmpty { return contentText }
+
         guard let output = rawOutput else { return nil }
+        if let text = Self.shellPlainOutput(from: output) { return text }
         if let str = output.stringValue, !str.isEmpty {
-            return str
-        }
-        if let obj = output.objectValue {
-            for key in ["output", "formatted_output", "combinedOutput"] {
-                if let val = obj[key]?.stringValue, !val.isEmpty {
-                    return val
-                }
-            }
-            var pieces: [String] = []
-            for key in ["stdout", "stderr"] {
-                if let val = obj[key]?.stringValue, !val.isEmpty {
-                    pieces.append(val)
-                }
-            }
-            if !pieces.isEmpty {
-                return pieces.joined(separator: "\n")
-            }
+            return Self.shellPlainOutput(from: str) ?? str
         }
         return nil
     }
 
     var terminalExitCode: Int? {
-        guard let out = rawOutput else { return nil }
-        if let code = out["exitCode"]?.int64Value ?? out["exit_code"]?.int64Value ?? out["returncode"]?.int64Value {
+        if let code = Self.shellExitCode(from: rawOutput) { return code }
+        if let code = Self.shellExitCode(from: contentText) { return code }
+        return nil
+    }
+
+    /// Pull human-readable terminal text out of a shell-result envelope.
+    private static func shellPlainOutput(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"), let json = try? JSONValue.decode(from: trimmed) else {
+            return nil
+        }
+        return shellPlainOutput(from: json)
+    }
+
+    private static func shellPlainOutput(from json: JSONValue?) -> String? {
+        guard let obj = json?.objectValue else { return nil }
+        for key in ["output", "formatted_output", "combinedOutput", "combined_output"] {
+            if let val = obj[key]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !val.isEmpty {
+                return val
+            }
+        }
+        var pieces: [String] = []
+        for key in ["stdout", "stderr"] {
+            if let val = obj[key]?.stringValue, !val.isEmpty {
+                pieces.append(val)
+            }
+        }
+        guard !pieces.isEmpty else { return nil }
+        return pieces.joined(separator: "\n")
+    }
+
+    private static func shellExitCode(from text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"), let json = try? JSONValue.decode(from: trimmed) else {
+            return nil
+        }
+        return shellExitCode(from: json)
+    }
+
+    private static func shellExitCode(from json: JSONValue?) -> Int? {
+        guard let json else { return nil }
+        if let code = json["exitCode"]?.int64Value
+            ?? json["exit_code"]?.int64Value
+            ?? json["returncode"]?.int64Value
+            ?? json["code"]?.int64Value {
             return Int(code)
+        }
+        // Grok often only sends kind: completed / failed
+        if let kind = json["kind"]?.stringValue?.lowercased() {
+            if kind == "completed" || kind == "success" { return 0 }
+            if kind == "failed" || kind == "error" { return 1 }
         }
         return nil
     }
@@ -609,6 +644,13 @@ struct ToolCallView: Sendable, Equatable {
             "offset", "limit", "line",
             "old_string", "new_string", "oldString", "newString", "content",
             "pattern", "Pattern", "query", "Query", "url", "Url",
+            // Consumed by compact title / command body — don't dump as leftover JSON.
+            "description", "Description", "intent", "summary",
+            "is_background", "isBackground", "background",
+            "timeout", "timeout_ms", "timeoutMs", "Timeout",
+            "dry_run", "dryRun", "explain", "recursive", "include", "exclude",
+            "head_limit", "headLimit", "max_results", "maxResults",
+            "case_sensitive", "caseSensitive", "multiline",
         ]
         let remaining = dict.filter { !knownKeys.contains($0.key) }
         guard !remaining.isEmpty else { return nil }
@@ -659,6 +701,76 @@ struct ToolCallView: Sendable, Equatable {
         }
         guard let brief = derivedBrief else { return kindLabel }
         return "\(kindLabel) · \(brief)"
+    }
+
+    /// Model-written intent from `rawInput.description` (Bash etc.).
+    /// Used for shell compact titles so the long command stays in the expand body.
+    var intentDescription: String? {
+        guard let raw = Self.extractNonEmptyString(
+            from: rawInput,
+            keys: ["description", "Description", "intent", "summary"]
+        ) else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Collapsed tool-row title. Commands use the model intent (or the command);
+    /// the terminal icon already carries "ran", and prefixing 已运行 is wrong
+    /// while the tool is still in progress.
+    var compactTitle: String {
+        switch cardLayout {
+        case .command:
+            if let intent = intentDescription {
+                return intent
+            }
+            if let cmd = terminalCommand {
+                let first = cmd.split(whereSeparator: \.isNewline).first.map(String.init)?
+                    .trimmingCharacters(in: .whitespaces) ?? cmd
+                return Self.truncate(first, limit: 72)
+            }
+            return "命令".localized
+        case .file:
+            if let name = shortPathLabel {
+                return "已读取 %@".localized(name)
+            }
+            return "已读取文件".localized
+        case .edit:
+            if let name = shortPathLabel {
+                return "已编辑 %@".localized(name)
+            }
+            return "已编辑文件".localized
+        case .search:
+            if let pattern = searchPattern {
+                return "已搜索 %@".localized(Self.truncate(pattern, limit: 48))
+            }
+            return "已搜索".localized
+        case .fetch:
+            if let url = fetchURL {
+                return "已抓取 %@".localized(Self.truncate(url, limit: 48))
+            }
+            return "已抓取".localized
+        case .other:
+            if let intent = intentDescription {
+                return intent
+            }
+            return displayTitle
+        }
+    }
+
+    private var shortPathLabel: String? {
+        if let path = filePath, !path.isEmpty {
+            return URL(fileURLWithPath: path).lastPathComponent
+        }
+        if let loc = locations.first?.path, !loc.isEmpty {
+            return URL(fileURLWithPath: loc).lastPathComponent
+        }
+        return nil
+    }
+
+    private static func truncate(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        let end = text.index(text.startIndex, offsetBy: limit)
+        return String(text[..<end]) + "…"
     }
 
     private var derivedBrief: String? {

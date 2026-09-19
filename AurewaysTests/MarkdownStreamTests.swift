@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 import SwiftStreamingMarkdown
 @testable import SwiftStreamingMarkdown
@@ -865,6 +866,38 @@ final class MarkdownStreamTests: XCTestCase {
             avgMs
         ))
         XCTAssertEqual(log.value, afterIntro, "open fence growth must not reparse committed prefix")
+    }
+
+    func testTableWidthHostDoesNotReportProposedWidth() {
+        final class MeasuredSize {
+            var value: CGSize = .zero
+        }
+        struct SizeProbe: Layout {
+            var box: MeasuredSize
+            func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+                let child = subviews[0].sizeThatFits(proposal)
+                box.value = child
+                return CGSize(width: proposal.width ?? child.width, height: proposal.height ?? child.height)
+            }
+            func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+                subviews[0].place(at: bounds.origin, proposal: proposal)
+            }
+        }
+        let box = MeasuredSize()
+        let hosting = NSHostingView(rootView: SizeProbe(box: box) {
+            TableWidthHost {
+                Color.clear.frame(width: 120, height: 16)
+            }
+        }.frame(width: 800, height: 100))
+        hosting.setFrameSize(NSSize(width: 800, height: 100))
+        hosting.layoutSubtreeIfNeeded()
+        XCTAssertEqual(
+            box.value.width,
+            120,
+            accuracy: 1,
+            "reporting the bubble width as the table size leaks into NavigationSplitView"
+        )
+        XCTAssertEqual(box.value.height, 16, accuracy: 1)
     }
 }
 

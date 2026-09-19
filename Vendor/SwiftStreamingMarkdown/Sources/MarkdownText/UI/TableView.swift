@@ -25,11 +25,6 @@ struct TableView: View {
   let columnMaxWidths: [Int: CGFloat]
 
   private let defaultMaxColumnWidth: CGFloat = 200
-  @State private var scrollWidth: CGFloat = 0
-  @State private var isExpanded: Bool = false
-  @State private var isCopyPressed: Bool = false
-  @State private var isCopyScaled: Bool = false
-  @State private var widthCommitTask: Task<Void, Never>?
 
   private let rawMarkdown: String
 
@@ -67,7 +62,8 @@ struct TableView: View {
         .accessibilityValue(String.itemPositionInTable(rowIndex: 1, totalRow: numOfRows + 1, columnIndex: colIdx + 1, totalColumn: headings.count))
       Spacer()
     }
-    .padding(12)
+    .padding(.horizontal, 10)
+    .padding(.vertical, 10)
     .id("\(colIdx)-heading")
     .background(config.tableStyle.headerBackgroundColor)
     .applyHeaderBorder(colIndex: colIdx, colCount: headings.count, color: config.tableStyle.borderColor)
@@ -76,7 +72,7 @@ struct TableView: View {
   @ViewBuilder
   var gridView: some View {
     VStack(alignment: .leading, spacing: 0) {
-      TableLayout(columnCount: headings.count, columnMaxWidths: self.actualColumnMaxWidths()) {
+      TableLayout(columnCount: headings.count, columnMaxWidths: self.staticColumnMaxWidths()) {
         ForEach(0..<headings.count, id: \.self) { colIdx in
           headerView(colIdx: colIdx)
         }
@@ -91,34 +87,12 @@ struct TableView: View {
     }
   }
 
-  /// Split-pane drags fire width changes every frame. Writing `@State` each
-  /// time rebuilds the grid (and any inline math) for the whole table.
-  private func commitScrollWidth(_ newWidth: CGFloat) {
-    guard newWidth > 0 else { return }
-    if scrollWidth == 0 {
-      scrollWidth = newWidth
-      return
-    }
-    guard abs(scrollWidth - newWidth) > 1 else { return }
-    widthCommitTask?.cancel()
-    widthCommitTask = Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 80_000_000)
-      guard !Task.isCancelled else { return }
-      if abs(scrollWidth - newWidth) > 1 {
-        scrollWidth = newWidth
-      }
-    }
-  }
-
-  private func actualColumnMaxWidths() -> [CGFloat] {
-    let averageWidth = scrollWidth / CGFloat(headings.count)
-    var actualColumnMaxWidths = Array(repeating: CGFloat(0), count: headings.count)
-    for idx in 0..<headings.count {
-      let maxColumnWidth = columnMaxWidths[idx] ?? defaultMaxColumnWidth
-      actualColumnMaxWidths[idx] = max(averageWidth, maxColumnWidth)
-    }
-
-    return actualColumnMaxWidths
+  /// Caps only — never derived from the container width. Measuring the
+  /// viewport into `@State` and feeding it back as `minWidth` / column
+  /// budget made the table's ideal size track the bubble, which then
+  /// leaked into `NavigationSplitView` and aborted on a constraints loop.
+  private func staticColumnMaxWidths() -> [CGFloat] {
+    (0..<headings.count).map { columnMaxWidths[$0] ?? defaultMaxColumnWidth }
   }
 
   @ViewBuilder
@@ -133,7 +107,8 @@ struct TableView: View {
         Spacer()
       }
       .frame(maxHeight: .infinity)
-      .padding(12)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 10)
       .id("\(colIdx)-\(rowIdx)")
       .applyCellBorder(colIndex: colIdx, colCount: headings.count, rowIndex: rowIdx, rowCount: numOfRows, color: config.tableStyle.borderColor)
     case .text(let attributedString):
@@ -151,127 +126,43 @@ struct TableView: View {
         Spacer()
       }
       .frame(maxHeight: .infinity)
-      .padding(12)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 10)
       .id("\(colIdx)-\(rowIdx)")
       .applyCellBorder(colIndex: colIdx, colCount: headings.count, rowIndex: rowIdx, rowCount: numOfRows, color: config.tableStyle.borderColor)
     }
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      if controller != nil {
-        scrollView.onTapGesture {
-          withAnimation(.easeInOut(duration: 0.2)) {
-            isExpanded.toggle()
-          }
-        }
-      } else {
-        scrollView
-      }
-
-      if isExpanded {
-        HStack(spacing: 0) {
-          tableCopyButton
-          tableDownloadButton
-        }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.opacity)
-      }
-    }
-  }
-
-  var scrollView: some View {
-    ScrollView([.horizontal]) {
+    // Fill the bubble in placeSubviews. sizeThatFits must keep the intrinsic
+    // width — returning the proposed (bubble / column) width made
+    // NavigationSplitView min/max track the pane and abort on a constraints
+    // loop while the last message was streaming.
+    TableWidthHost {
       gridView
-        .overlay(
-          RoundedRectangle(cornerRadius: 12)
-            .inset(by: 0.5)
-            .stroke(config.tableStyle.borderColor, lineWidth: 1)
-        )
-        .cornerRadius(12)
+        .contentShape(Rectangle())
     }
-    .background {
-      GeometryReader { geo in
-        Color.clear
-          .onAppear {
-            commitScrollWidth(geo.size.width)
-          }
-          .onChange(of: geo.size.width) { newValue in
-            commitScrollWidth(newValue)
-          }
-      }
-    }
-    .scrollIndicators(.hidden)
-    .contentShape(Rectangle())
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  private var tableCopyButton: some View {
-    Button(action: {
-      controller?.onTableCopyTap(content: rawMarkdown)
-      isCopyPressed = true
-      withAnimation(.easeInOut(duration: 0.2)) {
-        isCopyScaled = true
-      }
-      Task { @MainActor in
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        withAnimation(.easeInOut(duration: 0.25)) {
-          isCopyPressed = false
-          isCopyScaled = false
-        }
-      }
-    }, label: {
-      ZStack {
-        Image("Copy", bundle: .module)
-          .renderingMode(.template)
-          .foregroundStyle(config.tableStyle.actionButtonColor)
-          .frame(width: 20, height: 20)
-          .opacity(isCopyPressed ? 0.0 : 1.0)
-
-        Image("CopyFilled", bundle: .module)
-          .renderingMode(.template)
-          .foregroundStyle(config.tableStyle.actionButtonColor)
-          .frame(width: 20, height: 20)
-          .opacity(isCopyPressed ? 1.0 : 0.0)
-      }
-      .scaleEffect(isCopyScaled ? 1.3 : 1.0)
-    })
-    .frame(width: 32, height: 32)
-    .contentShape(Rectangle())
-  }
-
-  private var tableDownloadButton: some View {
-    Button(action: {
-      controller?.onTableDownloadTap(content: rawMarkdown)
-    }, label: {
-      Image("downloadArrow", bundle: .module)
-        .renderingMode(.template)
-        .foregroundStyle(config.tableStyle.actionButtonColor)
-        .frame(width: 20, height: 20)
-        .padding(2)
-    })
-    .frame(width: 32, height: 32)
-    .contentShape(Rectangle())
-  }
 }
 
 extension View {
 
   func applyHeaderBorder(colIndex: Int, colCount: Int, color: Color) -> some View {
-    var edges: [Edge] = [.bottom]
-    if colIndex != colCount - 1 {
-      edges.append(.trailing)
-    }
-    return border(width: 1, edges: edges, color: color)
+    // Horizontal rule under the header only — no vertical column lines.
+    _ = colIndex
+    _ = colCount
+    return border(width: 1, edges: [.bottom], color: color)
   }
 
   func applyCellBorder(colIndex: Int, colCount: Int, rowIndex: Int, rowCount: Int, color: Color) -> some View {
+    // Row separators only (skip the last row so the table has no outer bottom box).
+    _ = colIndex
+    _ = colCount
     var edges: [Edge] = []
     if rowIndex < rowCount - 1 {
       edges.append(.bottom)
-    }
-    if colIndex < colCount - 1 {
-      edges.append(.trailing)
     }
     return border(width: 1, edges: edges, color: color)
   }
@@ -309,6 +200,9 @@ struct TableLayout: Layout {
       }
     }
 
+    // Do not grow to a container budget here. Ideal width must stay intrinsic;
+    // stretching to the bubble happens in `placeSubviews` from `bounds.width`.
+
     var rowHeights = Array(repeating: CGFloat(0), count: rowCount)
     for row in 0..<rowCount {
       var rowHeight: CGFloat = 0
@@ -325,9 +219,15 @@ struct TableLayout: Layout {
   }
 
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) -> CGSize {
-    let totalWidth = cache.columnWidths.reduce(0, +)
-    let totalHeight = cache.rowHeights.reduce(0, +)
-    return CGSize(width: totalWidth, height: totalHeight)
+    // Width is always the column-cap sum. Adopting `proposal.width` made the
+    // table's measured size track the transcript column, which
+    // `SplitViewChildController` then wrote back as min/max and could not
+    // settle. Stretching happens in `placeSubviews`, not here.
+    let contentWidth = cache.columnWidths.reduce(0, +)
+    let contentHeight = cache.rowHeights.reduce(0, +)
+    _ = subviews
+    _ = proposal
+    return CGSize(width: contentWidth, height: contentHeight)
   }
 
   func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) {
@@ -335,6 +235,18 @@ struct TableLayout: Layout {
       return
     }
     let rowCount = subviews.count / columnCount
+    var columnWidths = cache.columnWidths
+    let contentSum = columnWidths.reduce(0, +)
+    // The host may report a smaller (intrinsic) size than the bubble. Use the
+    // parent's proposal so columns still span the offered width.
+    let targetWidth = max(bounds.width, proposal.width ?? 0)
+    if targetWidth > contentSum + 0.5, contentSum > 0 {
+      let share = (targetWidth - contentSum) / CGFloat(columnCount)
+      for col in 0..<columnCount {
+        columnWidths[col] += share
+      }
+    }
+
     var y: CGFloat = bounds.origin.y
 
     for row in 0..<rowCount {
@@ -343,12 +255,40 @@ struct TableLayout: Layout {
 
       for col in 0..<columnCount {
         let index = row * columnCount + col
-        subviews[index].place(at: CGPoint(x: x, y: y), proposal: .init(width: cache.columnWidths[col], height: rowHeight))
-        x += cache.columnWidths[col]
+        subviews[index].place(at: CGPoint(x: x, y: y), proposal: .init(width: columnWidths[col], height: rowHeight))
+        x += columnWidths[col]
       }
 
       y += rowHeight
     }
+  }
+}
+
+/// Reports the grid's intrinsic size for every proposal, then places it at the
+/// offered width so columns can stretch. Returning `proposedWidth` from
+/// `sizeThatFits` was enough for `NavigationSplitView` to treat the current
+/// column width as the table's min/max and abort during streaming layout.
+struct TableWidthHost: Layout {
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard let child = subviews.first else { return .zero }
+    _ = proposal
+    return child.sizeThatFits(.unspecified)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    guard let child = subviews.first else { return }
+    let intrinsic = child.sizeThatFits(.unspecified)
+    let offered = proposal.width ?? bounds.width
+    let layoutWidth = max(
+      bounds.width,
+      offered.isFinite ? offered : bounds.width,
+      intrinsic.width
+    )
+    child.place(
+      at: bounds.origin,
+      anchor: .topLeading,
+      proposal: ProposedViewSize(width: layoutWidth, height: bounds.height)
+    )
   }
 }
 

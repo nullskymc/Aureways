@@ -1,68 +1,97 @@
 import SwiftUI
 
-// MARK: - Tool Row
+// MARK: - Tool Row (B: Cursor-like minimal line)
 
 struct ToolCompactRow: View {
     let call: ToolCallView
     let isOpen: Bool
+    var connectAbove: Bool = false
+    var connectBelow: Bool = false
     let onToggle: () -> Void
-    @State private var isHovered = false
+
+    private var isRunning: Bool {
+        ["in_progress", "running"].contains(call.status.lowercased())
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Button(action: onToggle) {
                 HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 11))
-                        .foregroundStyle(statusColor)
-                        .frame(width: 14)
-                    Text(shortTitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    if let badge = diffBadge {
-                        if badge.added > 0 {
-                            Text("+\(badge.added)")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Palette.moss)
+                    statusLeading
+                        .frame(width: 14, height: 14)
+
+                    // 有 description 时折叠行只显示意图；具体命令在展开的 commandBody 里。
+                    HStack(spacing: 8) {
+                        Text(shortTitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary.opacity(0.92))
+                            .lineLimit(1)
+
+                        if let badge = diffBadge {
+                            if badge.added > 0 {
+                                Text("+\(badge.added)")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(Palette.moss)
+                            }
+                            if badge.removed > 0 {
+                                Text("−\(badge.removed)")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(Color.red.opacity(0.85))
+                            }
                         }
-                        if badge.removed > 0 {
-                            Text("−\(badge.removed)")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Color.red.opacity(0.85))
-                        }
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                            .animation(.easeInOut(duration: 0.15), value: isOpen)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.vertical, 2)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background {
-                if isHovered {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Palette.cardHover.opacity(0.40))
-                }
+            // 时间线段画在整行高度上，图标处留 14pt 空档，避免穿模。
+            .overlay(alignment: .topLeading) {
+                ActivityTimelineSegments(
+                    connectAbove: connectAbove,
+                    connectBelow: connectBelow && !isOpen,
+                    iconTop: 3,
+                    iconSize: 14
+                )
             }
-            .onHover { isHovered = $0 }
 
             if isOpen {
+                // 只用淡入：move + 高度变化会叠成「跳进来」。
                 ToolCallDetail(call: call)
-                    .padding(.leading, 22)
+                    .padding(.leading, 14)
+                    .transition(.opacity)
             }
         }
-        .padding(.vertical, 2)
+        .animation(.easeOut(duration: 0.12), value: isOpen)
+    }
+
+    @ViewBuilder
+    private var statusLeading: some View {
+        if isRunning {
+            // Keep the live tool indicator on the system ProgressView so streaming
+            // matches the activity header (Apple control, same spin cadence).
+            ProgressView()
+                .controlSize(.mini)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(statusColor)
+        }
     }
 
     private static let backtickRegex = try! NSRegularExpression(pattern: #"`([^`]+)`"#)
 
     private var shortTitle: String {
-        var title = call.displayTitle
+        // Prefer model intent; fall back to displayTitle (then shorten backtick paths).
+        var title = call.compactTitle
         let nsTitle = title as NSString
         let matches = Self.backtickRegex.matches(in: title, range: NSRange(location: 0, length: nsTitle.length))
         for match in matches.reversed() where match.numberOfRanges > 1 {
@@ -102,12 +131,13 @@ struct ToolCompactRow: View {
     }
 
     private var statusColor: Color {
+        // 参考图：工具图标偏灰，不拿品牌绿和思考抢对比。
         switch call.status.lowercased() {
-        case "completed", "success": return Palette.moss
+        case "completed", "success": return Color.secondary.opacity(0.72)
         case "failed", "error": return .red
         case "in_progress", "running": return Palette.sky
-        case "cancelled", "denied", "rejected": return Color.secondary
-        default: return Palette.gold
+        case "cancelled", "denied", "rejected": return Color.secondary.opacity(0.45)
+        default: return Color.secondary.opacity(0.55)
         }
     }
 }
@@ -120,36 +150,44 @@ struct ToolCallDetail: View {
     var lineLimit: Int = 16
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            switch call.cardLayout {
-            case .command:
-                commandBody
-            case .edit:
-                locationLinks
-                diffs
-                extraInput
-            case .file:
-                locationLinks
-                labeledText("内容".localized, call.contentText, lines: lineLimit)
-                extraInput
-            case .search:
-                if let pattern = call.searchPattern {
-                    labeledText("模式".localized, pattern, lines: 3)
+        HStack(alignment: .top, spacing: 8) {
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(Color.secondary.opacity(0.28))
+                .frame(width: 1)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                switch call.cardLayout {
+                case .command:
+                    commandBody
+                case .edit:
+                    locationLinks
+                    diffs
+                    extraInput
+                case .file:
+                    locationLinks
+                    labeledText("内容".localized, call.contentText, lines: lineLimit)
+                    extraInput
+                case .search:
+                    if let pattern = call.searchPattern {
+                        labeledText("模式".localized, pattern, lines: 3)
+                    }
+                    locationLinks
+                    labeledText("结果".localized, call.contentText, lines: lineLimit)
+                    extraInput
+                case .fetch:
+                    if let url = call.fetchURL {
+                        urlRow(url)
+                    }
+                    labeledText("内容".localized, call.contentText, lines: lineLimit)
+                    extraInput
+                case .other:
+                    locationLinks
+                    fallbackInput
+                    labeledText(nil, call.contentText, lines: min(lineLimit, 12))
                 }
-                locationLinks
-                labeledText("结果".localized, call.contentText, lines: lineLimit)
-                extraInput
-            case .fetch:
-                if let url = call.fetchURL {
-                    urlRow(url)
-                }
-                labeledText("内容".localized, call.contentText, lines: lineLimit)
-                extraInput
-            case .other:
-                locationLinks
-                fallbackInput
-                labeledText(nil, call.contentText, lines: min(lineLimit, 12))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -159,15 +197,12 @@ struct ToolCallDetail: View {
             HStack(spacing: 5) {
                 Image(systemName: "folder")
                     .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                 Text(cwd)
                     .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Palette.badgeBg.opacity(0.40), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
 
         if let command = call.terminalCommand {
@@ -186,19 +221,15 @@ struct ToolCallDetail: View {
                 } label: {
                     Image(systemName: "doc.on.doc")
                         .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
                 .help("复制命令".localized)
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.badgeBg.opacity(0.60), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         } else if !call.terminalIds.isEmpty {
             Text(call.status.lowercased() == "completed" ? "终端已结束".localized : "终端运行中".localized)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
         }
 
         if let output = call.terminalOutput, !output.isEmpty {
@@ -206,17 +237,11 @@ struct ToolCallDetail: View {
                 HStack(spacing: 6) {
                     Text("输出".localized)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                     if let code = call.terminalExitCode {
                         Text("退出码 %lld".localized(code))
                             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                             .foregroundStyle(code == 0 ? Palette.moss : Color.red)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(
-                                (code == 0 ? Palette.moss : Color.red).opacity(0.12),
-                                in: RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            )
                     }
                 }
                 Text(Self.clamped(output))
@@ -225,9 +250,6 @@ struct ToolCallDetail: View {
                     .textSelection(.enabled)
                     .lineLimit(lineLimit)
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.badgeBg.opacity(0.40), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
 
         extraInput
@@ -270,52 +292,108 @@ struct ToolCallDetail: View {
         }
     }
 
+    /// Leftover rawInput fields as labeled rows — never a single compact JSON blob.
     @ViewBuilder
     private var extraInput: some View {
-        if let extra = call.otherRawInput,
-           let extraStr = try? String(data: extra.encode(), encoding: .utf8), extraStr != "{}" {
-            Text(Self.clamped(extraStr))
-                .font(.system(size: 10.5, design: .monospaced))
+        structuredFields(from: call.otherRawInput, tone: .tertiary)
+    }
+
+    /// `.other` tools: parse rawInput into fields; fall back to pretty JSON only if needed.
+    @ViewBuilder
+    private var fallbackInput: some View {
+        let source = call.otherRawInput ?? call.rawInput
+        if case .object(let dict)? = source, !dict.isEmpty {
+            structuredFields(from: source, tone: .secondary)
+        } else if let source, source != .null {
+            Text(Self.clamped(source.prettyPrinted()))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-                .padding(6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.badgeBg.opacity(0.30), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+    }
+
+    private enum FieldTone {
+        case secondary, tertiary
+    }
+
+    @ViewBuilder
+    private func structuredFields(from json: JSONValue?, tone: FieldTone) -> some View {
+        if case .object(let dict)? = json, !dict.isEmpty {
+            let keys = dict.keys.sorted()
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(keys, id: \.self) { key in
+                    if let value = dict[key] {
+                        fieldRow(label: Self.humanKey(key), value: value, tone: tone)
+                    }
+                }
+            }
         }
     }
 
     @ViewBuilder
-    private var fallbackInput: some View {
-        if let rawInput = call.otherRawInput ?? call.rawInput,
-           let inputStr = try? String(data: rawInput.encode(), encoding: .utf8),
-           inputStr != "{}" {
-            Text(Self.clamped(inputStr))
+    private func fieldRow(label: String, value: JSONValue, tone: FieldTone) -> some View {
+        let bodyColor: Color = tone == .secondary ? Color.secondary : Color.secondary.opacity(0.7)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.tertiary)
+            Text(Self.clamped(Self.displayValue(value)))
                 .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(bodyColor)
                 .textSelection(.enabled)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .lineLimit(lineLimit)
         }
     }
 
     @ViewBuilder
     private func labeledText(_ label: String?, _ text: String, lines: Int) -> some View {
         if !text.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
+            let shown = Self.maybePrettyJSON(text)
+            VStack(alignment: .leading, spacing: 3) {
                 if let label {
                     Text(label)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
-                Text(Self.clamped(text))
+                Text(Self.clamped(shown))
                     .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .lineLimit(lines)
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
+    }
+
+    private static func humanKey(_ key: String) -> String {
+        switch key.lowercased() {
+        case "command", "cmd": return "命令".localized
+        case "path", "file_path", "filepath", "target_file": return "路径".localized
+        case "cwd", "working_dir", "workingdir", "workdir": return "工作目录".localized
+        case "pattern", "query": return "模式".localized
+        case "url": return "URL"
+        case "content", "text", "output": return "内容".localized
+        case "old_string", "oldstring": return "原文".localized
+        case "new_string", "newstring": return "新文".localized
+        case "offset": return "偏移".localized
+        case "limit": return "行数".localized
+        default:
+            return key.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    private static func displayValue(_ value: JSONValue) -> String {
+        if let s = value.stringValue { return maybePrettyJSON(s) }
+        if case .bool(let b) = value { return b ? "true" : "false" }
+        if case .number(let n) = value { return "\(n)" }
+        if case .null = value { return "null" }
+        return value.prettyPrinted()
+    }
+
+    private static func maybePrettyJSON(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{") || trimmed.hasPrefix("[") else { return text }
+        guard let parsed = try? JSONValue.decode(from: trimmed) else { return text }
+        return parsed.prettyPrinted()
     }
 
     private func urlRow(_ url: String) -> some View {
@@ -371,6 +449,7 @@ private struct ToolDiffBlock: View {
             HStack(spacing: 8) {
                 Text(URL(fileURLWithPath: path).lastPathComponent)
                     .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if diff.added > 0 {
@@ -388,7 +467,7 @@ private struct ToolDiffBlock: View {
             if diff.isIdentity {
                 Text("无行级变更".localized)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
             } else {
                 hunkList(diff)
             }
@@ -399,9 +478,7 @@ private struct ToolDiffBlock: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.badgeBg.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     @ViewBuilder
@@ -460,8 +537,8 @@ private struct ToolDiffBlock: View {
         }()
         let fill: Color = {
             switch line.kind {
-            case .insert: return Palette.moss.opacity(0.12)
-            case .delete: return Color.red.opacity(0.10)
+            case .insert: return Palette.moss.opacity(0.10)
+            case .delete: return Color.red.opacity(0.08)
             case .context: return Color.clear
             }
         }()
@@ -478,7 +555,7 @@ private struct ToolDiffBlock: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 0.5)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 2)
         .background(fill)
     }
 }

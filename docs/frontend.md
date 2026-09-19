@@ -39,7 +39,7 @@
   - **用户消息**：右侧对齐的现代连续曲率气泡（`cornerRadius: 16`），自适应包裹文字。
   - **Agent 回答**：无外层多余实底方框，左侧搭配 `sparkles` 微光头像，右侧由 [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown) 渲染标题、列表、围栏代码和表格。
   - **思考过程**：默认折叠成一行「思考」。
-  - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起，点开才是短文件名列表。展开区按 `ToolCallView.cardLayout` 分流：命令（`$` + cwd + 输出）、编辑（diff）、读取（路径 + 内容）、搜索（模式 + 结果）、抓取（URL + 内容）、其它（截断 rawInput）。权限卡复用同一套 `ToolCallDetail`。
+  - **工具调用**：连续工具收成一组「使用了 N 个工具」；完成后默认收起。活动块与工具折叠行都是 Cursor 式极简行（无 material 卡片壳、无灰底块）；活动块；进行中用系统 `ProgressView`，与活动卡标题同一套原生转圈。展开活动步骤时图标上下各画时间线段（图标处留空，不穿模）；折叠工具行：读/改/搜/抓仍是动词短句（已读取/已编辑…），Shell 只显示意图（有 description）或截断命令，不前缀「已运行」——图标已经说明这是命令，进行中写「已运行」也不对。命令正文只在展开详情。思考是旁白（无 chevron、不进时间线）。工具详情展开后左侧细竖线 + 等宽正文，按 `ToolCallView.cardLayout` 分流：命令（`$` + cwd + 输出）、编辑（diff）、读取、搜索、抓取、其它。权限卡复用 `ToolCallDetail`。
   - **计划**：一行摘要 + 可展开步骤。
 - **空白落地页 (`EmptyWorkspaceLanding`)**：A 轨道平面标志（浅色蓝标 / 深色白标，`BrandMark`）叠在 Orbit Blue 液态漫射光斑上，居中引导用户输入。Dock 用的分层 squircle 图标不进这块画布。
 
@@ -90,6 +90,7 @@
 - **拖动期间冻结内容的提议宽度，不要盖住它。** `InspectorPaneView` 在 `frozenWidth != nil` 时用 `FrozenWidthLayout`（自定义 `Layout`）把子视图的**提议宽度**钉在拖动开始那一刻，外层只变裁剪框，松手后才按最终宽度排一次——表列宽、公式、编辑器与终端的布局在拖动中一次都不重算。遮罩只挡眼睛，**不会让 SwiftUI 跳过布局**。遮罩必须是不透明的 `Palette.inspectorBg`：同色半透明叠上去等于没盖；`.regularMaterial` 会在分栏每帧对整块面板重采样模糊（PERF-02）。
 - **冻结必须用 `Layout`，不能用 `.frame(width:)`。** `.frame(width:)` 会把该宽度当成内容的*理想宽度*，并穿过外层的 `.frame(maxWidth: .infinity)` 继续向 `NavigationSplitView` 传播；分栏读到它就把列宽钉住——把分栏拉到最大宽度后就再也拉不回来，夹紧边界处反复夹紧/回弹。`Layout` 的容器尺寸恒等于父级提议，冻结与否都不改变自己占的空间，因此不会泄漏固定宽度。这一条是实测踩过的回归。
 - **不要在几何回调里写 `@State`。** 拖动状态由 `SplitResizeEngine`（`Views/SplitResize.swift`）持有：每帧喂进来的宽度只写 `lastWidth` 这类普通字段，`isResizing` / `frozenWidth` 只在**开始与结束两个边沿**变化，于是一个拖动周期只让视图失效两次。`@StateObject` 持有引用类型时，改它的普通属性不会触发更新——这是整条约束的实现基础。
+- **表格的 `sizeThatFits` 只回报固有宽度。** 把气泡 / 分栏的提议宽度当成表格自己的尺寸（或把视口写进 `@State` 再当列宽预算）会让 `NavigationSplitView` 的 min/max 跟着栏宽跑。流式时最后一条每拍重测，同一显示周期里约束收不了口，`_postWindowNeedsUpdateConstraints` 超限抛 `NSGenericException`。拉满气泡只放在 `placeSubviews`。`MarkdownStreamTests.testTableWidthHostDoesNotReportProposedWidth` 锁这条。
 - **拖动起止只认指针按下 / 抬起，不要用"宽度多久没变"。** 宽度不变无法区分"用户中途停顿"和"用户松手"：按住鼠标停顿超过阈值就会提前解冻、内容重排，表现出来就是界面渲染跑在拖动前面。`SplitResizeEngine` 用 `NSEvent.addLocalMonitorForEvents` 监视 `.leftMouseDown` / `.leftMouseUp`，只有"指针按着 + 宽度真的在变"同时成立才冻结；抬起即解冻。它不去上层找 `NSSplitView`：`.inspector` / `NavigationSplitView` 内部用什么容器属于 SwiftUI 的实现细节，顺着视图树找分隔条更脆。剩下的 3 秒兜底计时器只负责在抬起事件丢失时自我恢复。
 
 曾经的实现违反前两条：`isResizing` / `resizeGeneration` / `lastWidth` 三个 `@State` 承接 `onGeometryChange` 回调，其中 `resizeGeneration` 每帧无条件自增——每拖一帧就让整个检查器面板（`ZStack` 内全部标签页）失效一次。这些失效在同一显示周期里把 `setNeedsUpdateConstraints` 反复顶到窗口，累积超过 AppKit 的限额后 `-[NSWindow _postWindowNeedsUpdateConstraints]` 抛 `NSInternalInconsistencyException`，被 `+[NSApplication _crashOnException:]` 终止。诊断报告（`~/Library/Logs/DiagnosticReports/Aureways-*.ips`，2026-09-15/16 共 6 次）的栈是 `NSHostingView.layout → CoreViewSetGeometry → NSView.setFrame → Auto Layout 依赖级联 → NSHostingView.didChangeValue → invalidateSafeAreaInsets → setNeedsUpdateConstraints → _postWindowNeedsUpdateConstraints`；统一日志里对应的判据行是 `Marking window ... as needing Update Constraints in Window (limit: 277, count: 279)`，两次实测的约束更新数与布局数之比恒为 2:1（278/139、310/155），即一次无法收敛的振荡。

@@ -107,6 +107,7 @@ struct HarnessIcon: View {
         case CopilotHarness.id: return "HarnessIcon-copilot"
         case CursorHarness.id: return "HarnessIcon-cursor"
         case OpenCodeHarness.id: return "HarnessIcon-opencode"
+        case QoderHarness.id: return "HarnessIcon-qoder"
         default: return nil
         }
     }

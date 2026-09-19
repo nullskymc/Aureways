@@ -88,6 +88,7 @@ struct SingleBlockView: View, Equatable {
         TableView(headings: headers,
                   rows: rows,
                   rawMarkdown: rawMarkdown)
+          .frame(maxWidth: .infinity, alignment: .leading)
       case .blockQuote(_, let item):
         BlockQuoteView(item: item)
       case .image(let id, let data):

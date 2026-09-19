@@ -255,6 +255,8 @@ private struct ThoughtStep: View {
     let id: UUID
     let text: String
     var chrome: TranscriptChromeState
+    var connectAbove: Bool = false
+    var connectBelow: Bool = false
     @State private var isHovered = false
 
     private var isExpanded: Bool {
@@ -262,30 +264,25 @@ private struct ThoughtStep: View {
     }
 
     var body: some View {
+        // 参考图：思考是旁白，不是和工具同级的时间线节点——无 chevron、无竖线。
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "sparkles")
-                .font(.system(size: 11))
-                .foregroundStyle(Palette.gold)
-                .frame(width: 14)
+                .font(.system(size: 10))
+                .foregroundStyle(.quaternary)
+                .frame(width: 14, height: 14)
                 .padding(.top, 2)
             Text(text)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
                 .lineSpacing(3)
                 .lineLimit(isExpanded ? nil : 2)
                 .textSelection(.enabled)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .animation(.easeInOut(duration: 0.15), value: isExpanded)
-                .padding(.top, 4)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .opacity(isHovered ? 0.92 : 1)
+        .opacity(isHovered ? 0.9 : 1)
         .onTapGesture {
             if isExpanded {
                 chrome.thoughtExpanded.remove(id)
@@ -298,14 +295,47 @@ private struct ThoughtStep: View {
     }
 }
 
+/// 活动时间线：只在图标上下画线段，图标本身留空，避免整条贯穿穿模。
+struct ActivityTimelineSegments: View {
+    var connectAbove: Bool
+    var connectBelow: Bool
+    var iconTop: CGFloat
+    var iconSize: CGFloat
+    private let lineColor = Color.secondary.opacity(0.22)
+
+    var body: some View {
+        if connectAbove || connectBelow {
+            GeometryReader { geo in
+                let x = iconSize / 2
+                let iconBottom = iconTop + iconSize
+                ZStack(alignment: .topLeading) {
+                    if connectAbove, iconTop > 0 {
+                        Rectangle()
+                            .fill(lineColor)
+                            .frame(width: 1, height: iconTop)
+                            .offset(x: x - 0.5, y: 0)
+                    }
+                    if connectBelow {
+                        let h = max(0, geo.size.height - iconBottom)
+                        Rectangle()
+                            .fill(lineColor)
+                            .frame(width: 1, height: h)
+                            .offset(x: x - 0.5, y: iconBottom)
+                    }
+                }
+            }
+            .frame(width: iconSize)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 private struct ActivityCard: View {
     let blockID: UUID
     let steps: [ActivityStep]
     var isLive: Bool
     var run: ActivityRun?
     var chrome: TranscriptChromeState
-    @State private var isHeaderHovered = false
-
     // 运行中默认展开，让人看到工作流进展（思考全文与工具详情仍各自收起）；
     // 完成后自动收纳成摘要行，与正文做层次隔离。用户手动切换优先于默认。
     private var isExpanded: Bool {
@@ -341,7 +371,9 @@ private struct ActivityCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // B：活动块不再套 material 卡片。折叠就是一行摘要；展开后内容左缩进，
+        // 进行中仍用系统 ProgressView，和工具行同一套原生转圈。
+        VStack(alignment: .leading, spacing: 6) {
             Button {
                 chrome.activityExpanded[blockID] = !isExpanded
             } label: {
@@ -355,57 +387,46 @@ private struct ActivityCard: View {
                             .foregroundStyle(failedCount > 0 ? Color.red : Palette.moss)
                     }
                     Text(summary)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    Spacer()
+                    Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .animation(.easeInOut(duration: 0.15), value: isExpanded)
                 }
-                .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background {
-                if isHeaderHovered {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Palette.cardHover.opacity(0.35))
-                }
-            }
-            .onHover { isHeaderHovered = $0 }
 
             if isExpanded {
-                Divider()
-                    .overlay(Palette.splitDivider)
-                    .padding(.vertical, 2)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(steps) { step in
-                        stepView(step)
+                // B：扁平化叶子行后按位画时间线——线段只在图标上下，中间留空不穿模。
+                // spacing 为 0，让相邻行的上下线段在边界相接。
+                let leaves = timelineLeaves
+                // 时间线只串工具行；思考旁白不进竖线，避免和工具抢同一套节点感。
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(leaves.enumerated()), id: \.element.id) { index, leaf in
+                        let isTool = { if case .tool = leaf { return true }; return false }()
+                        let prevTool = index > 0 && {
+                            if case .tool = leaves[index - 1] { return true }; return false
+                        }()
+                        let nextTool = index + 1 < leaves.count && {
+                            if case .tool = leaves[index + 1] { return true }; return false
+                        }()
+                        leafView(
+                            leaf,
+                            connectAbove: isTool && prevTool,
+                            connectBelow: isTool && nextTool
+                        )
                     }
                 }
+                .padding(.leading, 22)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // 内容层用 .regularMaterial，不叠玻璃——这是 docs/frontend.md 已经写明的
-        // 规则，也是 Apple 的 Materials 指南：Liquid Glass 属于浮在内容之上的
-        // 导航层，不该铺在列表行 / 卡片上。实测每张卡都是一层实时背景采样，
-        // 滚动时 vImage 的模糊卷积占到主线程 self time 的 2%。
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Palette.border, lineWidth: 0.5)
-                .allowsHitTesting(false)
-        )
         .onChange(of: isLive) {
             // 回合结束统一收纳：运行中手动展开过的也一并收起。
             if !isLive {
@@ -421,13 +442,20 @@ private struct ActivityCard: View {
             if tools > 0 { return "正在思考并使用工具".localized }
             return "正在思考".localized
         }
+        // 参考图式摘要：按动作类型聚合成「已读取文件 · 已运行命令」，少报次数。
         var parts: [String] = []
-        if thoughtCount > 0 { parts.append("已思考".localized) }
-        if tools > 0 { parts.append("执行工具 %lld 次".localized(tools)) }
+        let layouts = Set(toolCalls.map(\.call.cardLayout))
+        if layouts.contains(.edit) { parts.append("已编辑文件".localized) }
+        if layouts.contains(.file) { parts.append("已读取文件".localized) }
+        if layouts.contains(.command) { parts.append("已运行命令".localized) }
+        if layouts.contains(.search) { parts.append("已搜索".localized) }
+        if layouts.contains(.fetch) { parts.append("已抓取".localized) }
+        if parts.isEmpty, thoughtCount > 0 { parts.append("已思考".localized) }
+        if parts.isEmpty, tools > 0 { parts.append("执行工具 %lld 次".localized(tools)) }
         if failedCount > 0 { parts.append("%lld 失败".localized(failedCount)) }
         if let duration = durationText { parts.append(duration) }
         if parts.isEmpty { return "工作记录".localized }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: "")
     }
 
     private var durationText: String? {
@@ -438,35 +466,84 @@ private struct ActivityCard: View {
         return "\(seconds / 60)m\(seconds % 60)s"
     }
 
+    private enum TimelineLeaf: Identifiable {
+        case thought(id: UUID, text: String)
+        case tool(ActivityTool)
+        case planEntry(id: String, content: String, status: String)
+
+        var id: String {
+            switch self {
+            case .thought(let id, _): return "t-\(id.uuidString)"
+            case .tool(let tool): return "c-\(tool.id.uuidString)"
+            case .planEntry(let id, _, _): return "p-\(id)"
+            }
+        }
+    }
+
+    private var timelineLeaves: [TimelineLeaf] {
+        var leaves: [TimelineLeaf] = []
+        for step in steps {
+            switch step {
+            case .thought(let id, let text):
+                leaves.append(.thought(id: id, text: text))
+            case .tools(_, let tools):
+                for tool in tools {
+                    leaves.append(.tool(tool))
+                }
+            case .plan(let planID, let entries):
+                for (offset, entry) in entries.enumerated() {
+                    leaves.append(.planEntry(
+                        id: "\(planID.uuidString)-\(offset)",
+                        content: entry.content,
+                        status: entry.status
+                    ))
+                }
+            }
+        }
+        return leaves
+    }
+
     @ViewBuilder
-    private func stepView(_ step: ActivityStep) -> some View {
-        switch step {
+    private func leafView(_ leaf: TimelineLeaf, connectAbove: Bool, connectBelow: Bool) -> some View {
+        switch leaf {
         case .thought(let id, let text):
-            ThoughtStep(id: id, text: text, chrome: chrome)
-        case .tools(_, let tools):
-            VStack(alignment: .leading, spacing: 3) {
-                ForEach(tools) { tool in
-                    ToolCompactRow(call: tool.call, isOpen: openCallID == tool.id) {
-                        chrome.openToolID[blockID] = openCallID == tool.id ? nil : tool.id
-                    }
-                }
+            ThoughtStep(
+                id: id,
+                text: text,
+                chrome: chrome,
+                connectAbove: connectAbove,
+                connectBelow: connectBelow
+            )
+        case .tool(let tool):
+            ToolCompactRow(
+                call: tool.call,
+                isOpen: openCallID == tool.id,
+                connectAbove: connectAbove,
+                connectBelow: connectBelow
+            ) {
+                chrome.openToolID[blockID] = openCallID == tool.id ? nil : tool.id
             }
-        case .plan(_, let entries):
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: entry.status == "completed" ? "checkmark.circle" : "circle")
-                            .font(.system(size: 11))
-                            .foregroundStyle(entry.status == "completed" ? Palette.moss : Color.secondary.opacity(0.55))
-                        Text(entry.content)
-                            .font(.system(size: 12))
-                            .foregroundStyle(entry.status == "completed" ? .secondary : .primary)
-                    }
-                }
+        case .planEntry(_, let content, let status):
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: status == "completed" ? "checkmark.circle" : "circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(status == "completed" ? Palette.moss : Color.secondary.opacity(0.55))
+                    .frame(width: 14, height: 14)
+                    .padding(.top, 2)
+                Text(content)
+                    .font(.system(size: 12))
+                    .foregroundStyle(status == "completed" ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.vertical, 3)
+            .overlay(alignment: .topLeading) {
+                ActivityTimelineSegments(
+                    connectAbove: connectAbove,
+                    connectBelow: connectBelow,
+                    iconTop: 5,
+                    iconSize: 14
+                )
+            }
         }
     }
 }

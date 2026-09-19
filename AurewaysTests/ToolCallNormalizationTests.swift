@@ -71,6 +71,41 @@ final class ToolCallNormalizationTests: XCTestCase {
         XCTAssertTrue(call.isTerminal)
         XCTAssertEqual(call.terminalCommand, "ls -la")
         XCTAssertEqual(call.displayTitle, "Execute `ls`")
+        XCTAssertEqual(call.intentDescription, "list files")
+        XCTAssertEqual(call.compactTitle, "list files")
+    }
+
+    
+    func testTerminalOutputUnwrapsStdoutJSON() throws {
+        let json = try JSONValue.decode(from: #"""
+        {
+            "toolCallId": "c-out",
+            "title": "Execute",
+            "kind": "execute",
+            "status": "completed",
+            "content": "{\"kind\":\"completed\",\"stdout\":\"hello\\nworld\",\"stderr\":\"\"}",
+            "rawInput": { "command": "echo hi" }
+        }
+        """#)
+        let call = ToolCallView(json: json)
+        XCTAssertEqual(call.terminalOutput, "hello\nworld")
+        XCTAssertEqual(call.terminalExitCode, 0)
+    }
+
+    func testCompactTitleFallsBackWithoutDescription() throws {
+        let json = try JSONValue.decode(from: """
+        {
+            "toolCallId": "c-desc-none",
+            "title": "Execute `ls`",
+            "kind": "execute",
+            "rawInput": {
+                "command": "ls"
+            }
+        }
+        """)
+        let call = ToolCallView(json: json)
+        XCTAssertNil(call.intentDescription)
+        XCTAssertEqual(call.compactTitle, "ls")
     }
 
     func testGrokSessionUpdateEnvelope() throws {

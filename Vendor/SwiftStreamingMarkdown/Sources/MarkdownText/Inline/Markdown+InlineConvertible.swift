@@ -177,13 +177,14 @@ extension Markdown.InlineCode: InlineConvertible {
         return NSMutableAttributedString(attachment: attachment)
       }
     }
-    var container = attributeContainer
-    container[.font] = config.inlineStyle.codeTextFont
-    container[.foregroundColor] = MDColor(config.inlineStyle.codeTextColor)
-    container[.backgroundColor] = MDColor(config.inlineStyle.codeBackgroundColor)
-    container[.underlineStyle] =  NSUnderlineStyle.patternDot.rawValue
-    container[.underlineColor] = MDColor(config.inlineStyle.codeUnderlineColor)
-    return NSMutableAttributedString(string: codeContent).mergingAttributes(container)
+    // Rounded chip via attachment — attributed backgroundColor cannot round corners.
+    let attachment = InlineCodeAttachment(
+      code: codeContent,
+      font: config.inlineStyle.codeTextFont,
+      textColor: MDColor(config.inlineStyle.codeTextColor),
+      backgroundColor: MDColor(config.inlineStyle.codeBackgroundColor)
+    )
+    return NSMutableAttributedString(attachment: attachment)
   }
 }
 
