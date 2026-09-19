@@ -126,6 +126,7 @@ Harness 要自己安装并登录，例如：
 - Codex / Claude：Node.js + `npx`，以及各自 CLI 登录
 - Oh My Pi：Bun + `omp`（`bun install -g @oh-my-pi/pi-coding-agent`），登录在 omp 自己的配置里。启动命令是 `omp acp`，自动批准会加 `--yolo`
 - Antigravity：官方 ACP 包 `agy_acp_server.par`（与 `localharness_external` 同目录，默认 `~/.local/share/antigravity-acp/`，wrapper 为 `agy_acp_server`）。`agy` CLI 没有 `--acp`，也不要用第三方 `npx agy-acp`。安装命令见仓库 README
+- Qoder：国际版（`@qoder-ai/qodercli` / `qoder`）与国内版（`@qodercn-ai/qoderclicn` / `qoderclicn`）。分别执行 `qoder login` 或 `qoderclicn login`。启动命令为 `qoder --acp` 或 `qoderclicn --acp`（自动检测安装的二进制），自动批准会加 `--yolo`
 
 ## 测试
 

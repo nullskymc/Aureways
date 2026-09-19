@@ -100,13 +100,15 @@ private struct UserBubble: View {
 
     private var attachmentRows: some View {
         let images = attachments.filter { $0.kind == "image" }
-        let files = attachments.filter { $0.kind != "image" }
+        let pastes = attachments.filter(\.isPastedText)
+        let files = attachments.filter { $0.kind != "image" && !$0.isPastedText }
         return VStack(alignment: .trailing, spacing: 6) {
             if !images.isEmpty {
                 HStack(alignment: .bottom, spacing: 6) {
                     ForEach(images) { UserAttachmentView(attachment: $0) }
                 }
             }
+            ForEach(pastes) { UserAttachmentView(attachment: $0) }
             if !files.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(files) { UserAttachmentView(attachment: $0) }
@@ -128,9 +130,36 @@ private struct UserAttachmentView: View {
     var body: some View {
         if attachment.kind == "image" {
             imageView
+        } else if attachment.isPastedText {
+            pasteCard
         } else {
             fileChip
         }
+    }
+
+    private var pasteCard: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(Palette.sky)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("粘贴的文本".localized)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                if attachment.characterCount > 0 {
+                    Text("%lld 字".localized(attachment.characterCount))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Palette.cardHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(.white.opacity(0.08))
+        )
     }
 
     @ViewBuilder

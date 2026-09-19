@@ -5266,18 +5266,34 @@
         }
       }
     },
-    "在右侧检查器中编辑此文本，发送时会一并交给 Agent。": {
+    "在右侧检查器中编辑此文本，发送时会把原文发给 Agent。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit this text in the inspector. It is included when you send."
+            "value": "Edit this text in the inspector. The original text is sent with the message."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在右侧检查器中编辑此文本，发送时会一并交给 Agent。"
+            "value": "在右侧检查器中编辑此文本，发送时会把原文发给 Agent。"
+          }
+        }
+      }
+    },
+    "%lld 字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld characters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 字"
           }
         }
       }

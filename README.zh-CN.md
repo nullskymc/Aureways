@@ -18,7 +18,7 @@
 ## 能做什么
 
 - **原生 Mac 界面**：统一工具栏、侧栏、系统偏好设置（`⌘,`）、浅色 / 深色跟随系统（可在偏好设置里覆盖）；文件在 Finder 中显示，终端是本机 PTY。
-- **任意 ACP Agent**：内置八家常见命令行 Agent，也可以在偏好设置里添加任意启动命令。会话按工作区列在侧栏，Agent 支持时可跨启动恢复。
+- **任意 ACP Agent**：内置九家常用命令行 Agent，也可以在偏好设置里添加任意启动命令。会话按工作区列在侧栏，Agent 支持时可跨启动恢复。
 - **流式对话**：Markdown 正文、可展开的思考、分组的工具调用、计划步骤。输入框支持 `/` 命令、`@` 引用工作区文件，以及图片和文件附件。超长转录已虚拟化，滚动成本只跟可见内容成正比。
 - **权限**：Agent 读写文件、执行命令前先征求确认；也可以改成由客户端代为批准。
 - **右侧工作台**（`⌘B`）：文件浏览器、文本编辑器（行号、`⌘S`、与 Agent 同时改文件时的冲突处理）、交互终端。每个打开的文件和终端各占一个标签，来回切换不丢状态。
@@ -49,10 +49,13 @@
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 | Oh My Pi | `omp acp` |
+| Qoder | `qoder --acp` / `qoderclicn --acp` |
 
 对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理，不进 Aureways 的设置。自定义 Agent 在偏好设置（`⌘,`）里添加。
 
 Oh My Pi 依赖 Bun（`>= 1.3.14`）。安装：`bun install -g @oh-my-pi/pi-coding-agent`，登录在 `omp` 里完成。自动批准会启动 `omp acp --yolo`。
+
+Qoder 同时支持国际版（`qoder`，安装 `@qoder-ai/qodercli`）与国内版（`qoderclicn`，安装 `@qodercn-ai/qoderclicn`）。Aureways 会自动检测 PATH 上已安装的 CLI。登录分别在 `qoder login` 或 `qoderclicn login` 中完成。自动批准会启动 `[qoder|qoderclicn] --acp --yolo`。
 
 Antigravity 的 `agy` CLI **没有** `--acp`。Google 另发一个 ACP 包：`agy_acp_server.par` 和 `localharness_external` 必须放在同一目录。Apple Silicon：
 

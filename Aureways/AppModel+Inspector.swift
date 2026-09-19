@@ -160,7 +160,8 @@ extension AppModel {
     }
 
     /// Persist an oversize composer paste as a workspace draft so the inspector
-    /// editor can save it and `session/prompt` can send it as a file resource.
+    /// can edit it and the composer can render a card. Send still reads the
+    /// file and emits a `text` content block.
     func capturePastedText(_ text: String) -> ComposerAttachment? {
         do {
             let url = try ComposerOverflow.write(text, inWorkspace: inspectorRoot)
@@ -177,8 +178,8 @@ extension AppModel {
         }
     }
 
-    /// Write dirty pasted-text drafts to disk before send so the agent reads
-    /// the inspector buffer, not the file as it was at paste time.
+    /// Write dirty pasted-text drafts to disk before send so the text block
+    /// carries the inspector buffer, not the file as it was at paste time.
     @discardableResult
     func flushPastedTextAttachments(_ attachments: [ComposerAttachment]) -> Bool {
         for attachment in attachments where attachment.kind == .pastedText {

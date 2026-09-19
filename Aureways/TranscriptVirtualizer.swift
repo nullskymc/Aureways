@@ -207,6 +207,8 @@ final class TranscriptHeightCache {
                 attachmentHeight = 0
             } else if attachments.contains(where: { $0.kind == "image" }) {
                 attachmentHeight = 156
+            } else if attachments.contains(where: \.isPastedText) {
+                attachmentHeight = 52
             } else {
                 attachmentHeight = 36
             }

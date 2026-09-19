@@ -234,9 +234,11 @@ final class ComposerTextViewTests: XCTestCase {
 
         let attachment = ComposerOverflow.pastedAttachment(url: url, characterCount: ComposerOverflow.utf16Count(text))
         XCTAssertEqual(attachment.kind, .pastedText)
-        XCTAssertEqual(attachment.transcriptAttachment.kind, "file")
+        XCTAssertEqual(attachment.transcriptAttachment.kind, "pastedText")
+        XCTAssertTrue(attachment.transcriptAttachment.isPastedText)
         XCTAssertEqual(attachment.transcriptAttachment.path, url.path)
         XCTAssertEqual(attachment.transcriptAttachment.mimeType, "text/plain")
+        XCTAssertEqual(attachment.transcriptAttachment.characterCount, ComposerOverflow.utf16Count(text))
 
         let tooLarge = String(repeating: "a", count: ComposerOverflow.maxBytes + 1)
         XCTAssertThrowsError(try ComposerOverflow.write(tooLarge, inWorkspace: root.path)) { error in

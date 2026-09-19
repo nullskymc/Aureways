@@ -152,6 +152,52 @@ final class ProtocolTests: XCTestCase {
         }
     }
 
+    func testOutgoingMessageSendsPastedTextAsTextBlock() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let paste = String(repeating: "字", count: ComposerOverflow.inlineUTF16Limit + 10)
+        let url = try ComposerOverflow.write(paste, inWorkspace: directory.path)
+        let attachment = ComposerOverflow.pastedAttachment(
+            url: url,
+            characterCount: ComposerOverflow.utf16Count(paste)
+        ).transcriptAttachment
+        XCTAssertEqual(attachment.kind, "pastedText")
+
+        let message = OutgoingMessage(text: "请看这段", attachments: [attachment])
+        let off = PromptCapabilities(image: true, audio: false, embeddedContext: false)
+        let blocks = message.contentBlocks(promptCapabilities: off)
+        XCTAssertEqual(blocks.count, 2)
+        if case .text(let text) = blocks[0] {
+            XCTAssertEqual(text, "请看这段")
+        } else {
+            XCTFail("expected composer text block")
+        }
+        if case .text(let text) = blocks[1] {
+            XCTAssertEqual(text, paste)
+        } else {
+            XCTFail("expected original paste as text, not resource / resource_link")
+        }
+
+        let asFile = TranscriptAttachment(
+            id: UUID(),
+            kind: "file",
+            name: url.lastPathComponent,
+            path: url.path,
+            mimeType: "text/plain",
+            imageBase64: nil
+        )
+        XCTAssertTrue(asFile.isPastedText)
+        let compat = OutgoingMessage(text: "", attachments: [asFile]).contentBlocks()
+        XCTAssertEqual(compat.count, 1)
+        if case .text(let text) = compat[0] {
+            XCTAssertEqual(text, paste)
+        } else {
+            XCTFail("paste-path file attachments should still send as text")
+        }
+    }
+
     func testMcpServerAndUsageDecoding() throws {
         let stdio = McpServerConfig(name: "fs", command: "/usr/bin/mcp", arguments: ["--root", "/tmp"])
         let payload = stdio.json(capabilities: McpCapabilities(http: false, sse: false))
@@ -488,6 +534,15 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(omp.launchArguments(autoApprove: false), ["acp"])
         XCTAssertEqual(omp.launchArguments(autoApprove: true), ["acp", "--yolo"])
         XCTAssertNil(omp.sessionMeta(autoApprove: true))
+
+        XCTAssertTrue(ids.contains(QoderHarness.id))
+        let qoder = QoderHarness()
+        XCTAssertTrue(qoder.profile.command == "qoder" || qoder.profile.command == "qoderclicn")
+        XCTAssertEqual(qoder.profile.arguments, ["--acp"])
+        XCTAssertEqual(qoder.launchArguments(autoApprove: false), ["--acp"])
+        XCTAssertEqual(qoder.launchArguments(autoApprove: true), ["--acp", "--yolo"])
+        XCTAssertNil(qoder.sessionMeta(autoApprove: true))
+        XCTAssertEqual(HarnessRegistry.migrateAgentId("qoder-cn"), QoderHarness.id)
     }
 
     func testGrokImageCapabilityOverride() {
@@ -1386,6 +1441,74 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(attachments.count, 1)
         XCTAssertEqual(attachments.first?.kind, "file")
         XCTAssertEqual(attachments.first?.path, path)
+        XCTAssertTrue(attachments.first?.isPastedText == true)
+        XCTAssertFalse(text.contains("字"))
+    }
+
+    @MainActor
+    func testUserOverflowTextChunkRendersAsCardNotBubble() {
+        let profile = AgentProfile(
+            id: "test", title: "Test", subtitle: "", command: "test",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let paste = String(repeating: "段", count: ComposerOverflow.inlineUTF16Limit + 10)
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.text(paste)),
+            messageId: "msg_overflow"
+        ))
+
+        XCTAssertEqual(session.items.count, 1)
+        guard case .user(_, let text, let attachments) = session.items.first else {
+            return XCTFail("expected user item")
+        }
+        XCTAssertEqual(text, "")
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments.first?.kind, "pastedText")
+        XCTAssertEqual(attachments.first?.characterCount, ComposerOverflow.utf16Count(paste))
+        XCTAssertFalse(text.contains("段"))
+    }
+
+    @MainActor
+    func testUserOverflowTextEchoDoesNotDumpIntoBubbleWhenPasteCardPresent() {
+        let profile = AgentProfile(
+            id: "test", title: "Test", subtitle: "", command: "test",
+            arguments: [], builtIn: false, notes: ""
+        )
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        let path = "/tmp/.aureways/pastes/paste-echo.txt"
+        let paste = String(repeating: "字", count: ComposerOverflow.inlineUTF16Limit + 25)
+        session.appendUser("请看这段", attachments: [
+            TranscriptAttachment(
+                id: UUID(),
+                kind: "pastedText",
+                name: "paste-echo.txt",
+                path: path,
+                mimeType: "text/plain",
+                imageBase64: nil,
+                characterCount: ComposerOverflow.utf16Count(paste)
+            )
+        ])
+
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.text("请看这段")),
+            messageId: "msg_echo"
+        ))
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .userMessageChunk(.text(paste)),
+            messageId: "msg_echo"
+        ))
+
+        XCTAssertEqual(session.items.count, 1)
+        guard case .user(_, let text, let attachments) = session.items.first else {
+            return XCTFail("expected user item")
+        }
+        XCTAssertEqual(text, "请看这段")
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments.first?.kind, "pastedText")
         XCTAssertFalse(text.contains("字"))
     }
 

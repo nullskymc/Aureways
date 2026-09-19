@@ -842,13 +842,12 @@ final class ChatSession: Identifiable {
     private func applyUserChunk(_ content: ContentBlock, messageId: String? = nil) -> UserChunkApply {
         endCurrentRun()
 
-        let attachment = TranscriptAttachment(contentBlock: content)
-        // Image / file / paste drafts are attachments. `ContentBlock.text` on a
-        // `resource` is the embedded payload — putting it in the bubble typesets
-        // the whole paste in history, which is what the composer card avoided.
-        let text = attachment == nil ? (content.text ?? "") : ""
-
-        guard !text.isEmpty || attachment != nil else { return .ignored }
+        let fromBlock = TranscriptAttachment(contentBlock: content)
+        // Image / file / paste drafts are attachments. Overflow `text` is the
+        // original paste we sent — the composer card exists so history does not
+        // typeset that payload. Same for `resource.text` on replay of old sends.
+        let rawText = fromBlock == nil ? (content.text ?? "") : ""
+        let isOverflowText = fromBlock == nil && ComposerOverflow.exceedsInlineLimit(rawText)
 
         func isDuplicateAttachment(_ a: TranscriptAttachment, in existing: [TranscriptAttachment]) -> Bool {
             existing.contains { b in
@@ -872,6 +871,31 @@ final class ChatSession: Identifiable {
                 isSameMessage = false
             }
         }
+
+        if isOverflowText, isSameMessage, case .user(_, _, let existing) = items.last,
+           existing.contains(where: \.isPastedText) {
+            return .ignored
+        }
+
+        let attachment: TranscriptAttachment?
+        let text: String
+        if isOverflowText {
+            attachment = TranscriptAttachment(
+                id: UUID(),
+                kind: "pastedText",
+                name: "粘贴的文本".localized,
+                path: nil,
+                mimeType: "text/plain",
+                imageBase64: nil,
+                characterCount: ComposerOverflow.utf16Count(rawText)
+            )
+            text = ""
+        } else {
+            attachment = fromBlock
+            text = rawText
+        }
+
+        guard !text.isEmpty || attachment != nil else { return .ignored }
 
         if isSameMessage, case .user(let id, let existingText, var existingAttachments) = items.last {
             if let messageId {

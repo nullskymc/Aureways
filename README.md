@@ -18,7 +18,7 @@ Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com)
 ## Features
 
 - **Native Mac surfaces** — unified toolbar, sidebar, system Settings (`⌘,`), light/dark following the system (overridable in Settings). "Reveal in Finder" and a real PTY terminal, not a web approximation.
-- **Any ACP agent** — eight agents ship built in, or add any launch command from Settings. Sessions live under their workspace in the sidebar and restore across launches when the agent supports it.
+- **Any ACP agent** — nine agents ship built in, or add any launch command from Settings. Sessions live under their workspace in the sidebar and restore across launches when the agent supports it.
 - **Streaming transcript** — Markdown body, collapsible thinking, grouped tool calls, plan steps. The composer takes `/` commands, `@` workspace-file references, and image/file attachments. Long transcripts are virtualized so scrolling stays cheap.
 - **Permissions** — the agent asks before reading/writing files or running commands; you can instead let the client approve on its behalf.
 - **Workbench** (`⌘B`) — a file browser, a text editor (line numbers, `⌘S`, conflict handling when you and the agent edit the same file), and interactive terminals. Every open file and terminal keeps its own tab, so switching doesn't lose state.
@@ -49,10 +49,13 @@ Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com)
 | Cursor Agent | `cursor-agent acp` |
 | OpenCode | `opencode acp` |
 | Oh My Pi | `omp acp` |
+| Qoder | `qoder --acp` / `qoderclicn --acp` |
 
 Install and sign in to the matching CLI first. Login and API keys live in each vendor's own tool — they don't go through Aureways. Add custom agents in Settings (`⌘,`).
 
 Oh My Pi is a Bun CLI (`engines.bun >= 1.3.14`). Install with `bun install -g @oh-my-pi/pi-coding-agent`, then authenticate inside `omp`. Auto-approve launches `omp acp --yolo`.
+
+Qoder supports both the international CLI (`qoder`, via `@qoder-ai/qodercli`) and mainland-China CLI (`qoderclicn`, via `@qodercn-ai/qoderclicn`). Aureways automatically detects whichever binary is available on PATH. Run `qoder login` or `qoderclicn login` first. Auto-approve launches with `--acp --yolo`.
 
 Antigravity's CLI (`agy`) has no `--acp` mode. Google publishes a separate ACP server (`agy_acp_server.par` + `localharness_external` in the same directory). On Apple Silicon:
 

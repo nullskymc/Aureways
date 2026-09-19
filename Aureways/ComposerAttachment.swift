@@ -100,8 +100,9 @@ struct ComposerAttachment: Identifiable {
 }
 
 /// Huge composer pastes skip NSTextView / SwiftUI `Text` layout. The payload
-/// is written under `{cwd}/.aureways/pastes/` so the inspector editor can
-/// save it and `session/prompt` can send it as a file resource.
+/// is written under `{cwd}/.aureways/pastes/` so the inspector can edit it
+/// and the composer/transcript can render a card. `session/prompt` still
+/// sends the file contents as a `text` block, not a file link.
 enum ComposerOverflow {
     /// Above this UTF-16 length, paste becomes a sidebar-editable draft.
     static let inlineUTF16Limit = 2_000
@@ -177,6 +178,12 @@ struct TranscriptAttachment: Codable, Equatable, Sendable, Identifiable {
     var path: String?
     var mimeType: String?
     var imageBase64: String?
+    /// UTF-16 length for `.pastedText` cards; 0 for other kinds.
+    var characterCount: Int = 0
+
+    var isPastedText: Bool {
+        kind == "pastedText" || (path.map(ComposerOverflow.isPastePath) ?? false)
+    }
 }
 
 extension TranscriptAttachment {
@@ -294,6 +301,12 @@ struct OutgoingMessage: Equatable, Sendable {
         let allowImage = promptCapabilities?.allowsImage ?? true
         let allowEmbedded = promptCapabilities?.allowsEmbeddedContext ?? true
         for attachment in attachments {
+            if attachment.isPastedText {
+                if let text = Self.pastedText(from: attachment) {
+                    blocks.append(.text(text))
+                }
+                continue
+            }
             switch attachment.kind {
             case "image":
                 blocks.append(contentsOf: Self.imageBlocks(attachment, allowImage: allowImage))
@@ -304,6 +317,17 @@ struct OutgoingMessage: Equatable, Sendable {
             }
         }
         return blocks
+    }
+
+    /// Overflow drafts are cards in the UI only. The agent still receives the
+    /// original characters as a `text` content block.
+    private static func pastedText(from attachment: TranscriptAttachment) -> String? {
+        guard let path = attachment.path else { return nil }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)), !data.isEmpty,
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return text
     }
 
     private static func imageBlocks(_ attachment: TranscriptAttachment, allowImage: Bool) -> [ContentBlock] {
@@ -375,13 +399,20 @@ func fileURI(_ path: String) -> String {
 
 extension ComposerAttachment {
     var transcriptAttachment: TranscriptAttachment {
+        let kindName: String
+        switch kind {
+        case .image: kindName = "image"
+        case .pastedText: kindName = "pastedText"
+        case .file: kindName = "file"
+        }
         let attachment = TranscriptAttachment(
             id: id,
-            kind: kind == .image ? "image" : "file",
+            kind: kindName,
             name: name,
             path: url?.path,
             mimeType: mimeType,
-            imageBase64: imageData?.base64EncodedString()
+            imageBase64: imageData?.base64EncodedString(),
+            characterCount: characterCount
         )
         if kind == .image {
             TranscriptImageStore.prefetch(attachment, image: thumbnail ?? imageData.flatMap(NSImage.init(data:)))

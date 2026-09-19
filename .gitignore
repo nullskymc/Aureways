@@ -13,3 +13,6 @@ xcuserdata
 .vscode
 *.log
 Aureways.app
+
+# Workspace paste drafts and local Aureways state
+.aureways/

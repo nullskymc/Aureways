@@ -146,6 +146,7 @@ enum HarnessRegistry {
             CursorHarness(),
             OpenCodeHarness(),
             OhMyPiHarness(),
+            QoderHarness(),
         ]
     }
 
@@ -160,6 +161,8 @@ enum HarnessRegistry {
         switch id {
         case "gemini":
             return AntigravityHarness.id
+        case "qoder-cn":
+            return QoderHarness.id
         default:
             return id
         }

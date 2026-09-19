@@ -766,7 +766,7 @@ private struct PastedTextCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
-        .help("在右侧检查器中编辑此文本，发送时会一并交给 Agent。".localized)
+        .help("在右侧检查器中编辑此文本，发送时会把原文发给 Agent。".localized)
         .overlay(alignment: .topTrailing) {
             Button(action: onRemove) {
                 Image(systemName: "xmark")

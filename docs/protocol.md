@@ -54,6 +54,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | Codex | 文件编辑标题固定 `Editing files`，只有 `content[].diff`、没有 `locations`；命令完成用 `formatted_output`/`exit_code`；MCP 包一层 `{server,tool,arguments}` | `normalizeToolCall`：从 diff 补 locations 和标题，输出字段别名，解开 MCP 信封 |
 | OpenCode | camelCase（`filePath`/`workdir`）；pending 标题是工具名 `read`/`write`/`bash`；write 完成后 title 变成相对路径 | `normalizeToolCall`：别名 `path`/`cwd`，从工具名推断 `kind`，路径标题改成 `Edit foo.ts`，必要时从 `content` 合成 diff |
 | Oh My Pi | 文件工具用 `path`；move 用 `oldPath`/`newPath`；完成后的 diff 在 `rawOutput.details` | `normalizeToolCall`：补 locations，把 nested diff 提升到 `content` |
+| Qoder | `initialize` 按规范（protocolVersion 1、`loadSession`、图片输入）；未登录时 `session/new` 直接回 `-32000 Authentication required`；`--acp` / `--yolo` 都不在 `--help` 里；国际版（`qoder`）与国内版（`qoderclicn`）协议一致 | 暂无改写钩子。自动检测已安装的 CLI（优先 `qoder`，次选 `qoderclicn`）。鉴权走 `HarnessRuntime.withAuthentication` 的懒重试，取第一个 authMethod |
 | Antigravity | MCP 信封 `{ServerName,ToolName,Arguments:{CommandLine,Cwd}}` 且 `kind: other`；文件键是 `TargetFile`；输出是 `combinedOutput`/`exitCode` | `normalizeToolCall`：拆信封、Pascal/snake 别名、按工具名表填 `kind` |
 | Copilot / Cursor | ACP 适配器闭源，键名未核实 | 保守地走同一套常见别名；不要把猜测写进 `ToolCallView` |
 
