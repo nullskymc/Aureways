@@ -354,9 +354,9 @@ private struct ActivityCard: View {
     }
 
     private var isBusy: Bool {
-        isLive || toolCalls.contains { tool in
-            !ChatSession.terminalToolStatuses.contains(tool.call.status.lowercased())
-        }
+        if toolCalls.contains(where: { $0.call.showsProgress }) { return true }
+        // 还没有工具时，流式中的思考仍算进行中；工具都出结果后不要跟整段流式一起转。
+        return isLive && toolCalls.isEmpty
     }
 
     private var failedCount: Int {

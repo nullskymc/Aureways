@@ -408,6 +408,22 @@ struct ToolCallView: Sendable, Equatable {
         return .other
     }
 
+    /// 转圈只跟这次工具有没有出结果，不跟整段 agent 流式绑在一起。
+    /// 不少 harness 在 `tool_call_update` 里已经带了 diff / 正文，却把 `status`
+    /// 留在 `in_progress` 直到整轮结束——编辑行就会一直转。
+    var showsProgress: Bool {
+        let live = ["", "pending", "in_progress", "running"].contains(status.lowercased())
+        guard live else { return false }
+        switch cardLayout {
+        case .edit:
+            return diffs.isEmpty
+        case .file, .search, .fetch:
+            return contents.isEmpty && contentText.isEmpty
+        case .command, .other:
+            return true
+        }
+    }
+
     var filePath: String? {
         if let path = locations.first?.path, !path.isEmpty { return path }
         return Self.extractNonEmptyString(from: rawInput, keys: ["path"])

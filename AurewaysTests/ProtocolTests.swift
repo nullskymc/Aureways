@@ -1663,6 +1663,35 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(ToolCallView(json: other).cardLayout, .other)
     }
 
+    func testEditWithDiffStopsProgressWhileStatusStillInProgress() throws {
+        let json = try JSONValue.decode(from: """
+        {"toolCallId":"e","title":"Edit","kind":"edit","status":"in_progress","content":[{"type":"diff","path":"/tmp/a.swift","oldText":"a","newText":"b"}]}
+        """)
+        let call = ToolCallView(json: json)
+        XCTAssertEqual(call.cardLayout, .edit)
+        XCTAssertEqual(call.status, "in_progress")
+        XCTAssertFalse(call.showsProgress, "已有 diff 就不要再转，哪怕 harness 还没发 completed")
+    }
+
+    func testEditWithoutDiffKeepsProgress() throws {
+        let json = try JSONValue.decode(from: """
+        {"toolCallId":"e","title":"Edit","kind":"edit","status":"in_progress"}
+        """)
+        XCTAssertTrue(ToolCallView(json: json).showsProgress)
+    }
+
+    func testCommandKeepsProgressUntilTerminalStatus() throws {
+        let running = try JSONValue.decode(from: """
+        {"toolCallId":"c","title":"ls","kind":"execute","status":"in_progress","rawInput":{"command":"ls"},"content":[{"type":"text","text":"partial"}]}
+        """)
+        XCTAssertTrue(ToolCallView(json: running).showsProgress)
+
+        let done = try JSONValue.decode(from: """
+        {"toolCallId":"c","title":"ls","kind":"execute","status":"completed","rawInput":{"command":"ls"}}
+        """)
+        XCTAssertFalse(ToolCallView(json: done).showsProgress)
+    }
+
     func testGrokExitPlanModeExtRequestIsAnswered() async throws {
         let seen = TextBox()
         let connection = try await launchMock(

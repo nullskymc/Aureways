@@ -10,7 +10,7 @@ struct ToolCompactRow: View {
     let onToggle: () -> Void
 
     private var isRunning: Bool {
-        ["in_progress", "running"].contains(call.status.lowercased())
+        call.showsProgress
     }
 
     var body: some View {
