@@ -228,7 +228,10 @@ final class WindowProbeView: NSView {
 
     private func configure(_ window: NSWindow?, appearance: ColorScheme?) {
         guard let window else { return }
-        window.appearance = appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
+        let target = appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
+        if window.appearance?.name != target?.name {
+            window.appearance = target
+        }
     }
 }
 

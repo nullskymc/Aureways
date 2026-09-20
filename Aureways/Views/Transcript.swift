@@ -47,6 +47,13 @@ struct TranscriptView: View {
                         .frame(height: window.bottomHeight)
                         .accessibilityHidden(true)
                 }
+                // 输入卡是浮在画布上的 overlay，留白由滚动区底部的占位垫高。
+                // 不使用 .safeAreaPadding：动态 safeArea 会在跨屏幕/缩放时通过 didChangeValueForKey
+                // 触发 NSHostingView.invalidateSafeAreaInsets() -> setNeedsUpdateConstraints，
+                // 在 AppKit layout 周期内产生死循环反馈崩溃。
+                Color.clear
+                    .frame(height: max(composerHeight + 24, 72))
+                    .accessibilityHidden(true)
             }
             .frame(maxWidth: 780, alignment: .top)
             .padding(.horizontal, 24)
@@ -54,18 +61,18 @@ struct TranscriptView: View {
             .frame(maxWidth: .infinity)
             .transaction { $0.animation = nil }
         }
-        // 输入卡是浮在画布上的 overlay，所以留白得由滚动区自己让出来。用
-        // safeAreaPadding 而不是塞在 stack 里的 padding：scrollTo(edge:) 认安全区，
-        // 最后一条消息会停在卡片上方，而不是滑到卡片底下。
-        .safeAreaPadding(.bottom, max(composerHeight + 24, 72))
         .scrollPosition($scrollPosition)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollEdgeEffectStyle(.hard, for: .bottom)
         .composerBar(session: session)
         .onPreferenceChange(ComposerHeightKey.self) { newHeight in
-            if abs(composerHeight - newHeight) > 0.5 {
-                composerHeight = newHeight
+            let target = max((newHeight * 2).rounded() / 2, 0)
+            guard abs(composerHeight - target) >= 1.0 else { return }
+            DispatchQueue.main.async {
+                if abs(composerHeight - target) >= 1.0 {
+                    composerHeight = target
+                }
             }
         }
         // 位置跟随只认「最后一块是否可见」，不读 contentOffset / contentSize：

@@ -44,7 +44,8 @@ struct ComposerDock: View {
         .padding(.bottom, 10)
         .background {
             GeometryReader { geo in
-                Color.clear.preference(key: ComposerHeightKey.self, value: geo.size.height)
+                let rounded = (geo.size.height * 2).rounded() / 2
+                Color.clear.preference(key: ComposerHeightKey.self, value: rounded)
             }
         }
     }

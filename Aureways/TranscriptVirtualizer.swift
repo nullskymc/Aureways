@@ -13,6 +13,13 @@ struct TranscriptWindow: Equatable {
 
     static let empty = TranscriptWindow(start: 0, end: 0, topHeight: 0, bottomHeight: 0)
 
+    static func == (lhs: TranscriptWindow, rhs: TranscriptWindow) -> Bool {
+        lhs.start == rhs.start
+            && lhs.end == rhs.end
+            && abs(lhs.topHeight - rhs.topHeight) < 0.5
+            && abs(lhs.bottomHeight - rhs.bottomHeight) < 0.5
+    }
+
     func clamped(to count: Int) -> TranscriptWindow {
         let start = min(max(self.start, 0), count)
         let end = min(max(self.end, start), count)
