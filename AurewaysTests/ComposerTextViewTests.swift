@@ -14,6 +14,7 @@ final class ComposerTextViewTests: XCTestCase {
         var attachments: [[ComposerAttachment]] = []
         var commands: [ComposerCommand] = []
         var overflowTexts: [String] = []
+        var heights: [CGFloat] = []
         var pasteTooLargeCount = 0
         weak var coordinator: ComposerCoordinator?
     }
@@ -27,6 +28,7 @@ final class ComposerTextViewTests: XCTestCase {
                 onAttachments: { box.attachments.append($0) },
                 onOverflowText: { box.overflowTexts.append($0) },
                 onPasteTooLarge: { box.pasteTooLargeCount += 1 },
+                onHeightChanged: { box.heights.append($0) },
                 onCommand: { command in
                     box.commands.append(command)
                     return true
@@ -106,6 +108,29 @@ final class ComposerTextViewTests: XCTestCase {
         textView.insertText(" world")
         drainRunloop()
         XCTAssertEqual(box.draft, "你好 world", "连续输入应持续同步")
+    }
+
+    func testDoCommandByConsumesCompleteAsCancel() throws {
+        let (textView, box) = try makeHostedTextView()
+        window.makeFirstResponder(textView)
+        box.commands = []
+
+        let handled = textView.delegate?.textView?(textView, doCommandBy: #selector(NSResponder.complete(_:))) as? Bool
+        XCTAssertEqual(handled, true, "Esc 走 complete: 时应被消费，避免弹出系统补全面板")
+        XCTAssertEqual(box.commands, [.cancel])
+    }
+
+    func testCalculateTextHeightGrowsWithLineBreaks() throws {
+        let (textView, box) = try makeHostedTextView()
+        let empty = textView.calculateTextHeight()
+        XCTAssertGreaterThanOrEqual(empty, 20)
+
+        textView.insertText("one\ntwo\nthree\nfour")
+        drainRunloop()
+        let stacked = textView.calculateTextHeight()
+        XCTAssertGreaterThan(stacked, empty, "换行后 TextKit 高度应增加，不能再靠隐藏 Text 镜像")
+        XCTAssertFalse(box.heights.isEmpty, "高度变化应回传 onHeightChanged")
+        XCTAssertEqual(box.heights.last ?? 0, stacked, accuracy: 0.5)
     }
 
     func testDoCommandByReportsConfirm() throws {

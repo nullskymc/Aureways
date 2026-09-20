@@ -102,13 +102,6 @@ struct ComposerHeightKey: PreferenceKey {
     }
 }
 
-private struct ComposerCardTextHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 20
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 private struct QuotaOverlayHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -209,17 +202,6 @@ struct ComposerCard: View {
             }
 
             ZStack(alignment: .topLeading) {
-                Text(draft.isEmpty ? " " : draft)
-                    .font(.system(size: 13.5))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .hidden()
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .background {
-                        GeometryReader { geo in
-                            Color.clear.preference(key: ComposerCardTextHeightKey.self, value: geo.size.height)
-                        }
-                    }
-
                 if draft.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 13.5))
@@ -235,12 +217,16 @@ struct ComposerCard: View {
                     onPasteTooLarge: {
                         model.errorMessage = "粘贴内容超过 2MB，暂不支持在编辑器中打开".localized
                     },
+                    onHeightChanged: { newHeight in
+                        if abs(measuredHeight - newHeight) > 0.5 {
+                            measuredHeight = newHeight
+                        }
+                    },
                     onCommand: handleCommand,
                     coordinatorSink: { editor.coordinator = $0 }
                 )
                 .frame(height: editorHeight)
             }
-            .onPreferenceChange(ComposerCardTextHeightKey.self) { measuredHeight = $0 }
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)

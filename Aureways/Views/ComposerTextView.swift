@@ -15,6 +15,8 @@ final class ComposerTextView: NSTextView {
     var attachmentHandler: (([ComposerAttachment]) -> Void)?
     var overflowHandler: ((String) -> Void)?
     var pasteTooLargeHandler: (() -> Void)?
+    var onHeightChanged: ((CGFloat) -> Void)?
+    private var lastReportedHeight: CGFloat = 0
 
     // 不覆写任何构造器（与文件编辑器的 SaveTextView 一致）：覆写 designated
     // init(frame:textContainer:) 后经它创建会绕开 NSTextView 默认 TextKit 装配，
@@ -102,6 +104,32 @@ final class ComposerTextView: NSTextView {
         let types = pasteboard.types ?? []
         return types.contains(.fileURL) || types.contains(.tiff) || types.contains(.png)
     }
+
+    /// 由 TextKit layoutManager 直接计算排版高度，无需隐藏镜像视图或 PreferenceKey。
+    func calculateTextHeight() -> CGFloat {
+        guard let layoutManager, let textContainer else { return 20 }
+        layoutManager.ensureLayout(for: textContainer)
+        let used = layoutManager.usedRect(for: textContainer).height
+        return max(20, (used * 2).rounded() / 2)
+    }
+
+    /// 宽度变化（窗口缩放）也会改换行高度；阈值避免 layout 每帧回写 @State。
+    func reportHeightIfNeeded() {
+        let height = calculateTextHeight()
+        guard abs(height - lastReportedHeight) > 0.5 else { return }
+        lastReportedHeight = height
+        onHeightChanged?(height)
+    }
+
+    override func layout() {
+        super.layout()
+        let height = calculateTextHeight()
+        guard abs(height - lastReportedHeight) > 0.5 else { return }
+        // 宽度变化换行发生在 AppKit 布局里，不能同步写 SwiftUI @State。
+        DispatchQueue.main.async { [weak self] in
+            self?.reportHeightIfNeeded()
+        }
+    }
 }
 
 struct ComposerTextRepresentable: NSViewRepresentable {
@@ -110,6 +138,7 @@ struct ComposerTextRepresentable: NSViewRepresentable {
     let onAttachments: ([ComposerAttachment]) -> Void
     var onOverflowText: (String) -> Void = { _ in }
     var onPasteTooLarge: () -> Void = {}
+    var onHeightChanged: ((CGFloat) -> Void)? = nil
     let onCommand: (ComposerCommand) -> Bool
     let coordinatorSink: (ComposerCoordinator) -> Void
 
@@ -135,8 +164,7 @@ struct ComposerTextRepresentable: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.font = .systemFont(ofSize: 13.5)
         textView.drawsBackground = false
-        // 与隐藏镜像 Text 左缘对齐：去掉 NSTextView 自带的行内边距，
-        // 替代原 TextEditor 方案的 .padding(.leading, -5) 技巧。
+        // 去掉 NSTextView 自带的行内边距，和卡片文字左缘对齐。
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
@@ -160,6 +188,10 @@ struct ComposerTextRepresentable: NSViewRepresentable {
         textView.pasteTooLargeHandler = { [weak coordinator = context.coordinator] in
             guard let coordinator else { return }
             coordinator.parent.onPasteTooLarge()
+        }
+        textView.onHeightChanged = { [weak coordinator = context.coordinator] height in
+            guard let coordinator else { return }
+            coordinator.parent.onHeightChanged?(height)
         }
         coordinatorSink(context.coordinator)
         return scrollView
@@ -214,6 +246,7 @@ final class ComposerCoordinator: NSObject, NSTextViewDelegate {
         parent.draft = text
         applyingProgrammaticChange = false
         textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        notifyHeightChanged()
     }
 
     /// 在指定范围插入文本（@补全确认用），textDidChange 不再重复写 draft。
@@ -223,12 +256,18 @@ final class ComposerCoordinator: NSObject, NSTextViewDelegate {
         textView.insertText(text, replacementRange: range)
         parent.draft = textView.string
         applyingProgrammaticChange = false
+        notifyHeightChanged()
+    }
+
+    fileprivate func notifyHeightChanged() {
+        textView?.reportHeightIfNeeded()
     }
 
     nonisolated func textDidChange(_ notification: Notification) {
         MainActor.assumeIsolated {
             guard !applyingProgrammaticChange, let textView else { return }
             parent.draft = textView.string
+            notifyHeightChanged()
         }
     }
 
@@ -262,7 +301,8 @@ final class ComposerCoordinator: NSObject, NSTextViewDelegate {
                 return parent.onCommand(.cancel)
             case #selector(NSResponder.complete(_:)):
                 // NSTextView 把 Esc 绑到 complete:（补全面板）；弹层开着时优先当作关闭弹层。
-                return parent.onCommand(.cancel)
+                _ = parent.onCommand(.cancel)
+                return true
             default:
                 return false
             }

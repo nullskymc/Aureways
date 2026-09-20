@@ -63,7 +63,11 @@ struct TranscriptView: View {
         .scrollEdgeEffectStyle(.soft, for: .top)
         .scrollEdgeEffectStyle(.hard, for: .bottom)
         .composerBar(session: session)
-        .onPreferenceChange(ComposerHeightKey.self) { composerHeight = $0 }
+        .onPreferenceChange(ComposerHeightKey.self) { newHeight in
+            if abs(composerHeight - newHeight) > 0.5 {
+                composerHeight = newHeight
+            }
+        }
         // 位置跟随只认「最后一块是否可见」，不读 contentOffset / contentSize：
         // 未放置部分的高度是缓存值，拿绝对偏移做判断会随估算漂移。
         .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.1) { visible in
