@@ -38,6 +38,7 @@ extension WebShellBridge {
                     "enabled": model.isAgentEnabled(agent),
                     "available": model.availability[agent.id] == true,
                     "quotaRefreshing": model.quotaStore.isRefreshing[agent.id] == true,
+                    "quotaSupported": model.quotaStore.supportsQuota(agent.id),
                 ]
             },
             "workspaces": model.workspaces.map { ["path": $0.path, "name": $0.name] },
@@ -64,7 +65,8 @@ extension WebShellBridge {
         for (id, snapshot) in store.snapshots {
             guard let data = try? encoder.encode(snapshot),
                   var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            object["severity"] = snapshot.overallSeverity.rawValue
+            let hasData = snapshot.mostUrgentWindow != nil || snapshot.creditsRemaining != nil
+            object["severity"] = hasData ? snapshot.overallSeverity.rawValue : "unknown"
             object["summary"] = snapshot.shortSummary
             object["fetchedAt"] = snapshot.fetchedAt.timeIntervalSince1970 * 1000
             if let next = store.nextAllowedFetch(for: id) {

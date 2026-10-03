@@ -3,7 +3,7 @@ import { t, relativeTime } from '../i18n'
 import type { QuotaSnapshot, QuotaWindow, SettingsAgent } from '../types'
 import { HarnessIcon, Icon, Spinner } from '../components/Icon'
 
-export function QuotaCard({ agent, snapshot, compact = false }: { agent: SettingsAgent | { id: string; title: string; quotaRefreshing?: boolean; available?: boolean }; snapshot?: QuotaSnapshot; compact?: boolean }) {
+export function QuotaCard({ agent, snapshot, compact = false }: { agent: SettingsAgent | { id: string; title: string; quotaRefreshing?: boolean; quotaSupported?: boolean; available?: boolean }; snapshot?: QuotaSnapshot; compact?: boolean }) {
   const windows = snapshot ? [snapshot.primaryWindow, snapshot.secondaryWindow, ...(snapshot.extraWindows ?? [])].filter(Boolean) as QuotaWindow[] : []
   return (
     <div class={'quota-card' + (compact ? ' compact' : '')}>
@@ -17,7 +17,7 @@ export function QuotaCard({ agent, snapshot, compact = false }: { agent: Setting
         </button>
       </div>
       {!snapshot ? (
-        <div class="quota-empty">{agent.available === false ? t('notInstalled') : t('noQuota')}</div>
+        <div class="quota-empty">{agent.available === false ? t('notInstalled') : agent.quotaSupported ? t('quotaErr_notConfigured') : t('noQuota')}</div>
       ) : snapshot.error && windows.length === 0 && snapshot.creditsRemaining == null && !snapshot.usageBreakdown?.length ? (
         <div class="quota-empty bad">{quotaError(snapshot.error)}</div>
       ) : (

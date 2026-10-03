@@ -41,7 +41,7 @@ export function MenuBar() {
             {agents.map((a) => (
               <button key={a.id} class={'mb-agent' + (a.id === current?.id ? ' on' : '')} title={a.title} onClick={() => (tab.value = a.id)}>
                 <HarnessIcon id={a.id} size={13} />
-                {state.quota[a.id] && <span class={'mb-sev ' + state.quota[a.id].severity} />}
+                {state.quota[a.id] && state.quota[a.id].severity !== 'unknown' && <span class={'mb-sev ' + state.quota[a.id].severity} />}
               </button>
             ))}
           </div>

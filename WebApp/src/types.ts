@@ -70,7 +70,7 @@ export interface AppState {
 
 export interface SettingsAgent {
   id: string; title: string; subtitle: string; builtIn: boolean; launchLine: string; notes: string
-  enabled: boolean; available: boolean; quotaRefreshing: boolean
+  enabled: boolean; available: boolean; quotaRefreshing: boolean; quotaSupported?: boolean
 }
 
 export interface Settings {
