@@ -18,10 +18,11 @@ export function QuotaCard({ agent, snapshot, compact = false }: { agent: Setting
       </div>
       {!snapshot ? (
         <div class="quota-empty">{agent.available === false ? t('notInstalled') : t('noQuota')}</div>
-      ) : snapshot.error ? (
-        <div class="quota-empty bad">{snapshot.error}</div>
+      ) : snapshot.error && windows.length === 0 && snapshot.creditsRemaining == null && !snapshot.usageBreakdown?.length ? (
+        <div class="quota-empty bad">{quotaError(snapshot.error)}</div>
       ) : (
         <>
+          {snapshot.error && <div class="quota-warn">{quotaError(snapshot.error)} · {t('quotaStale')}</div>}
           {windows.map((w) => <QuotaBar key={w.id} w={w} />)}
           {snapshot.usageBreakdown?.map((b) => <QuotaBar key={b.id} w={{ id: b.id, title: b.title, usedPercent: b.usedPercent }} />)}
           {(snapshot.creditsRemaining != null || snapshot.resetCreditsAvailable != null) && (
@@ -33,7 +34,11 @@ export function QuotaCard({ agent, snapshot, compact = false }: { agent: Setting
           {!compact && (
             <div class="quota-foot">
               {snapshot.accountEmail && <span>{snapshot.accountEmail}</span>}
-              <span>{t('updated', relativeTime(snapshot.updatedAt))}</span>
+              {snapshot.supplement && <span>{t('quotaSession', tokens(snapshot.supplement.usedTokens), tokens(snapshot.supplement.contextTokens))}</span>}
+              <span title={snapshot.sourceId}>
+                {snapshot.sourceKind ? t('quotaSource_' + snapshot.sourceKind) + ' · ' : ''}
+                {t('updated', relativeTime(snapshot.fetchedAt ?? snapshot.updatedAt))}
+              </span>
             </div>
           )}
         </>
@@ -65,4 +70,14 @@ function resetIn(ms: number): string {
   const h = Math.floor(m / 60)
   if (h < 48) return `${h}h ${m % 60}m`
   return `${Math.floor(h / 24)}d ${h % 24}h`
+}
+
+const quotaErrorKinds = ['rateLimited', 'unauthorized', 'notConfigured', 'network', 'unavailable']
+
+function quotaError(kind: string): string {
+  return quotaErrorKinds.includes(kind) ? t('quotaErr_' + kind) : t('quotaErr_generic', kind)
+}
+
+function tokens(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n)
 }

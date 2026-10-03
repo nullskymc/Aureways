@@ -291,6 +291,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     /// `quit`, so 退出 did nothing).
     enum MenuBarCommand: String, CaseIterable {
         case newSession, selectSession, openApp, openSettings, quitApp
+        /// The panel became visible. Stale-only quota check; the menu bar never polls.
+        case menuBarOpened
 
         init?(message type: String) {
             self.init(rawValue: type == "quit" ? "quitApp" : type)
@@ -308,6 +310,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
             }
         }
         switch command {
+        case .menuBarOpened:
+            model.quotaStore.request(reason: .menuBarOpened)
         case .newSession:
             dismiss()
             AppActivation.revealMainWindow()

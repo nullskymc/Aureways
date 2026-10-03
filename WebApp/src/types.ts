@@ -91,7 +91,7 @@ export interface Settings {
 }
 
 export interface QuotaWindow {
-  id: string; title: string; usedPercent: number; resetsAt?: number; resetDescription?: string; windowMinutes?: number
+  id: string; title: string; usedPercent: number; resetsAt?: number; resetDescription?: string; windowMinutes?: number; used?: number; limit?: number
 }
 
 export interface QuotaSnapshot {
@@ -107,7 +107,16 @@ export interface QuotaSnapshot {
   creditsUnit?: string
   resetCreditsAvailable?: number
   updatedAt: number
+  /** When the source produced this reading (ms). */
+  fetchedAt?: number
+  /** Earliest time the store will hit the network again for this harness (ms). */
+  nextRefreshAt?: number
+  /** Error kind from the native quota store (rateLimited, unauthorized, notConfigured, network, …). */
   error?: string
+  sourceId?: string
+  sourceKind?: 'officialAPI' | 'localCache'
+  /** ACP-reported session usage — supplementary only. */
+  supplement?: { usedTokens: number; contextTokens: number; costAmount?: number; costCurrency?: string; reportedAt: number }
   severity: 'healthy' | 'warning' | 'critical' | 'unknown'
   summary: string
 }

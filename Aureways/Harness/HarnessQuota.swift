@@ -33,6 +33,9 @@ struct HarnessQuotaWindow: Identifiable, Sendable, Codable, Hashable {
     var resetsAt: Date?
     var resetDescription: String?
     var windowMinutes: Int?
+    /// Absolute amounts when the source reports them (tokens, requests, credits…).
+    var used: Double?
+    var limit: Double?
 
     var remainingPercent: Double {
         max(0.0, min(100.0, 100.0 - usedPercent))
@@ -96,8 +99,16 @@ struct HarnessQuotaSnapshot: Identifiable, Sendable, Codable, Hashable {
     var creditsRemaining: Double?
     var creditsUnit: String?
     var resetCreditsAvailable: Int?
+    /// fetchedAt: when the source produced this reading (kept as `updatedAt` for on-disk compatibility).
     var updatedAt: Date
     var error: String?
+    /// Which `QuotaSource` produced the reading and of what kind (official API / local CLI cache).
+    var sourceId: String?
+    var sourceKind: QuotaSourceKind?
+    /// Last ACP-reported session usage for this harness. Supplementary only — never drives limits.
+    var supplement: QuotaSessionSupplement?
+
+    var fetchedAt: Date { updatedAt }
 
     var overallSeverity: HarnessQuotaSeverity {
         var highest: HarnessQuotaSeverity = .healthy
@@ -219,28 +230,42 @@ actor HarnessQuotaFetcher {
         }
     }
 
+    /// Whether the (built-in) source config maps this harness to any quota source.
     static func supportsQuota(for agentId: String) -> Bool {
-        switch mapAgentIdToProvider(agentId) {
-        case "antigravity", "codex", "grok":
-            return true
-        default:
-            return false
+        !QuotaSourceConfig.builtIn.sourceIds(for: agentId).isEmpty
+    }
+
+    /// Maps a non-2xx response to a typed error (429 carries Retry-After).
+    static func checkHTTP(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { throw QuotaFetchError.invalidResponse }
+        switch http.statusCode {
+        case 200...299: return
+        case 429:
+            throw QuotaFetchError.rateLimited(retryAfter: parseRetryAfter(http.value(forHTTPHeaderField: "Retry-After")))
+        case 401, 403: throw QuotaFetchError.unauthorized(http.statusCode)
+        default: throw QuotaFetchError.http(http.statusCode)
         }
     }
 
-    func fetchQuota(for agent: AgentProfile) async -> HarnessQuotaSnapshot? {
-        let provider = Self.mapAgentIdToProvider(agent.id)
+    static func parseRetryAfter(_ value: String?, now: Date = Date()) -> TimeInterval? {
+        guard let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty else { return nil }
+        if let seconds = Double(value) { return max(0, seconds) }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: value) else { return nil }
+        return max(0, date.timeIntervalSince(now))
+    }
 
-        switch provider {
-        case "antigravity":
-            return await fetchAntigravityNative(agent: agent)
-        case "codex":
-            return await fetchCodexNative(agent: agent)
-        case "grok":
-            return await fetchGrokNative(agent: agent)
-        default:
-            return nil
-        }
+    static func transportError(_ error: Error) -> QuotaFetchError {
+        if let typed = error as? QuotaFetchError { return typed }
+        return .network(error.localizedDescription)
+    }
+
+    func fetchAntigravity(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+        guard let snapshot = await fetchAntigravityNative(agent: agent) else { throw QuotaFetchError.unavailable }
+        return snapshot
     }
 
     // MARK: - Antigravity
@@ -830,7 +855,7 @@ actor HarnessQuotaFetcher {
 
     // MARK: - Native Grok Quota Probing
 
-    private func fetchGrokNative(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+    func fetchGrok(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
         let authPath = NSString(string: "~/.grok/auth.json").expandingTildeInPath
         guard FileManager.default.fileExists(atPath: authPath),
               let authData = try? Data(contentsOf: URL(fileURLWithPath: authPath)),
@@ -839,14 +864,14 @@ actor HarnessQuotaFetcher {
               let token = (firstEntry["key"] as? String) ?? (firstEntry["refresh_token"] as? String) ?? (firstEntry["access_token"] as? String),
               !token.isEmpty
         else {
-            return nil
+            throw QuotaFetchError.notConfigured
         }
 
         let email = firstEntry["email"] as? String
         let authMode = firstEntry["auth_mode"] as? String
 
         guard let url = URL(string: "https://cli-chat-proxy.grok.com/v1/billing?format=credits") else {
-            return nil
+            throw QuotaFetchError.invalidResponse
         }
 
         var request = URLRequest(url: url)
@@ -859,11 +884,11 @@ actor HarnessQuotaFetcher {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            try Self.checkHTTP(response)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let config = json["config"] as? [String: Any]
             else {
-                return nil
+                throw QuotaFetchError.invalidResponse
             }
 
             var usedPercent = (config["creditUsagePercent"] as? NSNumber)?.doubleValue
@@ -932,7 +957,7 @@ actor HarnessQuotaFetcher {
                 updatedAt: Date()
             )
         } catch {
-            return nil
+            throw Self.transportError(error)
         }
     }
 
@@ -968,18 +993,18 @@ actor HarnessQuotaFetcher {
         return (token, accountId, email, planType)
     }
 
-    private func fetchCodexNative(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+    func fetchCodex(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
         let authPath = NSString(string: "~/.codex/auth.json").expandingTildeInPath
         guard FileManager.default.fileExists(atPath: authPath),
               let authData = try? Data(contentsOf: URL(fileURLWithPath: authPath)),
               let authJSON = try? JSONSerialization.jsonObject(with: authData) as? [String: Any],
               let auth = Self.extractCodexAuth(authJSON)
         else {
-            return nil
+            throw QuotaFetchError.notConfigured
         }
 
         guard let url = URL(string: "https://chatgpt.com/backend-api/wham/usage") else {
-            return nil
+            throw QuotaFetchError.invalidResponse
         }
 
         var request = URLRequest(url: url)
@@ -994,10 +1019,9 @@ actor HarnessQuotaFetcher {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else {
-                return nil
+            try Self.checkHTTP(response)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw QuotaFetchError.invalidResponse
             }
 
             let email = (json["email"] as? String) ?? auth.email
@@ -1049,7 +1073,7 @@ actor HarnessQuotaFetcher {
             }
 
             guard primary != nil || secondary != nil || !extras.isEmpty || creditsVal != nil else {
-                return nil
+                throw QuotaFetchError.invalidResponse
             }
 
             return HarnessQuotaSnapshot(
@@ -1067,72 +1091,9 @@ actor HarnessQuotaFetcher {
                 updatedAt: Date()
             )
         } catch {
-            return nil
+            throw Self.transportError(error)
         }
     }
 }
 
-// MARK: - Quota State Service
-
-@Observable
-@MainActor
-final class HarnessQuotaService {
-    private(set) var snapshots: [String: HarnessQuotaSnapshot] = [:]
-    private(set) var isRefreshing: [String: Bool] = [:]
-    private var lastFetchTimes: [String: Date] = [:]
-    /// 事件型刷新的最小间隔；`force`（打开菜单栏窗口、一轮任务结束、手动点击）不受它限制。
-    private let cacheTTL: TimeInterval = 60.0
-    private let fetcher = HarnessQuotaFetcher()
-    private static let persistKey = "harnessQuotaSnapshots"
-
-    init(loadPersisted: Bool = true) {
-        if loadPersisted { self.loadPersisted() }
-    }
-
-    func snapshot(for agentId: String) -> HarnessQuotaSnapshot? {
-        snapshots[agentId]
-    }
-
-    func updateSnapshot(_ snapshot: HarnessQuotaSnapshot) {
-        snapshots[snapshot.harnessId] = snapshot
-        persist()
-    }
-
-    func refreshQuota(for agent: AgentProfile, force: Bool = false) async {
-        let agentId = agent.id
-        guard HarnessQuotaFetcher.supportsQuota(for: agentId) else { return }
-
-        if !force, let lastFetch = lastFetchTimes[agentId], Date().timeIntervalSince(lastFetch) < cacheTTL {
-            return
-        }
-        if isRefreshing[agentId] == true { return }
-
-        isRefreshing[agentId] = true
-        defer { isRefreshing[agentId] = false }
-
-        let snapshot = await fetcher.fetchQuota(for: agent)
-        lastFetchTimes[agentId] = Date()
-        if let snapshot {
-            snapshots[agentId] = snapshot
-            persist()
-        }
-    }
-
-    func refreshAll(agents: [AgentProfile], force: Bool = false) async {
-        for agent in agents where HarnessQuotaFetcher.supportsQuota(for: agent.id) {
-            await refreshQuota(for: agent, force: force)
-        }
-    }
-
-    private func loadPersisted() {
-        guard let data = UserDefaults.standard.data(forKey: Self.persistKey),
-              let decoded = try? JSONDecoder().decode([String: HarnessQuotaSnapshot].self, from: data)
-        else { return }
-        snapshots = decoded
-    }
-
-    private func persist() {
-        guard let data = try? JSONEncoder().encode(snapshots) else { return }
-        UserDefaults.standard.set(data, forKey: Self.persistKey)
-    }
-}
+// MARK: - Quota store lives in Quota/QuotaStore.swift

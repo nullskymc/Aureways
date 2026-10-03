@@ -1,1 +1,0 @@
-import{v as p}from"./Icon-DzxmZhwk.js";import{a as r}from"./Composer-CcsMWLgg.js";import"./preload-helper-Du-ZIQLl.js";async function n(){const o=await p("pick.markdown").catch(()=>[]);for(const a of o)r(a)}export{n as pickMarkdown};

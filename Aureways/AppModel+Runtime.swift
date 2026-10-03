@@ -27,7 +27,6 @@ extension AppModel {
             session.clearConnectRPC()
             session.phase = .ready
             persistIfNeeded(session)
-            await quotaService.refreshQuota(for: session.agent)
         } catch {
             fail(session, error)
         }
@@ -65,7 +64,6 @@ extension AppModel {
             session.clearConnectRPC()
             session.phase = .ready
             persistIfNeeded(session)
-            await quotaService.refreshQuota(for: session.agent)
         } catch {
             fail(session, error)
         }
@@ -103,7 +101,6 @@ extension AppModel {
                 flushSessionUpdates()
                 session.clearConnectRPC()
                 session.phase = .ready
-                await quotaService.refreshQuota(for: session.agent)
             } else {
                 await prepareWorkspaces(connection, session: session)
                 let created = try await runtime.withAuthentication {
@@ -119,7 +116,6 @@ extension AppModel {
                 session.clearConnectRPC()
                 session.phase = .ready
                 persistIfNeeded(session)
-                await quotaService.refreshQuota(for: session.agent)
             }
         } catch {
             fail(session, error)
@@ -161,11 +157,8 @@ extension AppModel {
         defer {
             flushSessionUpdates()
             session.isStreaming = false
-            Task { [weak self] in
-                guard let self else { return }
-                // 一轮任务结束是唯一的自动刷新时机，强制刷一次。
-                await self.quotaService.refreshQuota(for: session.agent, force: true)
-            }
+            // Turn end only *hints* the quota store: debounced, coalesced, TTL-gated.
+            quotaStore.noteSessionActivity(harnessId: session.agent.id)
         }
         do {
             let caps = runtimes[session.agent.id]?.capabilities.promptCapabilities
@@ -407,6 +400,10 @@ extension AppModel {
         guard let session = session(agentId: agentId, acpSessionId: notification.sessionId) else { return }
         let previousTitle = session.title
         session.apply(notification)
+        if case .usage(let usage) = notification.update {
+            // Supplementary only; never triggers a quota request.
+            quotaStore.recordSessionUsage(harnessId: agentId, usage: usage)
+        }
         if session.title != previousTitle {
             persistIfNeeded(session)
         }

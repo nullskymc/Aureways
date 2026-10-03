@@ -82,6 +82,11 @@
 		B1010000000000000000002B /* AppModel+Inspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000002B /* AppModel+Inspector.swift */; };
 		B10100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
 		B20100000000000000000050 /* HarnessQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000050 /* HarnessQuota.swift */; };
+		B101000000000000000000D8 /* QuotaSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D8 /* QuotaSources.swift */; };
+		B201000000000000000000D8 /* QuotaSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D8 /* QuotaSources.swift */; };
+		B101000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
+		B201000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
+		B2010000000000000000009B /* QuotaStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2010000000000000000009B /* QuotaStoreTests.swift */; };
 		B10100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
 		B20100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
 		B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000050 /* HarnessQuotaTests.swift */; };
@@ -157,6 +162,9 @@
 		F10100000000000000000029 /* CustomHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomHarness.swift; sourceTree = "<group>"; };
 		F1010000000000000000002B /* AppModel+Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Inspector.swift"; sourceTree = "<group>"; };
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
+		F101000000000000000000D8 /* QuotaSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quota/QuotaSources.swift; sourceTree = "<group>"; };
+		F101000000000000000000D9 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quota/QuotaStore.swift; sourceTree = "<group>"; };
+		F2010000000000000000009B /* QuotaStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStoreTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000054 /* ToolCallNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalization.swift; sourceTree = "<group>"; };
 		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000061 /* ToolCallNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalizationTests.swift; sourceTree = "<group>"; };
@@ -212,6 +220,8 @@
 				F10100000000000000000082 /* Info.plist */,
 				F101000000000000000000C2 /* WebAssetScheme.swift */,
 				F101000000000000000000D2 /* WebShellBridge.swift */,
+				F101000000000000000000D8 /* QuotaSources.swift */,
+				F101000000000000000000D9 /* QuotaStore.swift */,
 				F101000000000000000000D7 /* AppActivation.swift */,
 				F101000000000000000000D6 /* WebShellSettings.swift */,
 				F101000000000000000000D5 /* AttentionNotifier.swift */,
@@ -259,6 +269,7 @@
 				F20100000000000000000001 /* ProtocolTests.swift */,
 				F20100000000000000000099 /* SessionTranscriptTests.swift */,
 				F2010000000000000000009A /* MenuBarCommandTests.swift */,
+				F2010000000000000000009B /* QuotaStoreTests.swift */,
 				F20100000000000000000042 /* TerminalHostTests.swift */,
 				F20100000000000000000050 /* HarnessQuotaTests.swift */,
 				F20100000000000000000061 /* ToolCallNormalizationTests.swift */,
@@ -449,6 +460,8 @@
 				B10100000000000000000083 /* Qoder.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B101000000000000000000D8 /* QuotaSources.swift in Sources */,
+				B101000000000000000000D9 /* QuotaStore.swift in Sources */,
 				B10100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -490,6 +503,9 @@
 				B20100000000000000000083 /* Qoder.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B201000000000000000000D8 /* QuotaSources.swift in Sources */,
+				B201000000000000000000D9 /* QuotaStore.swift in Sources */,
+				B2010000000000000000009B /* QuotaStoreTests.swift in Sources */,
 				B20100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,
 				B20100000000000000000061 /* ToolCallNormalizationTests.swift in Sources */,

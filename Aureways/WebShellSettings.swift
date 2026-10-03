@@ -37,7 +37,7 @@ extension WebShellBridge {
                     "notes": agent.notes,
                     "enabled": model.isAgentEnabled(agent),
                     "available": model.availability[agent.id] == true,
-                    "quotaRefreshing": model.quotaService.isRefreshing[agent.id] == true,
+                    "quotaRefreshing": model.quotaStore.isRefreshing[agent.id] == true,
                 ]
             },
             "workspaces": model.workspaces.map { ["path": $0.path, "name": $0.name] },
@@ -60,11 +60,16 @@ extension WebShellBridge {
         var out: [String: Any] = [:]
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
-        for (id, snapshot) in model.quotaService.snapshots {
+        let store = model.quotaStore
+        for (id, snapshot) in store.snapshots {
             guard let data = try? encoder.encode(snapshot),
                   var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
             object["severity"] = snapshot.overallSeverity.rawValue
             object["summary"] = snapshot.shortSummary
+            object["fetchedAt"] = snapshot.fetchedAt.timeIntervalSince1970 * 1000
+            if let next = store.nextAllowedFetch(for: id) {
+                object["nextRefreshAt"] = next.timeIntervalSince1970 * 1000
+            }
             out[id] = object
         }
         return out
@@ -78,8 +83,8 @@ extension WebShellBridge {
         case "settings.refresh":
             model.refreshAvailability()
             refreshMarkdownDefault()
-            let agents = model.agents
-            Task { await model.quotaService.refreshAll(agents: agents) }
+            // Opening the page refreshes lazily: only stale sources (older than the TTL).
+            model.quotaStore.request(reason: .pageOpened)
         case "settings.set":
             let value = params["value"]
             switch string("key") {
@@ -115,12 +120,8 @@ extension WebShellBridge {
                 NSPasteboard.general.setString(agent.launchLine, forType: .string)
             }
         case "quota.refresh":
-            if let agent = agent() {
-                Task { await model.quotaService.refreshQuota(for: agent, force: true) }
-            } else {
-                let agents = model.agents
-                Task { await model.quotaService.refreshAll(agents: agents, force: true) }
-            }
+            // Manual still respects a short per-source minimum interval and any 429 window.
+            model.quotaStore.request(agent().map { [$0.id] }, reason: .manual)
         case "workspace.remove":
             model.removeWorkspace(string("path"))
         case "workspace.select":

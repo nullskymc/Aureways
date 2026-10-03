@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import { post } from '../bridge'
 import { relativeTime, t } from '../i18n'
 import { app } from '../store'
@@ -9,6 +10,17 @@ import { HarnessIcon, Icon, Spinner } from './Icon'
 export function MenuBar() {
   const state = app.value
   const tab = useSignal<string | null>(null)
+  // Panel shown → one stale-only quota check natively. No timers here: the menu bar never polls.
+  useEffect(() => {
+    const opened = () => { if (document.visibilityState === 'visible') post('menuBarOpened') }
+    opened()
+    document.addEventListener('visibilitychange', opened)
+    window.addEventListener('focus', opened)
+    return () => {
+      document.removeEventListener('visibilitychange', opened)
+      window.removeEventListener('focus', opened)
+    }
+  }, [])
   if (!state) return null
   const agents = state.settings.agents.filter((a) => a.enabled && a.available)
   const current = agents.find((a) => a.id === tab.value) ?? agents.find((a) => state.quota[a.id]) ?? agents[0]

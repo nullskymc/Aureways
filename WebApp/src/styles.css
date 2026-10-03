@@ -556,8 +556,9 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .quota-fill { height: 100%; border-radius: 3px; background: var(--green); }
 .quota-fill.warning { background: var(--amber); }
 .quota-fill.critical { background: var(--red); }
+.quota-warn { font-size: 11px; color: var(--amber); }
 .quota-reset { font-size: 11px; color: var(--text-3); margin-top: 3px; }
-.quota-meta, .quota-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-3); }
+.quota-meta, .quota-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; font-size: 11px; color: var(--text-3); }
 
 /* ---- Menu bar extra ------------------------------------------------------------ */
 .in-menubar body { font-size: 13px; }

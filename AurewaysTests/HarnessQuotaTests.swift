@@ -71,8 +71,8 @@ final class HarnessQuotaTests: XCTestCase {
         XCTAssertTrue(HarnessQuotaFetcher.supportsQuota(for: "grok-build"))
         XCTAssertTrue(HarnessQuotaFetcher.supportsQuota(for: "antigravity"))
         XCTAssertTrue(HarnessQuotaFetcher.supportsQuota(for: "gemini"))
-        XCTAssertFalse(HarnessQuotaFetcher.supportsQuota(for: "claude"))
-        XCTAssertFalse(HarnessQuotaFetcher.supportsQuota(for: "claude-code"))
+        XCTAssertTrue(HarnessQuotaFetcher.supportsQuota(for: "claude"))
+        XCTAssertTrue(HarnessQuotaFetcher.supportsQuota(for: "claude-code"))
         XCTAssertFalse(HarnessQuotaFetcher.supportsQuota(for: "cursor"))
         XCTAssertFalse(HarnessQuotaFetcher.supportsQuota(for: "copilot"))
         XCTAssertFalse(HarnessQuotaFetcher.supportsQuota(for: "opencode"))
@@ -234,7 +234,7 @@ final class HarnessQuotaTests: XCTestCase {
 
     @MainActor
     func testQuotaServiceSnapshotManagement() async {
-        let service = HarnessQuotaService(loadPersisted: false)
+        let service = QuotaStore(cacheURL: nil, migrateLegacyDefaults: false)
         let agent = AgentProfile(id: "test-agent", title: "Test Agent", subtitle: "Testing", command: "echo", arguments: [], builtIn: false, notes: "")
         XCTAssertNil(service.snapshot(for: agent.id))
 
