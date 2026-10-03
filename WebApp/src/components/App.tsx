@@ -6,6 +6,7 @@ import { app, route, setTicking, uiCommand } from '../store'
 import { prefs } from '../prefs'
 import { openTerminal, showInspector } from '../inspector/state'
 import { lazy } from './Lazy'
+import { installGlass } from '../glass'
 
 const Inspector = lazy(() => import('../inspector/Inspector').then((m) => m.Inspector))
 const Settings = lazy(() => import('../settings/Settings').then((m) => m.Settings))
@@ -64,6 +65,11 @@ export function App() {
     return () => ro.disconnect()
   }, [state?.selectedSessionId == null])
 
+  const glass = !!state?.chrome.glass
+  useEffect(() => {
+    if (glass) installGlass()
+  }, [glass])
+
   const headH = headerHeight(state)
   useLayoutEffect(() => {
     reportDragRegions(headH)
@@ -96,10 +102,10 @@ export function App() {
           <SidebarResizer width={sidebarWidth} />
         </>
       )}
-      <main class="main">
+      <main class="main" style={{ '--dock-h': `${dockHeight.value}px` }}>
         <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
         {session ? (
-          <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} />
+          <Transcript streaming={session.streaming} padBottom={glass ? 16 : dockHeight.value + 24} padTop={glass ? 12 : 64} />
         ) : (
           <Landing state={state} />
         )}
@@ -143,7 +149,7 @@ function MainHeader({ state, session, sidebarOpen, onToggle }: { state: AppState
   return (
     <header class="main-head" style={{ paddingLeft: pad }}>
       {!sidebarOpen && (
-        <span class="head-tools">
+        <span class="head-tools" data-glass="control">
           <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle}>
             <Icon name="sidebar" size={15} />
           </button>
@@ -178,7 +184,7 @@ function MainHeader({ state, session, sidebarOpen, onToggle }: { state: AppState
         </span>
       )}
       {!prefs.inspectorOpen.value && (
-        <span class="head-tools right">
+        <span class="head-tools right" data-glass="control">
           <button class="icon-btn" title={t('terminal')} onClick={() => void openTerminal()}>
             <Icon name="terminal" size={15} />
           </button>

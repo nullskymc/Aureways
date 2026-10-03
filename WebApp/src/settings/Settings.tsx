@@ -32,7 +32,7 @@ export function Settings({ state, section }: { state: AppState; section?: string
   const headPad = state.chrome.fullscreen ? 12 : Math.max(76, lights.x + lights.w + 14)
   return (
     <>
-      <aside class="sidebar settings-nav">
+      <aside class="sidebar settings-nav" data-glass="sidebar">
         <div class="sidebar-head" style={{ paddingLeft: headPad }} />
         <div class="sidebar-actions">
           <button class="nav-row" onClick={() => (route.value = { name: 'main' })}>

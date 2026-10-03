@@ -28,6 +28,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     weak var hostView: NSView?
     var onDragRegions: (([CGRect], CGFloat?) -> Void)?
     var onAppearance: ((String) -> Void)?
+    var onGlassRects: (([GlassLayerView.Panel]) -> Void)?
 
     private(set) var isReady = false
     private var flushPending = false
@@ -81,6 +82,36 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 self?.webView?.evaluateJavaScript(js) { result, error in
                     let text = error.map { "error: \($0)" } ?? String(describing: result ?? "nil")
                     try? text.write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+                }
+            }
+        }
+        // "n" / "f" / …: a synthetic ⌘-key event through NSApp.sendEvent, so the
+        // native menu's key equivalents are exercised like a real key press.
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.key"), object: nil, queue: .main) { [weak self] note in
+            guard let key = note.object as? String, let char = key.first else { return }
+            MainActor.assumeIsolated {
+                let codes: [Character: UInt16] = ["n": 45, "f": 3, "o": 31, ",": 43, "i": 34]
+                let window = self?.hostView?.window
+                guard let event = NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: key.count > 1 ? [.command, .option] : .command,
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window?.windowNumber ?? 0,
+                    context: nil, characters: String(char), charactersIgnoringModifiers: String(char),
+                    isARepeat: false, keyCode: codes[char] ?? 0
+                ) else { return }
+                NSApp.sendEvent(event)
+                try? "sent \(key)".write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+            }
+        }
+        // Toggles the menu bar extra panel (clicks our status item button).
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.statusItem"), object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                for window in NSApp.windows where String(describing: type(of: window)).contains("StatusBar") {
+                    func findButton(_ view: NSView?) -> NSButton? {
+                        guard let view else { return nil }
+                        if let button = view as? NSButton { return button }
+                        return view.subviews.lazy.compactMap(findButton).first
+                    }
+                    findButton(window.contentView)?.performClick(nil)
                 }
             }
         }
@@ -307,6 +338,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 ],
                 "fullscreen": chrome.fullscreen,
                 "titlebarHeight": chrome.titlebarHeight,
+                "glass": role == .main,
             ],
         ]
         state["workspaces"] = model.workspaces.map { ["path": WorkspaceRecord.normalized($0.path), "name": $0.name] }
@@ -748,6 +780,14 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 return CGRect(x: x, y: y, width: w, height: h)
             }
             onDragRegions?(rects, (body["height"] as? NSNumber).map { CGFloat($0.doubleValue) })
+        case "glass":
+            let panels = (body["rects"] as? [[String: Any]] ?? []).compactMap { rect -> GlassLayerView.Panel? in
+                func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
+                guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
+                else { return nil }
+                return GlassLayerView.Panel(kind: rect["k"] as? String ?? "", frame: CGRect(x: x, y: y, width: w, height: h), radius: number("r") ?? 12)
+            }
+            onGlassRects?(panels)
         case "menu":
             let token = (body["token"] as? NSNumber)?.intValue ?? 0
             let items = body["items"] as? [[String: Any]] ?? []

@@ -17,7 +17,8 @@
   --fill-2: light-dark(oklch(0 0 0 / 0.028), oklch(1 0 0 / 0.045));
   --hover: light-dark(oklch(0 0 0 / 0.045), oklch(1 0 0 / 0.06));
   --selected: light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.1));
-  --main-bg: light-dark(oklch(0.995 0 0), oklch(0.2 0.004 286));
+  /* Must match GlassLayerView.contentBackground (WebShellView.swift). */
+  --main-bg: light-dark(#fdfdfd, #161618);
   --surface: light-dark(oklch(1 0 0), oklch(0.24 0.005 286));
   --code-bg: light-dark(oklch(0.978 0.002 286), oklch(0.175 0.004 286));
   --accent: oklch(0.6 0.19 255);
@@ -490,6 +491,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 
 /* ---- Settings ------------------------------------------------------------------ */
 .settings-mode .main { border-left: 1px solid var(--border); }
+.settings-nav { width: 210px; }
 .settings-nav .sidebar-list { padding-top: 8px; }
 .settings-nav .nav-row { margin-bottom: 1px; }
 .settings-version { padding: 10px 18px 14px; color: var(--text-3); font-size: 11.5px; }
@@ -582,3 +584,25 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .mb-foot { display: flex; align-items: center; gap: 2px; border-top: 1px solid var(--border); padding-top: 6px; }
 .mb-link { height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12.5px; color: var(--text-2); }
 .mb-link:hover { background: var(--hover); color: var(--text); }
+
+/* ---- Liquid Glass (native NSGlassEffectView under transparent regions) ---------- */
+/* The native layer paints --main-bg edge to edge and floats glass under
+   [data-glass] elements, so those (and the main column) stay transparent. */
+html.glass .main { background: transparent; border-left: 0; }
+html.glass .sidebar { padding: 0 6px 6px; }
+html.glass .sidebar-resizer { margin: 0 -4px; }
+/* Header and dock float over nothing: the transcript scrolls between them
+   (fading at both ends) so glass under the controls/composer stays clean. */
+html.glass .main-head { background: none; }
+html.glass .transcript { top: var(--head-h); bottom: calc(var(--dock-h) - 14px); }
+html.glass .transcript .vscroll {
+  -webkit-mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 18px), transparent);
+}
+html.glass .dock { background: none; }
+html.glass .composer { background: transparent; border-color: transparent; box-shadow: none; }
+html.glass .composer:focus-within { border-color: color-mix(in oklch, var(--text) 14%, transparent); }
+html.glass .composer.dropping { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
+html.glass .head-tools { padding: 2px 3px; border-radius: 16px; gap: 0; box-shadow: inset 0 0 0 0.5px var(--border); }
+html.glass .head-tools .icon-btn:hover { background: color-mix(in oklch, var(--text) 8%, transparent); }
+html.glass .settings-mode .main { border-left: 0; }

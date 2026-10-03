@@ -168,7 +168,7 @@ export function Composer({ state, session }: { state: AppState; session: Session
           ))}
         </div>
       )}
-      <div class={'composer' + (streaming ? ' busy' : '') + (dropping.value ? ' dropping' : '')}>
+      <div class={'composer' + (streaming ? ' busy' : '') + (dropping.value ? ' dropping' : '')} data-glass="composer">
         {dropping.value && <div class="drop-hint">{t('dropToAttach')}</div>}
         {composer.attachments.length > 0 && (
           <div class="composer-attachments">

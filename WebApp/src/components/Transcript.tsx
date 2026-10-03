@@ -10,7 +10,7 @@ import { VirtualList, type VirtualListHandle } from './VirtualList'
 const rowKey = (b: Block) => b.key
 const render = (b: Block) => <BlockView block={b} />
 
-export function Transcript({ streaming, padBottom }: { streaming: boolean; padBottom: number }) {
+export function Transcript({ streaming, padBottom, padTop = 64 }: { streaming: boolean; padBottom: number; padTop?: number }) {
   const version = transcript.version.value
   const sessionId = transcript.sessionId.value
   const blocks = useComputed(() => {
@@ -32,7 +32,7 @@ export function Transcript({ streaming, padBottom }: { streaming: boolean; padBo
           rowKey={rowKey}
           estimate={estimateBlock}
           render={render}
-          padTop={64}
+          padTop={padTop}
           padBottom={padBottom}
           handle={handle}
           onPinnedChange={(p) => (pinned.value = p)}

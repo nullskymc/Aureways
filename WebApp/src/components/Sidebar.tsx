@@ -26,7 +26,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
   const showNewChatSelected = state.selectedSessionId === null
 
   return (
-    <aside class="sidebar">
+    <aside class="sidebar" data-glass="sidebar">
       <div class="sidebar-head" style={{ paddingLeft: headPad }}>
         <div class="flex1" />
         <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle} data-no-drag>

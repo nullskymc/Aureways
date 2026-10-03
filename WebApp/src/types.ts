@@ -53,7 +53,7 @@ export interface AppState {
   branch: string | null
   homePath: string
   error: string | null
-  chrome: { trafficLights: Rect; fullscreen: boolean; titlebarHeight: number }
+  chrome: { trafficLights: Rect; fullscreen: boolean; titlebarHeight: number; glass?: boolean }
   workspaces: Workspace[]
   agents: Agent[]
   sessions: Session[]

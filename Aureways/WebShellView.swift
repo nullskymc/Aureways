@@ -54,7 +54,7 @@ struct WebShellRepresentable: NSViewRepresentable {
     }
 }
 
-/// Window content: material backdrop, transparent web view, titlebar drag strip.
+/// Window content: content background + Liquid Glass layer, transparent web view, titlebar drag strip.
 /// Frames only (autoresizing masks), no Auto Layout constraints.
 @MainActor
 final class WebShellHostView: NSView {
@@ -63,7 +63,7 @@ final class WebShellHostView: NSView {
     let bridge: WebShellBridge
     let webView: WKWebView
     let role: WebShellBridge.Role
-    private let backdrop = NSVisualEffectView()
+    private let glassLayer = GlassLayerView()
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
     private var windowObservers: [NSObjectProtocol] = []
@@ -86,12 +86,10 @@ final class WebShellHostView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: 1280, height: 820))
 
         if role == .main {
-            backdrop.material = .sidebar
-            backdrop.blendingMode = .behindWindow
-            backdrop.state = .followsWindowActiveState
-            backdrop.frame = bounds
-            backdrop.autoresizingMask = [.width, .height]
-            addSubview(backdrop)
+            // Content background + Liquid Glass panels; the page is transparent over it.
+            glassLayer.frame = bounds
+            glassLayer.autoresizingMask = [.width, .height]
+            addSubview(glassLayer)
         }
 
         // Transparent page background so the material shows through the sidebar.
@@ -124,6 +122,7 @@ final class WebShellHostView: NSView {
             }
         }
         bridge.onAppearance = { [weak self] value in self?.applyAppearance(value) }
+        bridge.onGlassRects = { [weak self] rects in self?.glassLayer.apply(rects) }
         navigationGuard.onTerminate = { [weak self] in self?.reload() }
         if role == .main { WebShellBridge.current = bridge }
         reload()
@@ -309,5 +308,91 @@ final class WebShellNavigationGuard: NSObject, WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         onTerminate?()
+    }
+}
+
+/// Native layer under the transparent web view: the main content background
+/// (matches `--main-bg` in styles.css) and `NSGlassEffectView`s at rects the
+/// page reports for elements marked `data-glass` (sidebar panel, header
+/// control groups, composer). Frames only; it never affects web or SwiftUI
+/// layout, and it never takes mouse events.
+@MainActor
+final class GlassLayerView: NSView {
+    struct Panel: Equatable {
+        var kind: String
+        var frame: CGRect
+        var radius: CGFloat
+    }
+
+    /// `--main-bg`: light #fdfdfd, dark #161618.
+    static let contentBackground = NSColor(name: "AurewaysContentBackground") { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0x16 / 255.0, green: 0x16 / 255.0, blue: 0x18 / 255.0, alpha: 1)
+            : NSColor(srgbRed: 0xfd / 255.0, green: 0xfd / 255.0, blue: 0xfd / 255.0, alpha: 1)
+    }
+
+    private let container = NSGlassEffectContainerView()
+    private let content = FlippedView()
+    private var views: [NSGlassEffectView] = []
+    private var panels: [Panel] = []
+
+    override var isFlipped: Bool { true }
+    override var wantsUpdateLayer: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        container.frame = bounds
+        container.autoresizingMask = [.width, .height]
+        content.frame = container.bounds
+        content.autoresizingMask = [.width, .height]
+        container.contentView = content
+        addSubview(container)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateLayer() {
+        layer?.backgroundColor = Self.contentBackground.resolvedCGColor(for: effectiveAppearance)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func apply(_ next: [Panel]) {
+        guard next != panels else { return }
+        panels = next
+        while views.count < next.count {
+            let glass = NSGlassEffectView()
+            glass.style = .regular
+            glass.contentView = NSView()
+            content.addSubview(glass)
+            views.append(glass)
+        }
+        while views.count > next.count {
+            views.removeLast().removeFromSuperview()
+        }
+        for (glass, panel) in zip(views, next) {
+            if glass.frame != panel.frame { glass.frame = panel.frame }
+            if glass.cornerRadius != panel.radius { glass.cornerRadius = panel.radius }
+        }
+    }
+}
+
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+private extension NSColor {
+    func resolvedCGColor(for appearance: NSAppearance) -> CGColor {
+        var color = cgColor
+        appearance.performAsCurrentDrawingAppearance { color = self.cgColor }
+        return color
     }
 }
