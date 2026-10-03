@@ -142,7 +142,7 @@ final class ToolCallNormalizationTests: XCTestCase {
             "kind": "other",
             "rawInput": {
                 "variant": "ReadFile",
-                "target_file": "/Volumes/app/DevelopProject/Aureways/Aureways/Views/FileEditorTab.swift"
+                "target_file": "/Volumes/Data/DevelopProject/Aureways/Aureways/Views/FileEditorTab.swift"
             }
         }
         """)

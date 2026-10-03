@@ -12,7 +12,9 @@ xcuserdata
 .swiftpm
 .idea
 .vscode
+.claude/
 *.log
+*.trace
 Aureways.app
 
 # Workspace paste drafts and local Aureways state

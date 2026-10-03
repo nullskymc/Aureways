@@ -2,14 +2,26 @@ DERIVED ?= .derived
 SCHEME ?= Aureways
 
 # Command Line Tools does not ship xcodebuild. Prefer a full Xcode.app if
-# xcode-select still points at /Library/Developer/CommandLineTools.
-# This machine keeps Xcode on the app volume, not in /Applications.
-ifeq ($(origin DEVELOPER_DIR), undefined)
+# DEVELOPER_DIR is unset/missing, or xcode-select points at CommandLineTools or missing path.
+ifeq ($(wildcard $(DEVELOPER_DIR)),)
+DEVELOPER_DIR :=
+endif
+
+ifeq ($(DEVELOPER_DIR),)
 XCODE_SELECT := $(shell xcode-select -p 2>/dev/null)
+NEED_FALLBACK :=
 ifneq ($(findstring CommandLineTools,$(XCODE_SELECT)),)
+NEED_FALLBACK := 1
+endif
+ifeq ($(wildcard $(XCODE_SELECT)),)
+NEED_FALLBACK := 1
+endif
+ifeq ($(NEED_FALLBACK),1)
 XCODE_CANDIDATES := \
 	/Applications/Xcode.app \
 	/Applications/Xcode-beta.app \
+	/Volumes/Data/Applications/Xcode.app \
+	/Volumes/Data/Applications/Xcode-beta.app \
 	/Volumes/app/Applications/Xcode.app \
 	/Volumes/app/Applications/Xcode-beta.app
 XCODE_APP := $(firstword $(wildcard $(XCODE_CANDIDATES)))
@@ -21,6 +33,7 @@ DEVELOPER_DIR := $(XCODE_APP)/Contents/Developer
 endif
 endif
 endif
+
 ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif

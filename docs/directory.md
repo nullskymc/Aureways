@@ -17,33 +17,39 @@ Aureways/                              # 仓库根
 │   └── package-lock.json
 ├── Aureways.xcodeproj/
 ├── Aureways/                          # 应用源码（bundle id: ai.aureways.client）
-    ├── AurewaysApp.swift              # @main：主窗口 + 菜单栏 + 菜单命令
-    ├── AppActivation.swift            # 关窗口留在菜单栏、重新打开、用本应用打开文件
-    ├── WebShellView.swift             # 窗口宿主、玻璃层、输入框浮层
-    ├── WebShellBridge.swift           # AppModel ↔ 页面
-    ├── WebShellServices.swift         # fs / git / 终端 / 选择器的 rpc
-    ├── WebShellSettings.swift         # 设置与 Agent 目录的 rpc
-    ├── WebAssetScheme.swift           # aureways-web://app/ 提供页面资源
-    ├── WebTerminalService.swift       # 检查器终端的无界面 PTY
-    ├── AttentionNotifier.swift        # 后台会话的系统通知与 Dock 角标
-    ├── WebAppBundle/                  # make web 的产物，已提交
-    ├── AppModel.swift
-    ├── AppModel+Workspace.swift
-    ├── AppModel+Sessions.swift
-    ├── AppModel+Runtime.swift
-    ├── AppModel+Inspector.swift
-    ├── Domain/
-    │   ├── Session/                   # ChatSession、SessionStore（sqlite）
-    │   └── Workspace/                 # 文件树与 @ 补全用的索引
-    ├── Harness/                       # 各家启动命令与协议偏差
-    ├── ACP/                           # JSON-RPC、会话模型、fs / terminal
-    ├── Quota/                         # QuotaStore、各家额度源
-    ├── ComposerAttachment.swift
-    ├── MarkdownFile.swift
-    ├── Localization.swift
-    ├── Localizable.xcstrings
-    ├── AppIcon.icon/
-    └── Assets.xcassets/
+│   ├── AurewaysApp.swift              # @main：主窗口 + 菜单栏 + 菜单命令
+│   ├── AppActivation.swift            # 关窗口留在菜单栏、重新打开、用本应用打开文件
+│   ├── AttentionNotifier.swift        # 后台会话的系统通知与 Dock 角标
+│   ├── Localization.swift             # 语言切换与本地化辅助函数
+│   ├── Localizable.xcstrings          # 本地化多语言字符串字典
+│   ├── Info.plist
+│   ├── AppIcon.icon/
+│   ├── Assets.xcassets/
+│   ├── WebAppBundle/                  # make web 的产物，已提交
+│   ├── Model/                         # AppModel 及按职责拆分的扩展
+│   │   ├── AppModel.swift
+│   │   ├── AppModel+Workspace.swift
+│   │   ├── AppModel+Sessions.swift
+│   │   ├── AppModel+Runtime.swift
+│   │   └── AppModel+Inspector.swift
+│   ├── WebShell/                      # 原生窗口宿主与 Web 桥接
+│   │   ├── WebShellView.swift         # 窗口宿主、玻璃层、输入框浮层
+│   │   ├── WebShellBridge.swift       # AppModel ↔ 页面
+│   │   ├── WebShellServices.swift     # fs / git / 终端 / 选择器的 rpc
+│   │   ├── WebShellSettings.swift     # 设置与 Agent 目录的 rpc
+│   │   ├── WebAssetScheme.swift       # aureways-web://app/ 提供页面资源
+│   │   └── WebTerminalService.swift   # 检查器终端的无界面 PTY
+│   ├── Domain/
+│   │   ├── Session/                   # ChatSession、SessionStore（sqlite）
+│   │   └── Workspace/                 # 文件树与 @ 补全用的索引
+│   ├── Harness/                       # 各家启动命令与协议偏差
+│   ├── ACP/                           # JSON-RPC、会话模型、fs / terminal
+│   ├── Quota/                         # QuotaStore、各家额度源
+│   └── Support/                       # 辅助工具与通用类型
+│       ├── ComposerAttachment.swift
+│       ├── MarkdownFile.swift
+│       ├── TextDiff.swift
+│       └── PerfFixture.swift
 └── AurewaysTests/
 ```
 
@@ -76,7 +82,7 @@ Aureways/                              # 仓库根
 构建设置（`project.pbxproj`）：
 
 - `MACOSX_DEPLOYMENT_TARGET = 26.0`
-- `MARKETING_VERSION = 0.2.4`，`CURRENT_PROJECT_VERSION = 17`
+- `MARKETING_VERSION = 0.3.0`，`CURRENT_PROJECT_VERSION = 18`
 - `PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client`
 - App Sandbox 未开启（要拉起 CLI、读写工作区）
 - Debug：`CODE_SIGN_IDENTITY = "-"`，`ENABLE_DEBUG_DYLIB = NO`，`ENABLE_PREVIEWS = NO`
@@ -86,23 +92,23 @@ Swift 包只有 [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0�
 ## 运行时生成物（不入库）
 
 | 路径 | 说明 |
-| --- | --- |
+| --- | 说明 |
 | `.derived/` | Makefile 的 DerivedData |
 | `.derived/Build/Products/Debug/Aureways.app` | `make open` 打开的包 |
 | UserDefaults | 工作区、自定义 Agent、外观、菜单栏开关、额度源覆盖、MCP |
 | `~/Library/Application Support/ai.aureways.client/aureways.sqlite` | 会话链接与工作区目录 |
 
-`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build`。`WebApp/node_modules` 不入库。
+`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build`、`*.trace`、`.claude/`。`WebApp/node_modules` 不入库。
 
 ## 源码职责
 
 | 路径 | 职责 |
 | --- | --- |
 | `AurewaysApp.swift` | 窗口场景、菜单栏场景、菜单快捷键 |
-| `WebShellView.swift` | 玻璃、主 WebView、输入框浮层的位置 |
-| `WebShellBridge.swift` | 状态快照、转录补丁、命令、浮层高度 |
-| `AppModel.swift` 及 `AppModel+*` | 会话、发送、工作区、检查器草稿 |
-| `Harness/` | 启动参数、PATH、工具卡片形状 |
-| `ACP/` | JSON-RPC 与 Client 被调用的方法 |
-| `Quota/` | 与会话无关的额度缓存和限流 |
-| `Domain/Session/SessionStore.swift` | sqlite：`session_links`、`workspaces` |
+| `Model/` | AppModel 核心状态管理、会话、工作区与检查器扩展 |
+| `WebShell/` | 玻璃宿主、主/浮层 WebView、JS-Native 桥接及系统 RPC 服务 |
+| `Harness/` | 各 Agent CLI 启动参数、PATH、工具卡片规范化 |
+| `ACP/` | JSON-RPC 协议与 Client/Agent 双方调用契约 |
+| `Quota/` | 额度缓存、限流调度与各 Agent 额度源解析 |
+| `Domain/` | 会话存储（sqlite: `session_links`, `workspaces`）与工作区索引 |
+| `Support/` | 文本差异比对、富文本附件模型、Markdown 解析及性能测试桩 |

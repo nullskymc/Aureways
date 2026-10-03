@@ -1574,8 +1574,8 @@ final class ProtocolTests: XCTestCase {
             "kind": "execute",
             "status": "completed",
             "rawInput": {
-                "cwd": "/Volumes/app/DevelopProject/Aureways",
-                "command": "grep -rn \"WorkspaceTree\" /Volumes/app/DevelopProject/Aureways/Aureways"
+                "cwd": "/Volumes/Data/DevelopProject/Aureways",
+                "command": "grep -rn \"WorkspaceTree\" /Volumes/Data/DevelopProject/Aureways/Aureways"
             },
             "rawOutput": {
                 "exitCode": 0,
@@ -1586,8 +1586,8 @@ final class ProtocolTests: XCTestCase {
 
         let call = ToolCallView(json: toolJSON)
         XCTAssertTrue(call.isTerminal)
-        XCTAssertEqual(call.terminalCommand, #"grep -rn "WorkspaceTree" /Volumes/app/DevelopProject/Aureways/Aureways"#)
-        XCTAssertEqual(call.terminalCwd, "/Volumes/app/DevelopProject/Aureways")
+        XCTAssertEqual(call.terminalCommand, #"grep -rn "WorkspaceTree" /Volumes/Data/DevelopProject/Aureways/Aureways"#)
+        XCTAssertEqual(call.terminalCwd, "/Volumes/Data/DevelopProject/Aureways")
         XCTAssertEqual(call.terminalExitCode, 0)
         XCTAssertEqual(call.terminalOutput, "Aureways/Views/WorkspaceTree.swift:10:struct WorkspaceTree")
         XCTAssertEqual(call.kindLabel, "执行命令")

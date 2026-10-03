@@ -12,7 +12,7 @@
 └── Aureways/               ← Swift 源码，这里没有 Makefile
 ```
 
-本仓库当前是 `proto/web-shell`。另一份工作区 `/Volumes/app/DevelopProject/Aureways` 的 `main` 还不包含这套 Web shell。
+本仓库当前是 `proto/web-shell`。另一份工作区 `/Volumes/Data/DevelopProject/Aureways` 的 `main` 还不包含这套 Web shell。
 
 ## 工具链
 
@@ -26,16 +26,16 @@ xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer dire
 
 1. `/Applications/Xcode.app`
 2. `/Applications/Xcode-beta.app`
-3. `/Volumes/app/Applications/Xcode.app`
-4. `/Volumes/app/Applications/Xcode-beta.app`
+3. `/Volumes/Data/Applications/Xcode.app`
+4. `/Volumes/Data/Applications/Xcode-beta.app`
 5. Spotlight（`mdfind` bundle id `com.apple.dt.Xcode`）
 
 找到就把 `DEVELOPER_DIR` 设为该 App 的 `Contents/Developer`。也可以自己指定，或一次性改掉系统默认：
 
 ```bash
-make open DEVELOPER_DIR=/Volumes/app/Applications/Xcode.app/Contents/Developer
+make open DEVELOPER_DIR=/Volumes/Data/Applications/Xcode.app/Contents/Developer
 
-sudo xcode-select -s /Volumes/app/Applications/Xcode.app/Contents/Developer
+sudo xcode-select -s /Volumes/Data/Applications/Xcode.app/Contents/Developer
 sudo xcodebuild -license accept
 ```
 
@@ -143,7 +143,7 @@ npm run build   # 只构建，不复制进 Xcode 工程；make web 会做完整�
 
 | 项 | 值 |
 | --- | --- |
-| Marketing version | 0.2.4（build 17） |
+| Marketing version | 0.3.0（build 18） |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
 | 最低系统 | macOS 26 |

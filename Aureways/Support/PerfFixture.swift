@@ -47,7 +47,7 @@ enum PerfFixture {
     }
 
     static func toolUpdate(turn: Int, index: Int, step: Int) -> SessionNotification {
-        let path = "/Volumes/app/DevelopProject/Aureways/Aureways/Views/Transcript\(turn).swift"
+        let path = "/Volumes/Data/DevelopProject/Aureways/Aureways/Views/Transcript\(turn).swift"
         let output = String(repeating: "streamed tool output line \(step)\n", count: max(1, step + 1))
         let call = ToolCallView(json: .object([
             "toolCallId": .string("call_\(turn)_\(index)"),
@@ -60,7 +60,7 @@ enum PerfFixture {
     }
 
     static func toolCall(turn: Int, index: Int) -> ToolCallView {
-        let path = "/Volumes/app/DevelopProject/Aureways/Aureways/Views/Transcript\(turn).swift"
+        let path = "/Volumes/Data/DevelopProject/Aureways/Aureways/Views/Transcript\(turn).swift"
         return ToolCallView(json: .object([
             "toolCallId": .string("call_\(turn)_\(index)"),
             "title": .string("Read `\(path)`"),
