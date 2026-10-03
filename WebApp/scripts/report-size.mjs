@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { gzipSync } from 'node:zlib'
 
-const root = new URL('../../Aureways/WebTranscriptBundle/', import.meta.url).pathname
+const root = new URL('../../Aureways/WebAppBundle/', import.meta.url).pathname
 const files = []
 const walk = (dir) => {
   for (const name of readdirSync(dir)) {
@@ -24,6 +24,6 @@ for (const f of files.sort()) {
   tot.raw += raw; tot.gz += gz
   if (eager.has(rel)) { eag.raw += raw; eag.gz += gz }
 }
-console.log(`WebTranscriptBundle: ${files.length} files`)
+console.log(`WebAppBundle: ${files.length} files`)
 console.log(`  eager (html+main.js+css): ${kb(eag.raw)} raw / ${kb(eag.gz)} gz`)
 console.log(`  total on disk:            ${kb(tot.raw)} raw / ${kb(tot.gz)} gz`)

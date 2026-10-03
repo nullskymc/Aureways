@@ -1,0 +1,213 @@
+import { useSignal } from '@preact/signals'
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+import { nativeMenu, post, type MenuItem } from '../bridge'
+import { t } from '../i18n'
+import { uiCommand } from '../store'
+import type { AppState, Picker, Session } from '../types'
+import { AttachmentChip } from './Blocks'
+import { HarnessIcon, Icon } from './Icon'
+
+const INLINE_LIMIT = 2000 // matches ComposerOverflow.inlineUTF16Limit
+
+const drafts = new Map<string, string>()
+
+export function Composer({ state, session }: { state: AppState; session: Session | null }) {
+  const draftKey = session?.id ?? 'new'
+  const text = useSignal(drafts.get(draftKey) ?? '')
+  const area = useRef<HTMLTextAreaElement>(null)
+  const slashIndex = useSignal(0)
+  const composer = state.composer
+  const streaming = !!session?.streaming
+  const connecting = session?.phase === 'connecting'
+
+  useEffect(() => {
+    text.value = drafts.get(draftKey) ?? ''
+    area.current?.focus()
+  }, [draftKey])
+
+  useEffect(() => {
+    const c = uiCommand.value
+    if (c?.name === 'focusComposer') area.current?.focus()
+  }, [uiCommand.value])
+
+  useLayoutEffect(() => {
+    const el = area.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.4)) + 'px'
+  }, [text.value])
+
+  const canSend = (text.value.trim().length > 0 || composer.attachments.length > 0) && !connecting
+  const send = () => {
+    if (!canSend) return
+    post('send', { text: text.value })
+    text.value = ''
+    drafts.delete(draftKey)
+  }
+
+  // Slash commands advertised by the agent.
+  const slash = text.value.startsWith('/') && !text.value.includes(' ') && !text.value.includes('\n')
+    ? (composer.commands ?? []).filter((c) => c.name.toLowerCase().startsWith(text.value.slice(1).toLowerCase())).slice(0, 8)
+    : []
+  const pickSlash = (name: string) => {
+    text.value = `/${name} `
+    area.current?.focus()
+  }
+
+  const agent = state.agents.find((a) => a.id === (session?.agentId ?? state.selectedAgentId))
+  const agentTitle = session?.agentTitle ?? agent?.title ?? 'Agent'
+
+  return (
+    <div class="composer-wrap">
+      {slash.length > 0 && (
+        <div class="slash-menu">
+          {slash.map((c, i) => (
+            <button key={c.name} class={'slash-item' + (i === slashIndex.value % slash.length ? ' active' : '')} onMouseDown={(e) => { e.preventDefault(); pickSlash(c.name) }}>
+              <span class="slash-name">/{c.name}</span>
+              <span class="slash-desc">{c.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div class={'composer' + (streaming ? ' busy' : '')}>
+        {composer.attachments.length > 0 && (
+          <div class="composer-attachments">
+            {composer.attachments.map((a) => (
+              <AttachmentChip key={a.id} a={a} onRemove={() => post('removeAttachment', { id: a.id })} />
+            ))}
+          </div>
+        )}
+        <textarea
+          ref={area}
+          rows={1}
+          value={text.value}
+          placeholder={session ? t('placeholderFollow') : t('placeholder')}
+          onInput={(e) => {
+            text.value = (e.target as HTMLTextAreaElement).value
+            drafts.set(draftKey, text.value)
+            slashIndex.value = 0
+          }}
+          onPaste={(e) => {
+            const data = e.clipboardData
+            if (!data) return
+            const pasted = data.getData('text/plain')
+            if (pasted && pasted.length > INLINE_LIMIT) {
+              e.preventDefault()
+              post('pasteText', { text: pasted })
+            }
+          }}
+          onKeyDown={(e) => {
+            if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+              e.preventDefault()
+              slashIndex.value += e.key === 'ArrowDown' ? 1 : slash.length - 1
+              return
+            }
+            if (slash.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey))) {
+              e.preventDefault()
+              pickSlash(slash[slashIndex.value % slash.length].name)
+              return
+            }
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+              e.preventDefault()
+              if (!streaming) send()
+            }
+            if (e.key === 'Escape' && streaming) post('cancel')
+          }}
+        />
+        <div class="composer-bar">
+          <button class="icon-btn" title={t('attach')} onClick={() => post('attach')}>
+            <Icon name="paperclip" size={15} />
+          </button>
+          <AgentChip state={state} session={session} title={agentTitle} />
+          {composer.model && <PickerChip picker={composer.model} icon="cpu" onPick={(v) => post('setConfig', { configId: composer.model!.configId, value: v })} />}
+          {composer.effort && <PickerChip picker={composer.effort} icon="gauge" onPick={(v) => post('setConfig', { configId: composer.effort!.configId, value: v })} />}
+          {composer.mode && <PickerChip picker={composer.mode} icon="layers" onPick={(v) => (composer.mode!.configId ? post('setConfig', { configId: composer.mode!.configId, value: v }) : post('setMode', { modeId: v }))} />}
+          <div class="flex1" />
+          {state.usage && state.usage.size > 0 && <ContextRing used={state.usage.used} size={state.usage.size} />}
+          {streaming ? (
+            <button class="send-btn stop" title={t('stop') + ' (⌘.)'} onClick={() => post('cancel')}>
+              <Icon name="stop" size={12} />
+            </button>
+          ) : (
+            <button class="send-btn" title={t('send') + ' (↩)'} disabled={!canSend} onClick={send}>
+              <Icon name="arrowUp" size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AgentChip({ state, session, title }: { state: AppState; session: Session | null; title: string }) {
+  const agentId = session?.agentId ?? state.selectedAgentId
+  if (session) {
+    return (
+      <span class="chip static" title={title}>
+        <HarnessIcon id={agentId} size={13} />
+        <span>{title}</span>
+      </span>
+    )
+  }
+  return (
+    <button
+      class="chip"
+      onClick={async (e) => {
+        const items: MenuItem[] = state.agents.map((a) => ({
+          id: a.id,
+          title: a.title,
+          subtitle: a.available ? undefined : t('harnessUnavailable'),
+          checked: a.id === state.selectedAgentId,
+        }))
+        const id = await nativeMenu(items, e.currentTarget as Element)
+        if (id) post('selectAgent', { id })
+      }}
+    >
+      <HarnessIcon id={agentId} size={13} />
+      <span>{title}</span>
+      <Icon name="chevronUpDown" size={11} class="chev" />
+    </button>
+  )
+}
+
+function PickerChip({ picker, icon, onPick }: { picker: Picker; icon: string; onPick(v: string): void }) {
+  const current = picker.options.find((o) => o.id === picker.current)
+  return (
+    <button
+      class="chip"
+      title={current?.description ?? undefined}
+      onClick={async (e) => {
+        const items: MenuItem[] = []
+        let lastGroup: string | null | undefined = undefined
+        for (const o of picker.options) {
+          if (o.group !== lastGroup && o.group) {
+            if (items.length) items.push({ type: 'separator' })
+            items.push({ type: 'header', title: o.group })
+          }
+          lastGroup = o.group
+          items.push({ id: o.id, title: o.name, checked: o.id === picker.current })
+        }
+        const id = await nativeMenu(items, e.currentTarget as Element)
+        if (id && id !== picker.current) onPick(id)
+      }}
+    >
+      <Icon name={icon} size={12} class="chip-icon" />
+      <span>{current?.name ?? picker.current ?? '—'}</span>
+      <Icon name="chevronUpDown" size={11} class="chev" />
+    </button>
+  )
+}
+
+function ContextRing({ used, size }: { used: number; size: number }) {
+  const pct = Math.min(1, used / size)
+  const r = 6
+  const c = 2 * Math.PI * r
+  return (
+    <span class="context-ring" title={t('context', Math.round(pct * 100)) + ` · ${used.toLocaleString()} / ${size.toLocaleString()}`}>
+      <svg width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r={r} class="ring-bg" />
+        <circle cx="8" cy="8" r={r} class="ring-fg" stroke-dasharray={`${c * pct} ${c}`} transform="rotate(-90 8 8)" />
+      </svg>
+    </span>
+  )
+}

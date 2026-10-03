@@ -65,8 +65,9 @@ open: build
 clean:
 	rm -rf $(DERIVED)
 
-# Rebuild the WKWebView transcript renderer (WebTranscript/ -> Aureways/WebTranscriptBundle).
-# The bundle is committed, so normal app builds do not need Node; run this only
-# after editing WebTranscript/src.
+# Rebuild the web shell UI (WebApp/ -> Aureways/WebAppBundle). The whole main
+# window is one WKWebView running this app (docs/web-shell.md). The bundle is
+# committed, so normal app builds do not need Node; run this only after editing
+# WebApp/src.
 web:
-	cd WebTranscript && npm ci && npm run build
+	cd WebApp && npm ci && npm run build

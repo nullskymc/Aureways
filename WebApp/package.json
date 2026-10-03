@@ -1,20 +1,22 @@
 {
-  "name": "aureways-web-transcript",
+  "name": "aureways-webapp",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
-  "description": "WKWebView-hosted Markdown renderer for the Aureways transcript (feature-flagged prototype).",
+  "description": "The whole Aureways main-window UI, hosted in one WKWebView (see docs/web-shell.md).",
   "scripts": {
-    "build": "vite build && node scripts/report-size.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/report-size.mjs",
     "dev": "vite"
   },
   "dependencies": {
+    "@preact/signals": "^2.0.0",
     "@shikijs/core": "^3.0.0",
     "@shikijs/engine-javascript": "^3.0.0",
     "@shikijs/langs": "^3.0.0",
     "@shikijs/themes": "^3.0.0",
     "dompurify": "^3.2.0",
-    "marked": "^15.0.0"
+    "marked": "^15.0.0",
+    "preact": "^10.25.0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
