@@ -267,7 +267,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .prompt { color: var(--text-3); }
 .diff + .diff { border-top: 1px solid var(--border); }
 .diff-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-family: var(--sans); font-size: 12px; }
-.diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; color: var(--text-2); }
+.diff-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
 .diff-path:hover { color: var(--link); }
 .diff-body { max-height: 380px; overflow: auto; -webkit-user-select: text; user-select: text; }
 .hunk-head { padding: 2px 12px; color: var(--text-3); background: var(--fill-2); }

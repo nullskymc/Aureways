@@ -357,12 +357,20 @@ function ToolDetail({ tool }: { tool: ToolFields }) {
   )
 }
 
-function displayPath(path: string): string {
+const stripPrivate = (p: string) => (p.startsWith('/private/') ? p.slice(8) : p)
+
+/** Path shown in diff headers: relative to the session workspace when inside it. */
+export function displayPath(raw: string): string {
   const state = app.peek()
-  const cwd = state?.sessions.find((s) => s.id === state.selectedSessionId)?.cwd
-  const roots = [cwd, cwd ? '/private' + cwd : undefined].filter(Boolean) as string[]
-  for (const root of roots) if (path.startsWith(root + '/')) return path.slice(root.length + 1)
-  if (state?.homePath && path.startsWith(state.homePath + '/')) return '~' + path.slice(state.homePath.length)
+  const path = stripPrivate(raw.replace(/\/+$/, ''))
+  const session = state?.sessions.find((s) => s.id === state.selectedSessionId)
+  for (const root of [session?.cwd, session?.ws]) {
+    if (!root) continue
+    const r = stripPrivate(root.replace(/\/+$/, ''))
+    if (path.startsWith(r + '/')) return path.slice(r.length + 1)
+  }
+  const home = state?.homePath?.replace(/\/+$/, '')
+  if (home && path.startsWith(home + '/')) return '~' + path.slice(home.length)
   return path
 }
 
@@ -380,7 +388,7 @@ function DiffView({ file }: { file: DiffFile }) {
     <div class="diff">
       <div class="diff-head">
         <span class="diff-path" title={file.path} onClick={() => post('openPath', { path: file.path })}>
-          <bdi>{displayPath(file.path)}</bdi>
+          {displayPath(file.path)}
         </span>
         <span class="diffstat">
           <span class="add">+{file.added}</span> <span class="del">−{file.removed}</span>

@@ -336,16 +336,7 @@ final class ChatSession: Identifiable {
             visual = true
         case .toolCallUpdate(let call):
             currentUserMessageId = nil
-            let index: Int?
-            if !call.toolCallId.isEmpty, let mapped = toolItemIndexByCallID[call.toolCallId] {
-                index = mapped
-            } else {
-                index = items.lastIndex(where: {
-                    if case .tool(_, let existing) = $0 { return existing.toolCallId == call.toolCallId }
-                    return false
-                })
-            }
-            if let index, case .tool(let id, var existing) = items[index] {
+            if let index = toolIndex(for: call.toolCallId), case .tool(let id, var existing) = items[index] {
                 guard existing.merge(call) else { return }
                 items[index] = .tool(id, existing)
                 if !updateProjectedTool(itemID: id, call: existing) {
@@ -654,12 +645,36 @@ final class ChatSession: Identifiable {
         return nil
     }
 
+    /// Tool calls are keyed by `toolCallId`: harnesses re-announce a call
+    /// (e.g. inside `session/request_permission`, or a repeated `tool_call`),
+    /// which must merge into the existing row instead of adding a twin.
     func appendTool(_ call: ToolCallView, incrementsRevision: Bool = true) {
+        if !call.toolCallId.isEmpty, let index = toolIndex(for: call.toolCallId),
+           case .tool(let id, var existing) = items[index] {
+            guard existing.merge(call) else { return }
+            items[index] = .tool(id, existing)
+            if !updateProjectedTool(itemID: id, call: existing) {
+                rebuildTranscriptProjection(changedBlockID: transcriptBlockID(containingItemID: id))
+            }
+            if incrementsRevision { transcriptRevision += 1 }
+            return
+        }
         let id = UUID()
         beginRun(id)
         items.append(.tool(id, call))
         rebuildTranscriptProjection()
         if incrementsRevision { transcriptRevision += 1 }
+    }
+
+    private func toolIndex(for toolCallId: String) -> Int? {
+        if !toolCallId.isEmpty, let mapped = toolItemIndexByCallID[toolCallId], mapped < items.count,
+           case .tool(_, let existing) = items[mapped], existing.toolCallId == toolCallId {
+            return mapped
+        }
+        return items.lastIndex(where: {
+            if case .tool(_, let existing) = $0 { return existing.toolCallId == toolCallId }
+            return false
+        })
     }
 
     private func beginRun(_ id: UUID) {

@@ -242,6 +242,30 @@ final class ProtocolTests: XCTestCase {
     }
 
     @MainActor
+    func testPermissionReannouncedToolCallMergesIntoExistingRow() throws {
+        let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        session.appendUser("edit")
+        let first = ToolCallView(json: try JSONValue.decode(from: """
+        {"toolCallId": "call_edit", "title": "Edit hello.txt", "kind": "edit", "status": "pending"}
+        """))
+        session.apply(SessionNotification(sessionId: "s1", update: .toolCall(first)))
+        // session/request_permission carries the same call again, now with the diff.
+        let again = ToolCallView(json: try JSONValue.decode(from: """
+        {"toolCallId": "call_edit", "title": "Edit hello.txt", "kind": "edit", "status": "pending",
+         "content": [{"type": "diff", "path": "/tmp/hello.txt", "oldText": null, "newText": "hi\n"}]}
+        """))
+        session.appendTool(again)
+        session.apply(SessionNotification(sessionId: "s1", update: .toolCall(again)))
+        let tools = session.items.compactMap { item -> ToolCallView? in
+            if case .tool(_, let call) = item { return call }
+            return nil
+        }
+        XCTAssertEqual(tools.count, 1)
+        XCTAssertEqual(tools.first?.diffs.count, 1)
+    }
+
+    @MainActor
     func testUsageUpdateDoesNotRewriteTranscript() {
         let profile = AgentProfile(id: "test", title: "Test", subtitle: "", command: "test", arguments: [], builtIn: false, notes: "")
         let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
