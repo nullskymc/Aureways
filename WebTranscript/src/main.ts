@@ -174,6 +174,9 @@ function highlightBlock(block: HTMLElement) {
 
 let lastHeight = -1
 function reportHeight() {
+  // Before the first setMessages the page is empty; a 0 would collapse the
+  // host row to nothing and make the virtualized transcript jump.
+  if (messages.size === 0) return
   const h = Math.ceil(root.getBoundingClientRect().height)
   if (h !== lastHeight) {
     lastHeight = h
@@ -221,6 +224,7 @@ interface MessageInput {
 const api = {
   /** Replace the whole document with these messages, in order. */
   setMessages(list: MessageInput[]) {
+    lastHeight = -1 // a (re)assigned host always gets a fresh height report
     const ids = new Set(list.map((x) => x.id))
     for (const [id, m] of messages) {
       if (!ids.has(id)) {

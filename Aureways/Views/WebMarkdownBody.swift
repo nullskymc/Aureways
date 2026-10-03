@@ -12,7 +12,7 @@ import WebKit
 enum WebTranscriptFlag {
     static let key = "useWebTranscript"
 
-    static var isAvailable: Bool { WebTranscriptRuntime.shared.bundleRoot != nil }
+    @MainActor static var isAvailable: Bool { WebTranscriptRuntime.shared.bundleRoot != nil }
 }
 
 // MARK: - SwiftUI entry point

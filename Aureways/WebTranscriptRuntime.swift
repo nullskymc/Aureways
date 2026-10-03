@@ -14,7 +14,7 @@ final class WebTranscriptRuntime: NSObject {
 
     /// `Aureways.app/Contents/Resources/WebTranscriptBundle`, built from
     /// `WebTranscript/` (see its README). nil if the resource is missing.
-    let bundleRoot: URL? = Bundle.main.url(forResource: "WebTranscriptBundle", withExtension: nil)
+    let bundleRoot: URL?
 
     private lazy var configuration: WKWebViewConfiguration = makeConfiguration()
     private let schemeHandler: WebTranscriptSchemeHandler
@@ -31,7 +31,9 @@ final class WebTranscriptRuntime: NSObject {
     private var heights: [String: CGFloat] = [:]
 
     override private init() {
-        schemeHandler = WebTranscriptSchemeHandler(root: bundleRoot)
+        let root = Bundle.main.url(forResource: "WebTranscriptBundle", withExtension: nil)
+        bundleRoot = root
+        schemeHandler = WebTranscriptSchemeHandler(root: root)
         super.init()
     }
 

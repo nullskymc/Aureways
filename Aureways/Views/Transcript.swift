@@ -156,6 +156,8 @@ struct TranscriptView: View {
     /// 后台把还没解析的 agent 正文解析掉。300 条约 54 ms，排成一队跑，换来的是
     /// 块被放置时高度就是对的——窗口里的 spacer 靠这一点，而不是 LazyVStack 的估算。
     private func warmMarkdown() {
+        // The web renderer parses in the page; skip the cmark warm-up.
+        if UserDefaults.standard.bool(forKey: WebTranscriptFlag.key) { return }
         MarkdownDocumentCache.shared.warm(
             session.markdownSources,
             config: AurewaysMarkdown.plain
