@@ -24,6 +24,7 @@ struct SettingsView: View {
 struct GeneralSettingsPage: View {
     @Environment(AppModel.self) private var model
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage(WebTranscriptFlag.key) private var useWebTranscript = false
 
     var body: some View {
         @Bindable var model = model
@@ -35,6 +36,10 @@ struct GeneralSettingsPage: View {
                     Text("深色".localized).tag("dark")
                 }
                 Toggle("在菜单栏显示图标".localized, isOn: $showMenuBarExtra)
+                Toggle(isOn: $useWebTranscript) {
+                    Text("用 Web 渲染消息正文（实验）".localized)
+                    Text("用 WKWebView 渲染 Agent 回复的 Markdown，流式更顺、表格可横向滚动。".localized)
+                }
             }
 
             Section("语言".localized) {

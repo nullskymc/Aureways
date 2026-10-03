@@ -17,7 +17,7 @@ ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif
 
-.PHONY: build release test open clean perf-curve
+.PHONY: build release test open clean perf-curve web
 
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
 # command-line builds do not stall on approval. SwiftStreamingMarkdown pulls in
@@ -64,3 +64,9 @@ open: build
 
 clean:
 	rm -rf $(DERIVED)
+
+# Rebuild the WKWebView transcript renderer (WebTranscript/ -> Aureways/WebTranscriptBundle).
+# The bundle is committed, so normal app builds do not need Node; run this only
+# after editing WebTranscript/src.
+web:
+	cd WebTranscript && npm ci && npm run build

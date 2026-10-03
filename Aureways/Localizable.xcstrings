@@ -5329,6 +5329,38 @@
           }
         }
       }
+    },
+    "用 Web 渲染消息正文（实验）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Render messages with Web view (experimental)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 Web 渲染消息正文（实验）"
+          }
+        }
+      }
+    },
+    "用 WKWebView 渲染 Agent 回复的 Markdown，流式更顺、表格可横向滚动。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renders agent Markdown in a WKWebView: smoother streaming, horizontally scrollable tables."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 WKWebView 渲染 Agent 回复的 Markdown，流式更顺、表格可横向滚动。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

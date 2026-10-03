@@ -16,3 +16,6 @@ Aureways.app
 
 # Workspace paste drafts and local Aureways state
 .aureways/
+
+# Web transcript renderer build deps (output is committed in Aureways/WebTranscriptBundle)
+WebTranscript/node_modules/

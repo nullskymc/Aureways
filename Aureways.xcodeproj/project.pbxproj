@@ -22,6 +22,9 @@
 		B1010000000000000000000D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000D /* SessionStore.swift */; };
 		B1010000000000000000000F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1010000000000000000000F /* SettingsView.swift */; };
 		B10100000000000000000010 /* MarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000010 /* MarkdownBody.swift */; };
+		B101000000000000000000C1 /* WebMarkdownBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000C1 /* WebMarkdownBody.swift */; };
+		B101000000000000000000C2 /* WebTranscriptRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000C2 /* WebTranscriptRuntime.swift */; };
+		B101000000000000000000C3 /* WebTranscriptBundle in Resources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000C3 /* WebTranscriptBundle */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
 		B20100000000000000000042 /* TranscriptPerfTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000041 /* TranscriptPerfTests.swift */; };
 		B20100000000000000000044 /* TerminalHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000042 /* TerminalHostTests.swift */; };
@@ -150,6 +153,9 @@
 		F1010000000000000000000D /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session/SessionStore.swift; sourceTree = "<group>"; };
 		F1010000000000000000000F /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10100000000000000000010 /* MarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBody.swift; sourceTree = "<group>"; };
+		F101000000000000000000C1 /* WebMarkdownBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebMarkdownBody.swift; sourceTree = "<group>"; };
+		F101000000000000000000C2 /* WebTranscriptRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebTranscriptRuntime.swift; sourceTree = "<group>"; };
+		F101000000000000000000C3 /* WebTranscriptBundle */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebTranscriptBundle; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000041 /* TranscriptPerfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPerfTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000042 /* TerminalHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostTests.swift; sourceTree = "<group>"; };
@@ -264,6 +270,7 @@
 				F10100000000000000000080 /* MarkdownFile.swift */,
 				F10100000000000000000082 /* Info.plist */,
 				F10100000000000000000048 /* TranscriptVirtualizer.swift */,
+				F101000000000000000000C2 /* WebTranscriptRuntime.swift */,
 				F10100000000000000000055 /* TextDiff.swift */,
 				F10100000000000000000030 /* ComposerAttachment.swift */,
 				G10100000000000000000004 /* Harness */,
@@ -273,6 +280,7 @@
 				F10100000000000000000040 /* AppIcon.icon */,
 				F10100000000000000000070 /* Localization.swift */,
 				F10100000000000000000071 /* Localizable.xcstrings */,
+				F101000000000000000000C3 /* WebTranscriptBundle */,
 			);
 			path = Aureways;
 			sourceTree = "<group>";
@@ -301,6 +309,7 @@
 				F10100000000000000000033 /* CompletionPopup.swift */,
 				F1010000000000000000000F /* SettingsView.swift */,
 				F10100000000000000000010 /* MarkdownBody.swift */,
+				F101000000000000000000C1 /* WebMarkdownBody.swift */,
 				F10100000000000000000013 /* EmptyWorkspace.swift */,
 				F10100000000000000000014 /* TranscriptBlocks.swift */,
 				F10100000000000000000015 /* ToolViews.swift */,
@@ -479,6 +488,7 @@
 				B1010000000000000000000C /* Assets.xcassets in Resources */,
 				B10100000000000000000040 /* AppIcon.icon in Resources */,
 				B10100000000000000000071 /* Localizable.xcstrings in Resources */,
+				B101000000000000000000C3 /* WebTranscriptBundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -504,6 +514,8 @@
 				B1010000000000000000000D /* SessionStore.swift in Sources */,
 				B1010000000000000000000F /* SettingsView.swift in Sources */,
 				B10100000000000000000010 /* MarkdownBody.swift in Sources */,
+				B101000000000000000000C1 /* WebMarkdownBody.swift in Sources */,
+				B101000000000000000000C2 /* WebTranscriptRuntime.swift in Sources */,
 				B10100000000000000000012 /* ChatSession.swift in Sources */,
 				B10100000000000000000041 /* TranscriptBlock.swift in Sources */,
 				B10100000000000000000043 /* PerfFixture.swift in Sources */,

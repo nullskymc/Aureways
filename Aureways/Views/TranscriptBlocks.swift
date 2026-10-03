@@ -30,8 +30,8 @@ struct TranscriptBlockView: View, Equatable {
         switch block {
         case .user(_, let text, let attachments):
             UserBubble(text: text, attachments: attachments)
-        case .agent(_, let text):
-            AgentMessage(markdown: text, isStreaming: isStreaming)
+        case .agent(let id, let text):
+            AgentMessage(id: id, markdown: text, isStreaming: isStreaming)
         case .activity(_, let steps, let run):
             ActivityCard(
                 blockID: block.id,
@@ -201,8 +201,11 @@ private struct UserAttachmentView: View {
 }
 
 private struct AgentMessage: View {
+    let id: UUID
     let markdown: String
     var isStreaming = false
+
+    @AppStorage(WebTranscriptFlag.key) private var useWebTranscript = false
 
     @State private var isMessageHovered = false
     @State private var isButtonHovered = false
@@ -210,8 +213,12 @@ private struct AgentMessage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            MarkdownBody(source: markdown, isStreaming: isStreaming)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if useWebTranscript && WebTranscriptFlag.isAvailable {
+                WebMarkdownBody(messageID: id.uuidString, source: markdown, isStreaming: isStreaming)
+            } else {
+                MarkdownBody(source: markdown, isStreaming: isStreaming)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if !isStreaming && !markdown.isEmpty {
                 HStack {
