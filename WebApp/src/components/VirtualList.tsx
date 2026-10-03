@@ -49,10 +49,9 @@ export function VirtualList<T>(props: Props<T>) {
   const { rows, rowKey, estimate, padTop, padBottom } = props
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
-  /** Set by a real pointer / wheel / key gesture. Scroll events alone are not
-   * one: measuring a row grows scrollHeight and would unpin, leaving the tail
-   * under the composer. */
-  const gesture = useRef(false)
+  /** Latest composer clearance. The scroll listener is mounted once. */
+  const padBottomRef = useRef(padBottom)
+  padBottomRef.current = padBottom
   const [measureVersion, force] = useReducer((x: number) => x + 1, 0)
   const [view, setView] = useState({ top: 0, height: 800 })
   const elements = useRef(new Map<Element, string>())
@@ -103,59 +102,60 @@ export function VirtualList<T>(props: Props<T>) {
   )
   useEffect(() => () => ro.disconnect(), [ro])
 
-  // Viewport tracking. Only a user gesture may leave the bottom. Row
-  // measurement grows the scroll height without one, and that used to unpin
-  // while the tail was still under the composer.
+  // Stay pinned unless the viewport actually moves up. A wheel or click
+  // used to count as leaving the bottom, so a trackpad settle inside the
+  // composer clearance (or a row measurement) left the tail underneath it.
   useEffect(() => {
     const el = scroller.current!
     let raf = 0
-    let restoring = false
-    const arm = () => {
-      gesture.current = true
-    }
+    let locking = false
+    let lastTop = el.scrollTop
+    let lastHeight = el.scrollHeight
     const setPinned = (next: boolean) => {
       if (next === pinned.current) return
       pinned.current = next
       props.onPinnedChange?.(next)
     }
     const onScroll = () => {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < PIN_SLOP
-      if (gesture.current) {
-        gesture.current = false
-        setPinned(atBottom)
-      } else if (atBottom) {
-        setPinned(true)
-      } else if (pinned.current && !restoring) {
-        restoring = true
+      if (locking) return
+      const top = el.scrollTop
+      const height = el.scrollHeight
+      const gap = height - top - el.clientHeight
+      const topDelta = top - lastTop
+      const heightDelta = height - lastHeight
+      const userUp = topDelta < -2 && topDelta < heightDelta - 2
+      const towardEnd = topDelta > 2 && topDelta > heightDelta + 2
+      // Close enough that the tail is still crossing the composer.
+      const tail = Math.max(PIN_SLOP, padBottomRef.current)
+      if (pinned.current && userUp && gap > PIN_SLOP) {
+        setPinned(false)
+      } else if (pinned.current && gap > 1) {
+        locking = true
         pinToEnd(el)
-        restoring = false
+        locking = false
+      } else if (!pinned.current && gap < PIN_SLOP) {
+        setPinned(true)
+      } else if (!pinned.current && towardEnd && gap <= tail) {
+        setPinned(true)
+        locking = true
+        pinToEnd(el)
+        locking = false
       }
+      lastTop = el.scrollTop
+      lastHeight = el.scrollHeight
       if (!raf)
         raf = requestAnimationFrame(() => {
           raf = 0
           setView({ top: el.scrollTop, height: el.clientHeight })
         })
     }
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target?.closest('input, textarea, select, [contenteditable]')) return
-      if (e.key === 'PageUp' || e.key === 'PageDown' || e.key === 'Home' || e.key === 'End' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') arm()
-    }
     const resize = new ResizeObserver(() => {
       setView({ top: el.scrollTop, height: el.clientHeight })
       if (pinned.current) pinToEnd(el)
     })
     resize.observe(el)
-    el.addEventListener('wheel', arm, { passive: true, capture: true })
-    el.addEventListener('pointerdown', arm, { capture: true })
-    el.addEventListener('touchstart', arm, { passive: true, capture: true })
-    window.addEventListener('keydown', onKey)
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      el.removeEventListener('wheel', arm, { capture: true })
-      el.removeEventListener('pointerdown', arm, { capture: true })
-      el.removeEventListener('touchstart', arm, { capture: true })
-      window.removeEventListener('keydown', onKey)
       el.removeEventListener('scroll', onScroll)
       resize.disconnect()
       cancelAnimationFrame(raf)
