@@ -3,6 +3,7 @@ design/app-icon/_diag_*
 design/app-icon/_fit_*
 __pycache__/
 .derived
+.derived*
 .build
 DerivedData
 xcuserdata

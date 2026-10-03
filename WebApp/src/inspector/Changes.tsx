@@ -4,9 +4,8 @@ import { t } from '../i18n'
 import { rpc, type GitDiff } from '../rpc'
 import { app, transcript } from '../store'
 import type { DiffFile } from '../types'
-import { DiffView } from '../components/Blocks'
 import { Icon, Spinner } from '../components/Icon'
-import { filesVersion, openFile } from './state'
+import { filesVersion, openDiff, openFile } from './state'
 
 /** Review: edits made in this session (from tool calls) and the working tree vs HEAD. */
 export function ChangesView() {
@@ -14,8 +13,12 @@ export function ChangesView() {
   return (
     <div class="changes">
       <div class="seg" data-no-drag>
-        <button class={mode.value === 'session' ? 'on' : ''} onClick={() => (mode.value = 'session')}>{t('sessionEdits')}</button>
-        <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>{t('workingTree')}</button>
+        <button class={mode.value === 'session' ? 'on' : ''} onClick={() => (mode.value = 'session')}>
+          {t('sessionEdits')}
+        </button>
+        <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>
+          {t('workingTree')}
+        </button>
       </div>
       {mode.value === 'session' ? <SessionEdits /> : <GitChanges />}
     </div>
@@ -24,15 +27,23 @@ export function ChangesView() {
 
 function SessionEdits() {
   void transcript.version.value
-  // Last diff per path wins its hunks; counts accumulate.
   const files = new Map<string, DiffFile & { edits: number }>()
   for (const it of transcript.items) {
     if (it.kind !== 'tool' || !it.diffs) continue
     for (const d of it.diffs) {
       const prev = files.get(d.path)
       if (prev) {
-        files.set(d.path, { ...d, isNew: prev.isNew, added: prev.added + d.added, removed: prev.removed + d.removed, hunks: [...prev.hunks, ...d.hunks], edits: prev.edits + 1 })
-      } else files.set(d.path, { ...d, edits: 1 })
+        files.set(d.path, {
+          ...d,
+          isNew: prev.isNew || d.isNew,
+          added: prev.added + d.added,
+          removed: prev.removed + d.removed,
+          hunks: d.hunks.length > 0 ? d.hunks : prev.hunks,
+          edits: prev.edits + 1,
+        })
+      } else {
+        files.set(d.path, { ...d, edits: 1 })
+      }
     }
   }
   const list = [...files.values()]
@@ -42,9 +53,16 @@ function SessionEdits() {
   return (
     <div class="changes-list">
       <div class="changes-summary">
-        {t('filesChanged', list.length)} <span class="diffstat"><span class="add">+{added}</span> <span class="del">−{removed}</span></span>
+        {t('filesChanged', list.length)}{' '}
+        <span class="diffstat">
+          <span class="add">+{added}</span> <span class="del">−{removed}</span>
+        </span>
       </div>
-      {list.map((f) => <DiffView key={f.path} file={f} collapsible />)}
+      <div class="changes-files">
+        {list.map((f) => (
+          <ChangeRow key={f.path} file={f} onClick={() => openDiff(f)} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -68,22 +86,52 @@ function GitChanges() {
       <div class="changes-summary">
         <Icon name="gitDiff" size={12} /> {d.branch} · {t('filesChanged', files.length + (d.untracked?.length ?? 0))}
         <div class="flex1" />
-        <button class="icon-btn tiny" title={t('refresh')} onClick={load}>{loading.value ? <Spinner size={10} /> : <Icon name="refresh" size={12} />}</button>
+        <button class="icon-btn tiny" title={t('refresh')} onClick={load}>
+          {loading.value ? <Spinner size={10} /> : <Icon name="refresh" size={12} />}
+        </button>
       </div>
-      {files.map((f) => <DiffView key={f.path} file={f} collapsible />)}
+      <div class="changes-files">
+        {files.map((f) => (
+          <ChangeRow key={f.path} file={f} onClick={() => openDiff(f)} />
+        ))}
+      </div>
       {!!d.untracked?.length && (
         <div class="untracked">
           <div class="untracked-head">{t('untracked')}</div>
-          {d.untracked.map((rel) => (
-            <button key={rel} class="tree-row" onClick={() => openFile(joinPath(cwd, rel))}>
-              <Icon name="file" size={12} class="tree-icon" />
-              <span class="tree-name">{rel}</span>
-            </button>
-          ))}
+          {d.untracked.map((rel) => {
+            const abs = joinPath(cwd, rel)
+            return (
+              <button key={rel} class="change-row" onClick={() => openFile(abs)}>
+                <span class="change-badge untracked">U</span>
+                <span class="change-name">{rel.split('/').pop()}</span>
+                <span class="change-dir">{rel.split('/').slice(0, -1).join('/')}</span>
+              </button>
+            )
+          })}
         </div>
       )}
       {!files.length && !d.untracked?.length && <div class="changes-empty">{t('cleanTree')}</div>}
     </div>
+  )
+}
+
+function ChangeRow({ file, onClick }: { file: DiffFile; onClick: () => void }) {
+  const parts = file.path.split('/')
+  const name = parts.pop() ?? file.path
+  const dir = parts.slice(-2).join('/')
+  const status = file.isNew ? 'A' : file.added > 0 && file.removed === 0 ? 'A' : 'M'
+  return (
+    <button class="change-row" onClick={onClick} title={file.path}>
+      <span class={`change-badge ${status.toLowerCase()}`}>{status}</span>
+      <span class="change-name">{name}</span>
+      {dir && <span class="change-dir">{dir}</span>}
+      <div class="flex1" />
+      <span class="diffstat">
+        {file.added > 0 && <span class="add">+{file.added}</span>}
+        {file.added > 0 && file.removed > 0 && ' '}
+        {file.removed > 0 && <span class="del">−{file.removed}</span>}
+      </span>
+    </button>
   )
 }
 

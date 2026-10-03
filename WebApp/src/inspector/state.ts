@@ -5,6 +5,7 @@ import { batch, computed, signal, type Signal } from '@preact/signals'
 import { onMessage, post } from '../bridge'
 import { prefs } from '../prefs'
 import { rpc, type FileRead } from '../rpc'
+import type { DiffFile } from '../types'
 import { app } from '../store'
 import { t } from '../i18n'
 
@@ -12,6 +13,7 @@ export type Tab =
   | { kind: 'files'; id: 'files' }
   | { kind: 'changes'; id: 'changes' }
   | { kind: 'file'; id: string; path: string }
+  | { kind: 'diff'; id: string; file: DiffFile }
   | { kind: 'term'; id: string; termId: string; title: string; exited?: boolean }
 
 interface PaneState { tabs: Tab[]; active: string }
@@ -58,6 +60,18 @@ export function openFile(path: string) {
   const id = 'file:' + path
   if (!pane.tabs.some((t) => t.id === id)) pane.tabs.push({ kind: 'file', id, path })
   ensureBuffer(path)
+  showInspector(id)
+}
+
+export function openDiff(file: DiffFile) {
+  const pane = currentPane()
+  const id = 'diff:' + file.path
+  const existing = pane.tabs.find((t): t is Extract<Tab, { kind: 'diff' }> => t.id === id)
+  if (existing) {
+    existing.file = file
+  } else {
+    pane.tabs.push({ kind: 'diff', id, file })
+  }
   showInspector(id)
 }
 

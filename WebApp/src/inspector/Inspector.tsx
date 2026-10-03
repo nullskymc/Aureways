@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon'
 import { ChangesView } from './Changes'
 import { FileTree } from './FileTree'
 import { FileView } from './FileView'
+import { DiffPane } from './DiffPane'
 import { closeTab, currentPane, openTerminal, selectTab, buffers, type Tab } from './state'
 import { TerminalView } from './Terminal'
 
@@ -48,6 +49,7 @@ export function Inspector() {
         {active.kind === 'files' && <FileTree root={app.value?.inspectorRoot ?? ''} />}
         {active.kind === 'changes' && <ChangesView />}
         {active.kind === 'file' && <FileView key={active.path} path={active.path} />}
+        {active.kind === 'diff' && <DiffPane key={active.file.path} file={active.file} />}
         {/* Terminals stay mounted so xterm keeps its buffer; only the active one shows. */}
         {terms.map((tab) => (
           <TerminalView key={tab.termId} id={tab.termId} visible={tab.id === active.id} exited={!!tab.exited} />
@@ -74,15 +76,20 @@ function TabButton({ tab, active }: { tab: Tab; active: boolean }) {
       label = tab.path.split('/').pop() ?? tab.path
       dirty = !!buffers.get(tab.path)?.dirty.value
       break
+    case 'diff':
+      icon = 'gitDiff'
+      label = (tab.file.path.split('/').pop() ?? tab.file.path) + ' · Diff'
+      break
     case 'term':
       icon = 'terminal'
       label = tab.exited ? `${tab.title} ✕` : tab.title
       break
   }
-  const closable = tab.kind === 'file' || tab.kind === 'term'
+  const closable = tab.kind === 'file' || tab.kind === 'diff' || tab.kind === 'term'
   return (
     <div
       class={'insp-tab' + (active ? ' active' : '')}
+      data-no-drag
       title={tab.kind === 'file' ? tab.path : label}
       onMouseDown={(e) => {
         if (e.button === 1 && closable) {

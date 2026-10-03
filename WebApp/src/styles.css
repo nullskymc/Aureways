@@ -462,16 +462,35 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .seg button { height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; color: var(--text-2); }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 0.5px var(--border-strong), 0 1px 2px oklch(0 0 0 / 0.08); }
 .changes > .seg { margin: 8px 10px; align-self: flex-start; }
-.changes-list { flex: 1; min-height: 0; overflow: auto; padding: 0 10px 20px; display: flex; flex-direction: column; gap: 10px; }
-/* overflow:hidden on .diff zeroes the flex min-size, so many files were
-   crushed into the viewport instead of scrolling. */
+.changes-list { flex: 1; min-height: 0; overflow: auto; padding: 0 6px 20px; display: flex; flex-direction: column; gap: 6px; }
 .changes-list > * { flex: none; }
-.changes-list .diff { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--code-bg); font: 12px/1.55 var(--mono); }
-.changes-list .diff + .diff { border-top: 1px solid var(--border); }
-.changes-list .diff-body { max-height: 420px; }
-.changes-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); padding: 2px 2px 0; }
+.changes-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); padding: 4px 6px 2px; }
 .changes-empty { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 12.5px; }
-.untracked-head { font-size: 11.5px; font-weight: 600; color: var(--text-3); padding: 4px 6px; }
+.changes-files { display: flex; flex-direction: column; gap: 1px; }
+
+.change-row {
+  display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 8px;
+  border-radius: 6px; font-size: 12px; color: var(--text); white-space: nowrap; text-align: left;
+}
+.change-row:hover { background: var(--hover); }
+.change-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.change-dir { color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; margin-left: 2px; }
+.change-badge {
+  font-size: 10px; font-weight: 700; width: 15px; height: 15px; border-radius: 3px;
+  display: grid; place-items: center; line-height: 1; flex: none;
+}
+.change-badge.m { color: var(--amber); background: color-mix(in oklch, var(--amber) 15%, transparent); }
+.change-badge.a { color: var(--green); background: color-mix(in oklch, var(--green) 15%, transparent); }
+.change-badge.d { color: var(--red); background: color-mix(in oklch, var(--red) 15%, transparent); }
+.change-badge.untracked { color: var(--text-3); background: var(--fill); }
+
+.untracked-head { font-size: 11px; font-weight: 600; color: var(--text-3); padding: 8px 6px 2px; }
+
+/* ---- Diff View Pane (in Inspector active tab) -------------------------------- */
+.diff-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--main-bg); }
+.diff-pane-body { flex: 1; min-height: 0; overflow: auto; font: 12px/1.55 var(--mono); background: var(--code-bg); }
+.diff-pane-body .hunk { border-bottom: 1px solid var(--border); }
+.diff-pane-body .hunk:last-child { border-bottom: none; }
 
 /* ---- Composer extras ---------------------------------------------------------- */
 .mention-menu .slash-item { align-items: center; }
