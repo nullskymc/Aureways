@@ -10,7 +10,9 @@ import { VirtualList, type VirtualListHandle } from './VirtualList'
 const rowKey = (b: Block) => b.key
 const render = (b: Block) => <BlockView block={b} />
 
-export function Transcript({ streaming, padBottom, padTop = 64 }: { streaming: boolean; padBottom: number; padTop?: number }) {
+/** `jumpBottom`: where the ↓ button sits when the composer is a native
+ *  overlay (above its card and any open popup); defaults to above the dock. */
+export function Transcript({ streaming, padBottom, padTop = 64, jumpBottom }: { streaming: boolean; padBottom: number; padTop?: number; jumpBottom?: number }) {
   const version = transcript.version.value
   const sessionId = transcript.sessionId.value
   const blocks = useComputed(() => {
@@ -40,7 +42,7 @@ export function Transcript({ streaming, padBottom, padTop = 64 }: { streaming: b
         />
       )}
       {!pinned.value && rows.length > 0 && (
-        <button class="jump-bottom" onClick={() => handle.current?.scrollToBottom()} title={t('jumpBottom')} style={{ bottom: padBottom + 8 }}>
+        <button class="jump-bottom" onClick={() => handle.current?.scrollToBottom()} title={t('jumpBottom')} style={{ bottom: jumpBottom ?? padBottom + 8 }}>
           <Icon name="arrowDown" size={14} />
         </button>
       )}
@@ -105,6 +107,10 @@ function FindBar({ rows, handle }: { rows: Block[]; handle: { current: VirtualLi
     if (cmd?.name === 'find') {
       open.value = true
       requestAnimationFrame(() => input.current?.select())
+    } else if (cmd?.name === 'escape' && open.value) {
+      // Esc from the composer overlay page, which the composer didn't consume.
+      open.value = false
+      query.value = ''
     }
   }, [uiCommand.value])
 

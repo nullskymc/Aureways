@@ -58,7 +58,7 @@ export function FileView({ path }: { path: string }) {
           <Icon name="alert" size={13} />
           <span class="flex1">{t('changedOnDisk')}</span>
           <button class="btn small" onClick={() => { b.dirty.value = false; b.draft.value = null; void loadBuffer(b) }}>{t('reload')}</button>
-          <button class="btn small subtle" onClick={() => void saveBuffer(b, true)}>{t('keepMine')}</button>
+          <button class="btn small subtle" onClick={async () => { if (await saveBuffer(b, true)) b.draft.value = null }}>{t('keepMine')}</button>
         </div>
       )}
       <div class="file-body">

@@ -586,6 +586,8 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .mb-link:hover { background: var(--hover); color: var(--text); }
 
 /* ---- Liquid Glass (native NSGlassEffectView under transparent regions) ---------- */
+/* System glass only: no tint, stroke, frosting or opacity on top of it, so the
+   user's Liquid Glass setting (clear/tinted) and Reduce Transparency apply. */
 /* The native layer paints --main-bg edge to edge and floats glass under
    [data-glass] elements, so those (and the main column) stay transparent. */
 html.glass .main { background: transparent; border-left: 0; }
@@ -603,9 +605,8 @@ html.glass .transcript .vscroll {
 }
 html.glass .dock { background: none; }
 html.glass .composer { background: transparent; border-color: transparent; box-shadow: none; }
-html.glass .composer:focus-within { border-color: color-mix(in oklch, var(--text) 14%, transparent); }
 html.glass .composer.dropping { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
-html.glass .head-tools { padding: 2px 3px; border-radius: 16px; gap: 0; box-shadow: inset 0 0 0 0.5px var(--border); }
+html.glass .head-tools { padding: 2px 3px; border-radius: 16px; gap: 0; }
 html.glass .head-tools .icon-btn:hover { background: color-mix(in oklch, var(--text) 8%, transparent); }
 html.glass .settings-mode .main { border-left: 0; }
 
@@ -614,3 +615,5 @@ html.glass .settings-mode .main { border-left: 0; }
 html.in-composer, html.in-composer body, html.in-composer #app { background: transparent; }
 .overlay-root { position: absolute; left: 0; right: 0; bottom: 0; }
 html.in-composer .slash-menu { box-shadow: none; }
+/* The viewport follows the content here, so a vh cap would pin it small. */
+html.in-composer .composer textarea { max-height: 300px; }

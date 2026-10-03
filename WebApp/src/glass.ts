@@ -11,7 +11,7 @@ let frames = 0
 let scheduled = false
 
 function measure() {
-  const rects: { k: string; x: number; y: number; w: number; h: number; r: number }[] = []
+  const rects: Record<string, number | string>[] = []
   // `slot`: where the native composer overlay goes (no glass of its own here).
   document.querySelectorAll<HTMLElement>('[data-glass]').forEach((el) => {
     const kind = el.dataset.glass!
@@ -19,7 +19,18 @@ function measure() {
     if (b.width < 1 || b.height < 1) return
     const inset = INSET[kind] ?? 0
     const radius = kind === 'sidebar' ? 16 : kind === 'control' ? b.height / 2 : parseFloat(getComputedStyle(el).borderTopLeftRadius) || 12
-    rects.push({ k: kind, x: Math.round(b.left + inset), y: Math.round(b.top + inset), w: Math.round(b.width - inset * 2), h: Math.round(b.height - inset * 2), r: radius })
+    const rect: Record<string, number | string> = { k: kind, x: Math.round(b.left + inset), y: Math.round(b.top + inset), w: Math.round(b.width - inset * 2), h: Math.round(b.height - inset * 2), r: radius }
+    if (kind === 'slot' && el.parentElement) {
+      // Anchor for native layout: the dock's content box insets and the
+      // column's max width, so the overlay can follow live resize itself.
+      const p = el.parentElement
+      const pb = p.getBoundingClientRect()
+      const cs = getComputedStyle(p)
+      rect.al = Math.round(pb.left + parseFloat(cs.paddingLeft))
+      rect.ar = Math.round(window.innerWidth - pb.right + parseFloat(cs.paddingRight))
+      rect.mw = parseFloat(getComputedStyle(el).maxWidth) || Math.round(b.width)
+    }
+    rects.push(rect as never)
   })
   const json = JSON.stringify(rects)
   if (json !== last) {

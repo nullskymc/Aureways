@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import QuartzCore
 import WebKit
+import UserNotifications
 
 /// Composer draft attachments, shared by the main and composer-overlay pages.
 @Observable
@@ -64,6 +65,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     var onFocusComposer: (() -> Void)?
     var onFocusMain: (() -> Void)?
     var onComposerLayout: (([String: Any]) -> Void)?
+    /// The page (re)loaded and signalled `ready` (after queued commands).
+    var onReady: (() -> Void)?
 
     let terminals = WebTerminalService()
     var markdownDefaultCache = false
@@ -92,6 +95,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     /// `ai.aureways.debug.eval` evaluates its string object as JS and writes the
     /// result to /tmp/aureways_eval.out; `ai.aureways.debug.frame` takes
     /// "x,y,w,h" (screen coordinates) and sets the window frame.
+    private static var debugMenuBarPanel: NSPanel?
+
     private func installDebugHooks() {
         let center = DistributedNotificationCenter.default()
         center.addObserver(forName: Notification.Name("ai.aureways.debug.eval"), object: nil, queue: .main) { [weak self] note in
@@ -102,6 +107,10 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 if js.hasPrefix("@composer ") {
                     js.removeFirst("@composer ".count)
                     target = self?.composerPeer?.webView
+                }
+                if js.hasPrefix("@menubar ") {
+                    js.removeFirst("@menubar ".count)
+                    target = (Self.debugMenuBarPanel?.contentView as? WebShellHostView)?.webView
                 }
                 target?.evaluateJavaScript(js) { result, error in
                     let text = error.map { "error: \($0)" } ?? String(describing: result ?? "nil")
@@ -151,14 +160,92 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         // Toggles the menu bar extra panel (clicks our status item button).
         center.addObserver(forName: Notification.Name("ai.aureways.debug.statusItem"), object: nil, queue: .main) { _ in
             MainActor.assumeIsolated {
-                for window in NSApp.windows where String(describing: type(of: window)).contains("StatusBar") {
+                var log: [String] = []
+                var clicked = false
+                for window in NSApp.windows {
+                    let name = String(describing: type(of: window))
+                    log.append("\(name) visible=\(window.isVisible) frame=\(window.frame)")
+                    guard name.contains("StatusBar"), !clicked else { continue }
                     func findButton(_ view: NSView?) -> NSButton? {
                         guard let view else { return nil }
                         if let button = view as? NSButton { return button }
                         return view.subviews.lazy.compactMap(findButton).first
                     }
-                    findButton(window.contentView)?.performClick(nil)
+                    if let button = findButton(window.contentView) {
+                        log.append("  button \(type(of: button)) action=\(String(describing: button.action)) target=\(String(describing: button.target.map { type(of: $0) }))")
+                        // SwiftUI's MenuBarExtra button has no target/action; it
+                        // reacts to mouse events, so deliver an in-process
+                        // down/up pair to its window (no Accessibility needed).
+                        // The up event is queued first so the button's tracking loop ends.
+                        let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+                        func event(_ type: NSEvent.EventType) -> NSEvent? {
+                            NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+                        }
+                        if let down = event(.leftMouseDown), let up = event(.leftMouseUp) {
+                            NSApp.postEvent(up, atStart: false)
+                            button.mouseDown(with: down)
+                        }
+                        clicked = true
+                    }
                 }
+                try? log.joined(separator: "\n").write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+            }
+        }
+        // Finder drop without Accessibility: "path|path" (prefix "@composer "
+        // to drop on the composer overlay instead of the main page).
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.drop"), object: nil, queue: .main) { [weak self] note in
+            guard var spec = note.object as? String else { return }
+            MainActor.assumeIsolated {
+                var target = self?.webView as? ShellWebView
+                if spec.hasPrefix("@composer ") {
+                    spec.removeFirst("@composer ".count)
+                    target = self?.composerPeer?.webView as? ShellWebView
+                }
+                let urls = spec.split(separator: "|").map { URL(fileURLWithPath: String($0)) }
+                target?.acceptDroppedFiles(urls)
+            }
+        }
+        // The MenuBarExtra panel can't be opened without a real click, so this
+        // hosts the same #menubar page in a plain panel next to the window.
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.menubarPanel"), object: nil, queue: .main) { [weak self] note in
+            let close = (note.object as? String) == "close"
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if close {
+                    Self.debugMenuBarPanel?.close()
+                    Self.debugMenuBarPanel = nil
+                    return
+                }
+                let size = MenuBarWebView.size
+                let anchor = self.hostView?.window?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+                let panel = NSPanel(contentRect: NSRect(x: anchor.maxX - size.width - 40, y: anchor.maxY - size.height - 60, width: size.width, height: size.height),
+                                    styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
+                panel.titleVisibility = .hidden
+                panel.titlebarAppearsTransparent = true
+                panel.isReleasedWhenClosed = false
+                // Like the real MenuBarExtra window: above other apps' windows,
+                // so WebKit doesn't treat the page as occluded/hidden.
+                panel.level = .statusBar
+                panel.contentView = WebShellHostView(model: self.model, role: .menuBar)
+                panel.orderFront(nil)
+                Self.debugMenuBarPanel = panel
+            }
+        }
+        // Lists delivered user notifications and the Dock badge.
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.notifications"), object: nil, queue: .main) { _ in
+            let badge = MainActor.assumeIsolated { NSApp.dockTile.badgeLabel ?? "" }
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+                    var lines = ["badge=\(badge) auth=\(settings.authorizationStatus.rawValue)"]
+                    lines += delivered.map { "\($0.request.content.title) | \($0.request.content.body)" }
+                    try? lines.joined(separator: "\n").write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+                }
+            }
+        }
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.fullscreen"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.hostView?.window?.toggleFullScreen(nil)
             }
         }
         center.addObserver(forName: Notification.Name("ai.aureways.debug.frame"), object: nil, queue: .main) { [weak self] note in
@@ -698,6 +785,9 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
             case "composerLayout":
                 onComposerLayout?(body)
                 return
+            case "composerEscape":
+                WebShellBridge.current?.sendCommand("escape")
+                return
             case "uiPrefs", "dragRegions", "glass":
                 return
             default:
@@ -712,6 +802,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
             let queued = queuedCommands
             queuedCommands = []
             queued.forEach(post)
+            onReady?()
         case "log":
             NSLog("[web] %@", String(describing: body["message"] ?? ""))
         case "send":
@@ -858,7 +949,9 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
                 guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
                 else { return nil }
-                return GlassLayerView.Panel(kind: rect["k"] as? String ?? "", frame: CGRect(x: x, y: y, width: w, height: h), radius: number("r") ?? 12)
+                var extra: [String: CGFloat] = [:]
+                for key in ["al", "ar", "mw"] { extra[key] = number(key) }
+                return GlassLayerView.Panel(kind: rect["k"] as? String ?? "", frame: CGRect(x: x, y: y, width: w, height: h), radius: number("r") ?? 12, extra: extra)
             }
             onGlassRects?(panels)
         case "menu":

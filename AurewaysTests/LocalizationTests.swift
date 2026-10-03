@@ -50,9 +50,9 @@ final class LocalizationTests: XCTestCase {
         }
 
         L10n.languageCode = "en"
-        XCTAssertEqual(L10n.tr("设置"), "Settings")
+        XCTAssertEqual(L10n.tr("新对话"), "New Chat")
         L10n.languageCode = "zh-Hans"
-        XCTAssertEqual(L10n.tr("设置"), "设置")
+        XCTAssertEqual(L10n.tr("新对话"), "新对话")
         L10n.languageCode = "not-a-locale"
         XCTAssertEqual(L10n.languageCode, L10n.systemLanguage)
     }
@@ -73,25 +73,19 @@ final class LocalizationTests: XCTestCase {
         XCTAssertNotNil(strings)
         guard let strings else { return }
 
-        XCTAssertGreaterThan(strings.count, 200, "Should have more than 200 localized strings")
+        // The web shell carries its own strings; the catalog only holds what
+        // native code still shows (menus, panels, notifications, agent hints).
+        XCTAssertGreaterThan(strings.count, 30, "Native strings went missing")
 
         // Validate essential UI keys are present and translated
         let keyChecks = [
             "新对话": "New Chat",
-            "重试": "Retry",
-            "设置": "Settings",
-            "工作区": "Workspaces",
             "取消": "Cancel",
-            "确认": "Confirm",
-            "批准": "Approve",
-            "放弃": "Discard",
-            "正在思考": "Thinking",
+            "打开": "Open",
             "读取文件": "Read File",
             "编辑文件": "Edit File",
             "执行命令": "Execute Command",
             "搜索": "Search",
-            "终端": "Terminal",
-            "检查器": "Inspector"
         ]
 
         for (key, expectedEn) in keyChecks {
@@ -135,6 +129,44 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(missingEnCount, 0, "All entries must have English localizations")
         XCTAssertEqual(emptyEnCount, 0, "No English localization value should be empty")
         XCTAssertEqual(chineseInEnCount, 0, "No English localization value should contain Chinese characters")
+    }
+
+    /// Every catalog key must still be used as a literal somewhere in the app
+    /// sources (keys are always looked up as `"…".localized` / `L10n.tr("…")`),
+    /// so dead strings don't pile up again.
+    func testNoUnusedCatalogKeys() throws {
+        guard let fileURL = findXCStringsURL() else {
+            XCTFail("Localizable.xcstrings not found")
+            return
+        }
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: fileURL)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        let sourceDir = fileURL.deletingLastPathComponent()
+        var source = ""
+        let enumerator = FileManager.default.enumerator(at: sourceDir, includingPropertiesForKeys: nil)
+        while let url = enumerator?.nextObject() as? URL {
+            if url.pathExtension == "swift", let text = try? String(contentsOf: url, encoding: .utf8) {
+                source += text
+            }
+        }
+        guard !source.isEmpty else { return }
+        // …and every literal lookup must have a catalog entry (else English
+        // users see the Chinese source string).
+        let lookup = try NSRegularExpression(pattern: #""((?:[^"\\]|\\.)*)"\.localized|L10n\.tr\("((?:[^"\\]|\\.)*)""#)
+        let range = NSRange(source.startIndex..., in: source)
+        for match in lookup.matches(in: source, range: range) {
+            let group = match.range(at: 1).location != NSNotFound ? 1 : 2
+            guard let keyRange = Range(match.range(at: group), in: source) else { continue }
+            let key = String(source[keyRange]).replacingOccurrences(of: "\\n", with: "\n")
+            XCTAssertNotNil(strings[key], "Missing catalog entry for: \(key)")
+        }
+        for key in strings.keys where !key.isEmpty {
+            let literal = "\"" + key
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n") + "\""
+            XCTAssertTrue(source.contains(literal), "Unused catalog key: \(key)")
+        }
     }
 
     func testFormatSpecifiersConsistency() throws {

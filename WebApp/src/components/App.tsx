@@ -27,6 +27,8 @@ export function App() {
   const dockHeight = useSignal(140)
   /** Card height of the native composer overlay (sessions only; see ComposerOverlay.tsx). */
   const composerH = useSignal(88)
+  /** Full overlay height (card + open popups): the ↓ button stays above it. */
+  const composerTotal = useSignal(88)
   const dock = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export function App() {
     switch (c?.name) {
       case 'composerHeight':
         if (typeof c.data?.h === 'number') composerH.value = c.data.h
+        if (typeof c.data?.total === 'number') composerTotal.value = c.data.total
         break
       case 'toggleSidebar':
         sidebarOpen.value = !sidebarOpen.value
@@ -76,7 +79,7 @@ export function App() {
   }, [glass])
   // With a session open the composer is a native overlay (its own web view on
   // glass) and the transcript scrolls underneath it to the window bottom.
-  const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId
+  const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId && route.value.name === 'main'
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('composer-overlay', overlay)
   }, [overlay])
@@ -116,7 +119,7 @@ export function App() {
       <main class="main" style={{ '--dock-h': `${dockHeight.value}px` }}>
         <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
         {session ? (
-          <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} padTop={glass ? 12 : 64} />
+          <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} jumpBottom={overlay ? dockHeight.value + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
         ) : (
           <Landing state={state} />
         )}

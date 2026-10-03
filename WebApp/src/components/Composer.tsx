@@ -249,7 +249,11 @@ export function Composer({ state, session }: { state: AppState; session: Session
               e.preventDefault()
               if (!streaming) send()
             }
-            if (e.key === 'Escape' && streaming) post('cancel')
+            if (e.key === 'Escape') {
+              if (streaming) post('cancel')
+              // Overlay page: hand unconsumed Esc to the main page (find bar…).
+              else if (document.documentElement.classList.contains('in-composer')) post('composerEscape')
+            }
           }}
         />
         <div class="composer-bar">

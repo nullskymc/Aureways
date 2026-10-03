@@ -117,7 +117,15 @@ final class WebShellHostView: NSView {
         bridge.onGlassRects = { [weak self] rects in
             guard let self else { return }
             self.glassLayer.apply(rects.filter { $0.kind != "slot" })
-            self.composerOverlay?.slot = rects.first { $0.kind == "slot" }?.frame
+            self.composerOverlay?.anchor = rects.first { $0.kind == "slot" }.map { slot in
+                ComposerOverlay.Anchor(
+                    areaLeft: slot.extra["al"] ?? slot.frame.minX,
+                    areaRight: slot.extra["ar"] ?? (self.bounds.width - slot.frame.maxX),
+                    maxWidth: slot.extra["mw"] ?? slot.frame.width,
+                    bottomInset: self.bounds.height - slot.frame.maxY
+                )
+            }
+            self.composerOverlay?.relayout(in: self.bounds)
         }
         bridge.onFocusComposer = { [weak self] in
             guard let self, let window = self.window else { return }
@@ -127,6 +135,7 @@ final class WebShellHostView: NSView {
                 window.makeFirstResponder(self.webView)
             }
         }
+        bridge.onReady = { [weak self] in self?.composerOverlay?.mainPageReady() }
         bridge.onFocusMain = { [weak self] in
             guard let self, let window = self.window else { return }
             window.makeFirstResponder(self.webView)
@@ -169,6 +178,12 @@ final class WebShellHostView: NSView {
             url = components.url ?? url
         }
         webView.load(URLRequest(url: url))
+    }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        // Same pass as the window resize: no wait for the page's next report.
+        composerOverlay?.relayout(in: bounds)
     }
 
     override func viewDidMoveToWindow() {
@@ -306,10 +321,15 @@ final class ShellWebView: WKWebView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = fileURLs(sender)
         guard !urls.isEmpty else { return super.performDragOperation(sender) }
+        acceptDroppedFiles(urls)
+        return true
+    }
+
+    /// Finder drop (also driven by the Debug `drop` hook).
+    func acceptDroppedFiles(_ urls: [URL]) {
         bridge?.sendCommand("dropEnd")
         bridge?.pendingAttachments.append(contentsOf: ComposerAttachment.fromFileURLs(urls))
         bridge?.sendCommand("focusComposer")
-        return true
     }
 }
 
@@ -389,6 +409,8 @@ final class GlassLayerView: NSView {
         var kind: String
         var frame: CGRect
         var radius: CGFloat
+        /// Kind-specific numbers (the composer `slot` carries its anchor).
+        var extra: [String: CGFloat] = [:]
     }
 
     /// `--main-bg`: light #fdfdfd, dark #161618.
@@ -436,7 +458,6 @@ final class GlassLayerView: NSView {
         panels = next
         while views.count < next.count {
             let glass = NSGlassEffectView()
-            glass.style = .regular
             glass.contentView = NSView()
             content.addSubview(glass)
             views.append(glass)
@@ -446,6 +467,11 @@ final class GlassLayerView: NSView {
         }
         for (glass, panel) in zip(views, next) {
             if glass.frame != panel.frame { glass.frame = panel.frame }
+            // Follow live resize until the page reports again: the sidebar
+            // panel stretches with the window height, right-hand controls
+            // keep their distance from the right edge.
+            glass.autoresizingMask = panel.kind == "sidebar" ? [.height]
+                : panel.frame.midX > bounds.midX ? [.minXMargin] : []
             if glass.cornerRadius != panel.radius { glass.cornerRadius = panel.radius }
         }
     }
@@ -554,11 +580,14 @@ final class TrafficLightLayout {
 /// `WKWebView` (`#composer`) over an `NSGlassEffectView`, both above the main
 /// page so the glass refracts the transcript scrolling behind it.
 ///
-/// Placement: the main page reports a `slot` rect (x, width and bottom of the
-/// composer's place in the dock); the composer page reports its content
-/// height and the card/popup rects (`composerLayout`). Only this overlay's
-/// frames are set; nothing feeds back into SwiftUI or the main page layout
-/// except the card height, which the main page uses for its bottom inset.
+/// Placement is native: the main page reports where the composer column
+/// sits (`Anchor`: the dock's content insets from the page edges, the column's
+/// max width and the bottom inset), and the frame is recomputed from the host
+/// bounds on every layout pass, so live resize moves the overlay in the same
+/// frame as the window. The composer page reports only its own content
+/// height and the card/popup rects (`composerLayout`). Nothing feeds back into
+/// SwiftUI or the main page layout except the card height, which the main
+/// page uses for its bottom inset.
 @MainActor
 final class ComposerOverlay {
     let bridge: WebShellBridge
@@ -567,17 +596,43 @@ final class ComposerOverlay {
     private let navigationGuard = WebShellNavigationGuard()
     private weak var main: WebShellBridge?
     private var layout: Layout?
-    private var lastCardHeight: CGFloat = -1
+    private var lastSentHeight: CGSize?
+    private var hostBounds: CGRect = .zero
+
+    /// Card/popup geometry in the composer page's own coordinates: horizontal
+    /// insets from the viewport's edges (so they survive width changes before
+    /// the next report), height, and distance from the viewport bottom.
+    struct Inset: Equatable {
+        var left: CGFloat
+        var right: CGFloat
+        var height: CGFloat
+        var bottom: CGFloat
+    }
 
     struct Layout {
         var height: CGFloat
-        var card: CGRect      // x, w, h; y = distance from the overlay's bottom
+        var card: Inset
         var radius: CGFloat
-        var popup: CGRect?
+        var popup: Inset?
     }
 
-    var slot: CGRect? {
-        didSet { if slot != oldValue { place() } }
+    /// Where the composer column sits in the main page (from its `slot`).
+    struct Anchor: Equatable {
+        var areaLeft: CGFloat
+        var areaRight: CGFloat
+        var maxWidth: CGFloat
+        var bottomInset: CGFloat
+    }
+
+    var anchor: Anchor? {
+        didSet { if anchor != oldValue { place() } }
+    }
+
+    /// Called from the host's layout pass (including every live-resize step).
+    func relayout(in bounds: CGRect) {
+        guard bounds != hostBounds else { return }
+        hostBounds = bounds
+        place()
     }
 
     private(set) var isShown = false
@@ -592,10 +647,6 @@ final class ComposerOverlay {
         webView.frame = CGRect(x: 0, y: 0, width: 760, height: 120)
         webView.alphaValue = 0
         webView.hitRegion = []
-        // Between messages (live resize), stay bottom-anchored and roughly centred.
-        webView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
-        glass.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
-        glass.style = .regular
         glass.cornerRadius = 22
         glass.contentView = NSView()
         glass.isHidden = true
@@ -618,44 +669,64 @@ final class ComposerOverlay {
     }
 
     private func receive(_ body: [String: Any]) {
-        func rect(_ any: Any?) -> CGRect? {
+        let viewport = CGFloat((body["vw"] as? NSNumber)?.doubleValue ?? Double(webView.frame.width))
+        func inset(_ any: Any?) -> Inset? {
             guard let dict = any as? [String: Any] else { return nil }
             func number(_ key: String) -> CGFloat { CGFloat((dict[key] as? NSNumber)?.doubleValue ?? 0) }
-            return CGRect(x: number("x"), y: number("b"), width: number("w"), height: number("h"))
+            return Inset(left: number("x"), right: viewport - number("x") - number("w"), height: number("h"), bottom: number("b"))
         }
         let height = CGFloat((body["h"] as? NSNumber)?.doubleValue ?? 0)
-        guard height > 0, let card = rect(body["card"]) else {
+        guard height > 0, let card = inset(body["card"]) else {
             layout = nil
             place()
             return
         }
         let radius = CGFloat(((body["card"] as? [String: Any])?["r"] as? NSNumber)?.doubleValue ?? 22)
-        layout = Layout(height: height.rounded(.up), card: card, radius: radius, popup: rect(body["popup"]))
+        layout = Layout(height: height.rounded(.up), card: card, radius: radius, popup: inset(body["popup"]))
         place()
     }
 
     private func place() {
-        guard let slot, let layout, slot.width > 0 else {
+        guard let anchor, let layout, hostBounds.width > 0 else {
             setShown(false)
             return
         }
-        let bottom = slot.maxY
-        let frame = CGRect(x: slot.minX, y: bottom - layout.height, width: slot.width, height: layout.height).integral
+        let area = hostBounds.width - anchor.areaLeft - anchor.areaRight
+        let width = min(anchor.maxWidth, area)
+        guard width > 40 else {
+            setShown(false)
+            return
+        }
+        let x = anchor.areaLeft + (area - width) / 2
+        let bottom = hostBounds.height - anchor.bottomInset
+        let frame = CGRect(x: x, y: bottom - layout.height, width: width, height: layout.height).integral
         if webView.frame != frame { webView.frame = frame }
         // Overlay-local rects (web view is flipped: y from its top).
-        func local(_ r: CGRect) -> CGRect {
-            CGRect(x: r.minX, y: frame.height - r.minY - r.height, width: r.width, height: r.height)
+        func local(_ r: Inset) -> CGRect {
+            CGRect(x: r.left, y: frame.height - r.bottom - r.height, width: max(0, frame.width - r.left - r.right), height: r.height)
         }
         let card = local(layout.card)
         webView.hitRegion = [card] + (layout.popup.map { [local($0)] } ?? [])
         let glassFrame = card.offsetBy(dx: frame.minX, dy: frame.minY)
         if glass.frame != glassFrame { glass.frame = glassFrame }
         if glass.cornerRadius != layout.radius { glass.cornerRadius = layout.radius }
-        if abs(layout.card.height - lastCardHeight) > 0.5 {
-            lastCardHeight = layout.card.height
-            main?.sendCommand("composerHeight", ["h": layout.card.height])
-        }
+        sendHeight()
         setShown(true)
+    }
+
+    /// Tells the main page the card height (its dock slot / bottom inset) and
+    /// the overlay's full height including popups (its ↓ button sits above).
+    private func sendHeight(force: Bool = false) {
+        guard let layout else { return }
+        let size = CGSize(width: layout.card.height, height: layout.height)
+        guard force || size != lastSentHeight else { return }
+        lastSentHeight = size
+        main?.sendCommand("composerHeight", ["h": layout.card.height, "total": layout.height])
+    }
+
+    /// The main page reloaded and lost what it was told.
+    func mainPageReady() {
+        sendHeight(force: true)
     }
 
     private func setShown(_ shown: Bool) {

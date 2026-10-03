@@ -37,6 +37,7 @@ export function ComposerOverlay() {
       const top = Math.min(c.top, menu ? menu.top : c.top)
       const msg = {
         h: Math.ceil(base - top),
+        vw: window.innerWidth,
         card: { ...rect(c), r: parseFloat(getComputedStyle(card).borderTopLeftRadius) || 22 },
         popup: menu ? rect(menu) : undefined,
       }
