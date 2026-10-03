@@ -4,7 +4,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 应用退出时显式终止交互终端；不依赖 PTY master 关闭带来的 SIGHUP，有竞态。
     nonisolated func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
-            AppModel.shared?.terminateAllTerminals()
             WebShellBridge.current?.terminals.closeAll()
         }
     }
@@ -39,14 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppActivation.receiveOpenedURLs(urls)
         }
     }
-
-    #if DEBUG
-    nonisolated func applicationDidFinishLaunching(_ notification: Notification) {
-        MainActor.assumeIsolated {
-            ScrollProbe.shared.start()
-        }
-    }
-    #endif
 }
 
 @main
@@ -54,34 +45,17 @@ struct AurewaysApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
-    /// Read once: switching the window root at runtime is not supported.
-    private let legacyUI = WebShellFlag.useLegacy
 
     init() {
         // Agent 进程退出后向其 stdin 写请求会触发 SIGPIPE，默认行为是杀掉整个 app。
         signal(SIGPIPE, SIG_IGN)
     }
 
-    /// Default: one WKWebView fills the window (docs/web-shell.md). The legacy
-    /// SwiftUI split view is kept only behind `useLegacyNativeUI`.
-    @ViewBuilder
-    private var mainWindowContent: some View {
-        if legacyUI {
-            RootView()
-                .environment(model)
-                .environment(\.locale, model.displayLocale)
-                .preferredColorScheme(model.colorScheme)
-                .id(model.appLanguage)
-                .frame(minWidth: 980, minHeight: 640)
-        } else {
-            WebShellRoot(model: model)
-                .frame(minWidth: 760, minHeight: 520)
-        }
-    }
-
     var body: some Scene {
         Window("Aureways", id: AppActivation.mainWindowID) {
-            mainWindowContent
+            // One WKWebView fills the window (docs/web-shell.md).
+            WebShellRoot(model: model)
+                .frame(minWidth: 760, minHeight: 520)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
@@ -93,12 +67,8 @@ struct AurewaysApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
                 Button("打开 Markdown…".localized) {
-                    if let bridge = WebShellBridge.current {
-                        AppActivation.revealMainWindow()
-                        bridge.sendCommand("openMarkdown")
-                    } else {
-                        model.pickAndOpenMarkdownDocuments()
-                    }
+                    AppActivation.revealMainWindow()
+                    WebShellBridge.current?.sendCommand("openMarkdown")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
             }
@@ -115,7 +85,6 @@ struct AurewaysApp: App {
                     WebShellBridge.current?.sendCommand("find")
                 }
                 .keyboardShortcut("f", modifiers: [.command])
-                .disabled(legacyUI)
             }
             CommandGroup(before: .sidebar) {
                 Button("切换侧边栏".localized) {
@@ -152,8 +121,7 @@ struct AurewaysApp: App {
                         model.selectSessionByIndex(index)
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command])
-                    .disabled(legacyUI)
-                }
+                    }
             }
             CommandGroup(replacing: .appTermination) {
                 Button("关闭窗口".localized) {

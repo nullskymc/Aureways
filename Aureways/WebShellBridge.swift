@@ -10,7 +10,7 @@ import WebKit
 /// ~45 Hz. A flush sends the app snapshot only when its JSON changed, and the
 /// selected transcript as incremental ops (suffix appends for streaming text).
 @MainActor
-final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
+final class WebShellBridge: NSObject, WKScriptMessageHandler {
     static let handlerName = "aureways"
     static weak var current: WebShellBridge?
 
@@ -614,7 +614,6 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
         case "send":
             let text = body["text"] as? String ?? ""
             let attachments = pendingAttachments
-            guard model.flushPastedTextAttachments(attachments) else { return }
             model.sendFromComposer(text: text, attachments: attachments)
             pendingAttachments = []
         case "cancel":

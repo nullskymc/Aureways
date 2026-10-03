@@ -1,31 +1,6 @@
 {
-  "originHash" : "0219d6ba42ceb4e98500baf2b50626a685eaa36fa665cfdcb053c065ea9d3e93",
+  "originHash" : "34fc6ded3af11d97770b2e20b5e3cfd72f9d3309ae17ef3278b95041f16c02dc",
   "pins" : [
-    {
-      "identity" : "equatable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ordo-one/equatable",
-      "state" : {
-        "revision" : "597c2bb34af0c51331eb3b5e705f942d8ee20daa",
-        "version" : "1.4.1"
-      }
-    },
-    {
-      "identity" : "highlightswift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/appstefan/highlightswift",
-      "state" : {
-        "revision" : "99c431b38a1444a5fd6a4978307fbbefe3a7af53"
-      }
-    },
-    {
-      "identity" : "iosmath",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/junyan72/iosMath",
-      "state" : {
-        "revision" : "ba9ab7729b151329c54fd895a7c1859981d9484c"
-      }
-    },
     {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
@@ -36,48 +11,12 @@
       }
     },
     {
-      "identity" : "swift-cmark",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-cmark",
-      "state" : {
-        "revision" : "924936d0427cb25a61169739a7660230bffa6ea6",
-        "version" : "0.8.0"
-      }
-    },
-    {
-      "identity" : "swift-markdown",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-markdown.git",
-      "state" : {
-        "revision" : "7d9a5ce307528578dfa777d505496bd5f544ad94",
-        "version" : "0.7.3"
-      }
-    },
-    {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax.git",
-      "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
-      }
-    },
-    {
       "identity" : "swiftterm",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
       "state" : {
         "revision" : "5d14406844143538cd8f8851d2d8a67c1fe443e5",
         "version" : "1.20.0"
-      }
-    },
-    {
-      "identity" : "swiftui-shimmer",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/markiv/SwiftUI-Shimmer",
-      "state" : {
-        "revision" : "0226e21f9bf355d40e07e5f5e1c33679d50e167f",
-        "version" : "1.5.1"
       }
     }
   ],

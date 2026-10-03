@@ -158,7 +158,6 @@ extension AppModel {
         selectedAgentId = targetAgent.id
         let session = ChatSession(agent: targetAgent, cwd: workspacePath, phase: .connecting)
         sessions.insert(session, at: 0)
-        adoptInspectorForNewSession(session.id)
         selectedSessionID = session.id
         session.appendUser(message.text, attachments: message.attachments)
         enqueuePrompt(session, message: message, reconnect: true)
@@ -211,9 +210,6 @@ extension AppModel {
             let next = persist ? session.id : sessions.first(where: { $0.id != session.id && !$0.isClosed })?.id
             switchSelectedSession(to: next)
         }
-        if !persist {
-            discardInspectorState(session.id)
-        }
         Task { await shutdownRuntimeIfIdle(session.agent.id) }
     }
 
@@ -229,7 +225,6 @@ extension AppModel {
         if selectedSessionID == session.id {
             switchSelectedSession(to: sessions.first(where: { $0.id != session.id && !$0.isClosed })?.id)
         }
-        discardInspectorState(session.id)
         Task { await shutdownRuntimeIfIdle(session.agent.id) }
     }
 
@@ -249,7 +244,6 @@ extension AppModel {
                 if selectedSessionID == session.id {
                     switchSelectedSession(to: sessions.first(where: { $0.id != session.id && !$0.isClosed })?.id)
                 }
-                discardInspectorState(session.id)
                 await shutdownRuntimeIfIdle(session.agent.id)
             } catch {
                 session.isClosed = false

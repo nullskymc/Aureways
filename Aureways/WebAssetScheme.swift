@@ -5,7 +5,7 @@ import WebKit
 /// built from `WebApp/`) under `aureways-web://app/`. A custom scheme rather
 /// than file:// so ES modules and lazy chunks load same-origin, with no network.
 @MainActor
-final class WebAssetSchemeHandler: NSObject, @preconcurrency WKURLSchemeHandler {
+final class WebAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     static let scheme = "aureways-web"
     static let indexURL = URL(string: "\(scheme)://app/index.html")!
 

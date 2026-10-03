@@ -1,3 +1,5 @@
+> **Historical.** This document describes the SwiftUI transcript/markdown UI that was removed when the window became a web shell. See [web-shell.md](web-shell.md) for the current architecture.
+
 # 前端架构与 UI 设计
 
 技术栈：SwiftUI，macOS 26+，基于原生 macOS 统一工具栏（`.windowToolbarStyle(.unified)`）与自适应色彩系统（`NSColor(dynamicProvider:)`）。

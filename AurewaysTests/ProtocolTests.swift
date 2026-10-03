@@ -253,7 +253,7 @@ final class ProtocolTests: XCTestCase {
         // session/request_permission carries the same call again, now with the diff.
         let again = ToolCallView(json: try JSONValue.decode(from: """
         {"toolCallId": "call_edit", "title": "Edit hello.txt", "kind": "edit", "status": "pending",
-         "content": [{"type": "diff", "path": "/tmp/hello.txt", "oldText": null, "newText": "hi\n"}]}
+         "content": [{"type": "diff", "path": "/tmp/hello.txt", "oldText": null, "newText": "hi"}]}
         """))
         session.appendTool(again)
         session.apply(SessionNotification(sessionId: "s1", update: .toolCall(again)))

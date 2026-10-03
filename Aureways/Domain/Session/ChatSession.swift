@@ -91,15 +91,11 @@ final class ChatSession: Identifiable {
     var acpSessionId: String?
     var title: String
     private(set) var items: [TranscriptItem] = []
-    private(set) var transcriptEntries: [TranscriptEntry] = []
-    private(set) var transcriptEntryIDs: Set<UUID> = []
-    private var transcriptEntryVersions: [UUID: UInt64] = [:]
     /// Unique growing buffer for the in-flight agent/thought/user text so each
     /// chunk is O(delta) instead of a CoW copy of the whole message.
     private let liveText = NSMutableString()
     private var liveTextOwner: UUID?
     private var toolItemIndexByCallID: [String: Int] = [:]
-    private var toolEntryIndexByItemID: [UUID: Int] = [:]
     var isStreaming = false
     var pendingPermission: PermissionPrompt?
     var permissionContinuation: CheckedContinuation<PermissionDecision, Never>?
@@ -157,15 +153,6 @@ final class ChatSession: Identifiable {
         configOptions.first(where: \.isThoughtLevel)
     }
 
-    /// 走 Markdown 渲染的正文（只有 agent 消息；思考 / 工具输出是明文）。
-    /// `MarkdownDocumentCache` 预热用这个列表。
-    var markdownSources: [String] {
-        items.compactMap {
-            if case .agent(_, let text) = $0, !text.isEmpty { return text }
-            return nil
-        }
-    }
-
     init(agent: AgentProfile, cwd: String, title: String? = nil, acpSessionId: String? = nil, createdAt: Date = Date(), phase: SessionPhase = .connecting) {
         self.agent = agent
         self.cwd = cwd
@@ -175,22 +162,16 @@ final class ChatSession: Identifiable {
         self.phase = phase
     }
 
-    func ensureTranscriptProjection() {
-        if transcriptEntries.isEmpty, !items.isEmpty {
-            rebuildTranscriptProjection()
-        }
-    }
-
     func replaceTranscript(_ newItems: [TranscriptItem], runs: [UUID: ActivityRun]) {
         items = newItems
         activityRuns = runs
         resetLiveText()
-        rebuildTranscriptProjection()
+        itemsChanged()
     }
 
     func appendStatus(_ text: String) {
         items.append(.status(UUID(), text))
-        rebuildTranscriptProjection()
+        itemsChanged()
         transcriptRevision += 1
     }
 
@@ -210,7 +191,7 @@ final class ChatSession: Identifiable {
         let before = items.count
         items.removeAll { $0.id == id }
         guard items.count != before else { return }
-        rebuildTranscriptProjection()
+        itemsChanged()
         transcriptRevision += 1
     }
 
@@ -224,70 +205,22 @@ final class ChatSession: Identifiable {
             connectDiagnosticID = id
             items.append(.status(id, text))
         }
-        rebuildTranscriptProjection()
+        itemsChanged()
         transcriptRevision += 1
     }
 
     private func rebuildToolIndex() {
         toolItemIndexByCallID.removeAll(keepingCapacity: true)
-        toolEntryIndexByItemID.removeAll(keepingCapacity: true)
         for (index, item) in items.enumerated() {
             if case .tool(_, let call) = item, !call.toolCallId.isEmpty {
                 toolItemIndexByCallID[call.toolCallId] = index
             }
         }
-        for (entryIndex, entry) in transcriptEntries.enumerated() {
-            guard case .activity(_, let steps, _) = entry.block else { continue }
-            for step in steps {
-                guard case .tools(_, let tools) = step else { continue }
-                for tool in tools { toolEntryIndexByItemID[tool.id] = entryIndex }
-            }
-        }
     }
 
-    private static let projectionSignposter = OSSignposter(
-        subsystem: "ai.aureways.client",
-        category: "Projection"
-    )
-
-    private func rebuildTranscriptProjection(changedBlockID: UUID? = nil) {
-        let signpostID = Self.projectionSignposter.makeSignpostID()
-        let state = Self.projectionSignposter.beginInterval("TranscriptProjectionRebuild", id: signpostID)
-        defer { Self.projectionSignposter.endInterval("TranscriptProjectionRebuild", state) }
-        #if DEBUG
-        if PerfFixture.usesLegacyProjection {
-            let blocks = TranscriptBlock.group(items, runs: activityRuns)
-            transcriptEntries = blocks.map { TranscriptEntry(block: $0) }
-            transcriptEntryIDs = Set(transcriptEntries.map(\.id))
-            rebuildToolIndex()
-            PerfCounters.countProjectionRebuild()
-            return
-        }
-        #endif
-        let blocks = TranscriptBlock.group(items, runs: activityRuns, countPerformance: false)
-        if let changedBlockID {
-            transcriptEntryVersions[changedBlockID, default: 0] &+= 1
-        }
-        let liveIDs = Set(blocks.map(\.id))
-        transcriptEntryIDs = liveIDs
-        transcriptEntryVersions = transcriptEntryVersions.filter { liveIDs.contains($0.key) }
-        let existingEntries = Dictionary(uniqueKeysWithValues: transcriptEntries.map { ($0.id, $0) })
-        transcriptEntries = blocks.map { block in
-            var version = transcriptEntryVersions[block.id, default: 0]
-            if let entry = existingEntries[block.id] {
-                if entry.block != block { version &+= 1 }
-                transcriptEntryVersions[block.id] = version
-                entry.block = block
-                entry.version = version
-                return entry
-            }
-            transcriptEntryVersions[block.id] = version
-            return TranscriptEntry(block: block, version: version)
-        }
+    /// Structural change to `items` (insert/remove): re-key the tool index.
+    private func itemsChanged() {
         rebuildToolIndex()
-        #if DEBUG
-        PerfCounters.countProjectionRebuild()
-        #endif
     }
 
     func appendUser(_ text: String, attachments: [TranscriptAttachment] = []) {
@@ -296,7 +229,7 @@ final class ChatSession: Identifiable {
             TranscriptImageStore.prefetch(attachment)
         }
         items.append(.user(UUID(), text, attachments))
-        rebuildTranscriptProjection()
+        itemsChanged()
         if !isReplaying, SessionTitle.isPlaceholder(title) {
             let source = text.isEmpty ? (attachments.first?.name ?? text) : text
             title = SessionTitle.derived(from: source)
@@ -306,7 +239,7 @@ final class ChatSession: Identifiable {
 
     func apply(_ notification: SessionNotification) {
         var visual = false
-        var projectionUpdated = false
+        var indexCurrent = false
         switch notification.update {
         case .agentMessageChunk(let content):
             currentUserMessageId = nil
@@ -314,38 +247,35 @@ final class ChatSession: Identifiable {
                 appendAgentContent(content),
                 asThought: false,
                 visual: &visual,
-                projectionUpdated: &projectionUpdated
+                indexCurrent: &indexCurrent
             )
         case .agentThoughtChunk(let content):
             noteLiveText(
                 appendText(content.text ?? "", asThought: true),
                 asThought: true,
                 visual: &visual,
-                projectionUpdated: &projectionUpdated
+                indexCurrent: &indexCurrent
             )
         case .userMessageChunk(let content):
             noteUserChunk(
                 applyUserChunk(content, messageId: notification.messageId),
                 visual: &visual,
-                projectionUpdated: &projectionUpdated
+                indexCurrent: &indexCurrent
             )
         case .toolCall(let call):
             currentUserMessageId = nil
             appendTool(call, incrementsRevision: false)
-            projectionUpdated = true
+            indexCurrent = true
             visual = true
         case .toolCallUpdate(let call):
             currentUserMessageId = nil
             if let index = toolIndex(for: call.toolCallId), case .tool(let id, var existing) = items[index] {
                 guard existing.merge(call) else { return }
                 items[index] = .tool(id, existing)
-                if !updateProjectedTool(itemID: id, call: existing) {
-                    rebuildTranscriptProjection(changedBlockID: transcriptBlockID(containingItemID: id))
-                }
-                projectionUpdated = true
+                indexCurrent = true
             } else {
                 appendTool(call, incrementsRevision: false)
-                projectionUpdated = true
+                indexCurrent = true
             }
             visual = true
         case .plan(let entries):
@@ -388,8 +318,8 @@ final class ChatSession: Identifiable {
             break
         }
         if visual {
-            if !projectionUpdated {
-                rebuildTranscriptProjection()
+            if !indexCurrent {
+                itemsChanged()
             }
             transcriptRevision += 1
         }
@@ -498,37 +428,7 @@ final class ChatSession: Identifiable {
         guard !Self.terminalToolStatuses.contains(call.status.lowercased()) else { return }
         call.status = "cancelled"
         items[index] = .tool(id, call)
-        if !updateProjectedTool(itemID: id, call: call) {
-            rebuildTranscriptProjection(changedBlockID: transcriptBlockID(containingItemID: id))
-        }
         transcriptRevision += 1
-    }
-
-    private func updateProjectedTool(itemID: UUID, call: ToolCallView) -> Bool {
-        #if DEBUG
-        if PerfFixture.usesLegacyProjection { return false }
-        #endif
-        guard let entryIndex = toolEntryIndexByItemID[itemID],
-              transcriptEntries.indices.contains(entryIndex),
-              case .activity(let blockID, var steps, let run) = transcriptEntries[entryIndex].block
-        else { return false }
-
-        for stepIndex in steps.indices {
-            guard case .tools(let toolsID, var tools) = steps[stepIndex],
-                  let toolIndex = tools.firstIndex(where: { $0.id == itemID })
-            else { continue }
-            tools[toolIndex].call = call
-            steps[stepIndex] = .tools(toolsID, tools)
-            let entry = transcriptEntries[entryIndex]
-            entry.block = .activity(blockID, steps, run)
-            entry.version &+= 1
-            transcriptEntryVersions[blockID] = entry.version
-            #if DEBUG
-            PerfCounters.countProjectionUpdate()
-            #endif
-            return true
-        }
-        return false
     }
 
     private enum LiveTextApply {
@@ -547,102 +447,33 @@ final class ChatSession: Identifiable {
         _ result: LiveTextApply,
         asThought: Bool,
         visual: inout Bool,
-        projectionUpdated: inout Bool
+        indexCurrent: inout Bool
     ) {
         switch result {
         case .ignored:
             break
         case .created:
             visual = true
-        case .continued(let id, let text):
+        case .continued:
             visual = true
-            if updateProjectedLiveText(itemID: id, text: text, asThought: asThought) {
-                projectionUpdated = true
-            }
+            indexCurrent = true
         }
     }
 
     private func noteUserChunk(
         _ result: UserChunkApply,
         visual: inout Bool,
-        projectionUpdated: inout Bool
+        indexCurrent: inout Bool
     ) {
         switch result {
         case .ignored:
             break
         case .created:
             visual = true
-        case .continued(let id, let text, let attachments):
+        case .continued:
             visual = true
-            if updateProjectedUser(itemID: id, text: text, attachments: attachments) {
-                projectionUpdated = true
-            }
+            indexCurrent = true
         }
-    }
-
-    private func updateProjectedLiveText(itemID: UUID, text: String, asThought: Bool) -> Bool {
-        #if DEBUG
-        if PerfFixture.usesLegacyProjection { return false }
-        #endif
-        guard let last = transcriptEntries.last else { return false }
-        if asThought {
-            guard case .activity(let blockID, var steps, let run) = last.block,
-                  let stepIndex = steps.lastIndex(where: {
-                      if case .thought(let id, _) = $0 { return id == itemID }
-                      return false
-                  })
-            else { return false }
-            steps[stepIndex] = .thought(itemID, text)
-            last.block = .activity(blockID, steps, run)
-            last.version &+= 1
-            transcriptEntryVersions[blockID] = last.version
-        } else {
-            guard case .agent(let id, _) = last.block, id == itemID else { return false }
-            last.block = .agent(id, text)
-            last.version &+= 1
-            transcriptEntryVersions[id] = last.version
-        }
-        #if DEBUG
-        PerfCounters.countProjectionUpdate()
-        #endif
-        return true
-    }
-
-    private func updateProjectedUser(
-        itemID: UUID,
-        text: String,
-        attachments: [TranscriptAttachment]
-    ) -> Bool {
-        #if DEBUG
-        if PerfFixture.usesLegacyProjection { return false }
-        #endif
-        guard let last = transcriptEntries.last,
-              case .user(let id, _, _) = last.block,
-              id == itemID
-        else { return false }
-        last.block = .user(id, text, attachments)
-        last.version &+= 1
-        transcriptEntryVersions[id] = last.version
-        #if DEBUG
-        PerfCounters.countProjectionUpdate()
-        #endif
-        return true
-    }
-
-    private func transcriptBlockID(containingItemID itemID: UUID) -> UUID? {
-        for entry in transcriptEntries {
-            switch entry.block {
-            case .activity(let id, let steps, _):
-                for step in steps {
-                    if case .tools(_, let tools) = step, tools.contains(where: { $0.id == itemID }) {
-                        return id
-                    }
-                }
-            default:
-                if entry.id == itemID { return entry.id }
-            }
-        }
-        return nil
     }
 
     /// Tool calls are keyed by `toolCallId`: harnesses re-announce a call
@@ -653,16 +484,13 @@ final class ChatSession: Identifiable {
            case .tool(let id, var existing) = items[index] {
             guard existing.merge(call) else { return }
             items[index] = .tool(id, existing)
-            if !updateProjectedTool(itemID: id, call: existing) {
-                rebuildTranscriptProjection(changedBlockID: transcriptBlockID(containingItemID: id))
-            }
             if incrementsRevision { transcriptRevision += 1 }
             return
         }
         let id = UUID()
         beginRun(id)
         items.append(.tool(id, call))
-        rebuildTranscriptProjection()
+        itemsChanged()
         if incrementsRevision { transcriptRevision += 1 }
     }
 
@@ -704,7 +532,7 @@ final class ChatSession: Identifiable {
             changed = true
         }
         if changed {
-            rebuildTranscriptProjection()
+            itemsChanged()
             transcriptRevision += 1
         }
     }
@@ -781,10 +609,8 @@ final class ChatSession: Identifiable {
         currentUserMessageId = nil
         usage = nil
         reportedMcpServers = []
-        transcriptEntryVersions.removeAll()
-        transcriptEntryIDs.removeAll()
         resetLiveText()
-        rebuildTranscriptProjection()
+        itemsChanged()
         transcriptRevision += 1
     }
 

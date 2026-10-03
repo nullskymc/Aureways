@@ -43,23 +43,6 @@ final class AppModel {
         }
     }
     var autoApprove = false
-    var inspectorOpen = false
-    var paneTabs: [PaneTab] = [.browser]
-    var activePaneTabId = PaneTab.browser.id
-    /// Open files / terminals belong to a session (or the new-chat landing).
-    var inspectorBySession: [UUID: SessionInspectorState] = [:]
-    var untitledInspector = SessionInspectorState()
-    /// Session that currently owns the live `paneTabs` / drafts / terminals.
-    var inspectorOwner: UUID?
-    var fileTabStates: [String: FileTabState] = [:]
-    var interactiveTerminals: [UUID: InteractiveTerminal] = [:]
-    var browserInvalidationToken = 0
-    var pendingSavePath: String?
-    var pendingSaveContent: String?
-    var pendingClosePath: String?
-    var pendingReloadPath: String?
-    var editorDrafts: [String: String] = [:]
-    var terminalTitles: [UUID: String] = [:]
     var searchQuery = ""
     @ObservationIgnored
     var sidebarListingCache: (signature: SidebarListing.Signature, snapshot: SidebarListing.Snapshot)?

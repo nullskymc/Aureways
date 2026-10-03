@@ -1,3 +1,5 @@
+> **Historical.** This document describes the SwiftUI transcript/markdown UI that was removed when the window became a web shell. See [web-shell.md](web-shell.md) for the current architecture.
+
 # 性能问题计划
 
 范围：Aureways 在「长会话 + 流式输出 + 频繁拖动分栏」下的崩溃、卡顿与 CPU / 续航开销。

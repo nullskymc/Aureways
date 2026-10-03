@@ -2,15 +2,9 @@ import AppKit
 import SwiftUI
 import WebKit
 
-/// The main window is a thin native shell around one `WKWebView`.
-/// See docs/web-shell.md. The old SwiftUI `NavigationSplitView` root is only
-/// reachable through this defaults flag (it can hit the AppKit
-/// "more Update Constraints in Window passes than there are views" crash).
-enum WebShellFlag {
-    static let legacyKey = "useLegacyNativeUI"
-    static var useLegacy: Bool { UserDefaults.standard.bool(forKey: legacyKey) }
-}
-
+/// The main window is a thin native shell around one `WKWebView`
+/// (docs/web-shell.md).
+///
 /// SwiftUI side of the shell: no layout of its own, just environment hooks.
 struct WebShellRoot: View {
     let model: AppModel
@@ -287,7 +281,7 @@ final class TitlebarDragStrip: NSView {
 
 /// `WKUserContentController` retains its handlers; keep the bridge weak.
 @MainActor
-final class WeakScriptMessageHandler: NSObject, @preconcurrency WKScriptMessageHandler {
+final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
     private weak var target: (any WKScriptMessageHandler)?
 
     init(_ target: any WKScriptMessageHandler) {
@@ -301,7 +295,7 @@ final class WeakScriptMessageHandler: NSObject, @preconcurrency WKScriptMessageH
 
 /// Only the bundled app loads in-page; links go native.
 @MainActor
-final class WebShellNavigationGuard: NSObject, @preconcurrency WKNavigationDelegate {
+final class WebShellNavigationGuard: NSObject, WKNavigationDelegate {
     var onTerminate: (() -> Void)?
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {

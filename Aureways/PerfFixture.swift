@@ -1,59 +1,13 @@
 #if DEBUG
 import Foundation
-import Synchronization
 
-/// Debug-build counters for the transcript work that is suspected of running
-/// per scroll frame. `TranscriptBlock.group` is nonisolated, so the counter is
-/// an atomic rather than main-actor state.
-enum PerfCounters {
-    private static let groupCallCount = Atomic<Int>(0)
-    private static let projectionRebuildCount = Atomic<Int>(0)
-    private static let projectionUpdateCount = Atomic<Int>(0)
-    private static let indexFullRebuildCount = Atomic<Int>(0)
-    private static let indexLastRowUpdateCount = Atomic<Int>(0)
-
-    static var groupCalls: Int { groupCallCount.load(ordering: .relaxed) }
-    static var projectionRebuilds: Int { projectionRebuildCount.load(ordering: .relaxed) }
-    static var projectionUpdates: Int { projectionUpdateCount.load(ordering: .relaxed) }
-    static var indexFullRebuilds: Int { indexFullRebuildCount.load(ordering: .relaxed) }
-    static var indexLastRowUpdates: Int { indexLastRowUpdateCount.load(ordering: .relaxed) }
-
-    static func countGroupCall() {
-        groupCallCount.add(1, ordering: .relaxed)
-    }
-
-    static func countProjectionRebuild() {
-        projectionRebuildCount.add(1, ordering: .relaxed)
-    }
-
-    static func countProjectionUpdate() {
-        projectionUpdateCount.add(1, ordering: .relaxed)
-    }
-
-    static func countIndexFullRebuild() {
-        indexFullRebuildCount.add(1, ordering: .relaxed)
-    }
-
-    static func countIndexLastRowUpdate() {
-        indexLastRowUpdateCount.add(1, ordering: .relaxed)
-    }
-
-    static func reset() {
-        groupCallCount.store(0, ordering: .relaxed)
-        projectionRebuildCount.store(0, ordering: .relaxed)
-        projectionUpdateCount.store(0, ordering: .relaxed)
-        indexFullRebuildCount.store(0, ordering: .relaxed)
-        indexLastRowUpdateCount.store(0, ordering: .relaxed)
-    }
-}
-
-/// Deterministic transcript fixture for scroll-performance work.
+/// Deterministic transcript fixture for transcript performance work.
 ///
-/// Shared by `TranscriptPerfTests` (micro-benchmarks) and, when
-/// `AUREWAYS_PERF_TURNS` is set, by the app itself so a trace can be recorded
+/// When
+/// `AUREWAYS_PERF_TURNS` is set, the app loads it so the web transcript can be profiled
 /// against a known transcript instead of a live agent conversation:
 ///
-///     AUREWAYS_PERF_TURNS=50 open -a Aureways        # 350 items / 300 blocks
+///     AUREWAYS_PERF_TURNS=50 open -a Aureways        # 350 items
 ///
 /// Debug builds only; never compiled into Release.
 enum PerfFixture {
@@ -173,11 +127,6 @@ enum PerfFixture {
 
         建议把分组结果缓存到 `ChatSession` 上，`body` 只读数组。
         """
-    }
-
-    /// Runs the pre-optimization view projection from the same Debug binary.
-    static var usesLegacyProjection: Bool {
-        ProcessInfo.processInfo.environment["AUREWAYS_PERF_LEGACY"] == "1"
     }
 
     /// Turn count requested via the environment, or `nil` when unset.

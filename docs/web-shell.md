@@ -47,7 +47,11 @@ most every ~22 ms (≈45 Hz) and emits only what changed.
     { "op": "upsert", "index": 12, "item": Item },          // new or changed item
     { "op": "append", "id": "…", "delta": "more tokens" },  // agent / thought / user text grew by a suffix
     { "op": "remove", "id": "…" } ] }
-{ "type": "command", "name": "find" | "toggleSidebar" | "focusComposer" | "newSession" }
+{ "type": "command", "name": "find" | "toggleSidebar" | "focusComposer" | "newChat" | "toggleInspector"
+    | "showFiles" | "showChanges" | "newTerminal" | "openMarkdown" | "openSettings" | "openFiles" (paths) }
+{ "type": "rpcResult", "id": 7, "result": … } | { "type": "rpcResult", "id": 7, "error": "…" }
+{ "type": "termData", "id": "…", "data": "<base64>" } | { "type": "termExit", "id": "…", "code": 0 }
+{ "type": "fileChanged", "path": "…" }                      // agent wrote a file
 { "type": "menuResult", "token": 3, "id": "model:gpt-5" | null }
 ```
 
@@ -72,17 +76,28 @@ timing so the web can show "Worked for 42s".
 `openSettings`, `menu {token, x, y, items}` (native `NSMenu` popup),
 `dragRegions {rects}`, `sessionMenu {id, x, y}`.
 
+### Request/response (`rpc`)
+
+JS posts `{type: "rpc", id, method, params}`; Swift answers with `rpcResult`.
+Methods (`WebShellServices.swift`, `WebShellSettings.swift`): `fs.list`, `fs.read`,
+`fs.write` (mtime conflict check), `fs.search` (workspace file index), `git.diff`,
+`term.open`, `ui.confirm`, `pick.markdown` / `pick.folder` / `pick.executable`,
+`settings.refresh` / `settings.set` / `settings.markdownDefault`,
+`agent.enable` / `agent.remove` / `agent.add` / `agent.copyLaunch`, `quota.refresh`,
+`workspace.remove` / `workspace.select`, `mcp.add` / `mcp.enable` / `mcp.remove`.
+Terminal input goes as plain messages: `term.input`, `term.resize`, `term.close`.
+
 ## Migration plan
 
-1. **(this branch)** Web shell is the default window content. Old SwiftUI root
-   (`RootView` + `NavigationSplitView`) stays compiled behind the
-   `useLegacyNativeUI` defaults flag for comparison only; the per-message
-   `WebMarkdownBody` prototype is removed (its renderer moved into `WebApp/`).
-2. Port the inspector (file browser, editor, terminal tabs, diff review) as web
-   routes; terminals via xterm.js fed from the existing PTY layer.
-3. Port Settings to a web route (`#/settings`) and drop the SwiftUI Settings
-   scene; menu-bar extra can stay native.
-4. Delete legacy SwiftUI views once parity is reached.
+1. Web shell is the window content. ✅
+2. Inspector (file browser, editor, terminal tabs, diff review) in the web app;
+   terminals are xterm.js fed by headless SwiftTerm PTYs
+   (`WebTerminalService.swift`), files/git through the `rpc` channel
+   (`WebShellServices.swift`). ✅
+3. Settings is a web route (⌘, → `openSettings`); the SwiftUI `Settings`
+   scene is gone. The menu bar extra hosts the same bundle at `#menubar`. ✅
+4. Legacy SwiftUI views (`RootView`/`NavigationSplitView`, native transcript,
+   `SwiftStreamingMarkdown`, the `useLegacyNativeUI` flag) are deleted. ✅
 
 ## Building the web app
 
