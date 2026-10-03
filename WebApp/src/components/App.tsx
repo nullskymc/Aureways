@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
-import { app, route, setTicking, uiCommand } from '../store'
+import { app, composerH, composerTotal, route, setTicking, uiCommand } from '../store'
 import { prefs } from '../prefs'
 import { openTerminal, showInspector } from '../inspector/state'
 import { lazy } from './Lazy'
@@ -25,19 +25,11 @@ export function App() {
   const sidebarOpen = prefs.sidebarOpen
   const sidebarWidth = prefs.sidebarWidth
   const dockHeight = useSignal(140)
-  /** Card height of the native composer overlay (sessions only; see ComposerOverlay.tsx). */
-  const composerH = useSignal(88)
-  /** Full overlay height (card + open popups): the ↓ button stays above it. */
-  const composerTotal = useSignal(88)
   const dock = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const c = uiCommand.value
     switch (c?.name) {
-      case 'composerHeight':
-        if (typeof c.data?.h === 'number') composerH.value = c.data.h
-        if (typeof c.data?.total === 'number') composerTotal.value = c.data.total
-        break
       case 'toggleSidebar':
         sidebarOpen.value = !sidebarOpen.value
         break

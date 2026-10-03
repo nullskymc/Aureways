@@ -25,6 +25,9 @@ function reindex() {
 
 export type UICommand = { name: string; seq: number; paths?: string[]; data?: Record<string, unknown> }
 export const uiCommand = signal<UICommand | null>(null)
+/** Card height of the native composer overlay, and its full height incl. popups. */
+export const composerH = signal(88)
+export const composerTotal = signal(88)
 let commandSeq = 0
 
 onMessage((m) => {
@@ -84,6 +87,15 @@ onMessage((m) => {
       break
     }
     case 'command':
+      // State-like command: apply immediately. uiCommand holds only the latest
+      // value, so a command arriving in the same tick would drop this one, and
+      // native only resends the height when it changes.
+      if (m.name === 'composerHeight') {
+        const d = m as unknown as { h?: number; total?: number }
+        if (typeof d.h === 'number') composerH.value = d.h
+        if (typeof d.total === 'number') composerTotal.value = d.total
+        break
+      }
       uiCommand.value = { name: m.name, seq: ++commandSeq, paths: m.paths, data: m as unknown as Record<string, unknown> }
       break
   }
