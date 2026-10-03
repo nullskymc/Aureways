@@ -4,7 +4,7 @@
 
 # Aureways
 
-**面向 agentic coding 的 macOS 原生客户端。** 用 SwiftUI 写成的 `.app`——不是网页，也不是套壳。选定工作区，在系统窗口里对话、改文件、开终端，让 agent 干活。
+**面向 agentic coding 的 macOS 客户端。** 窗口是原生壳。侧栏、对话、输入框、检查器、设置都在同一个 `WKWebView` 里，由 Preact 绘制。选定工作区，和本机已经安装的 Agent 对话。
 
 [![Release](https://github.com/nullskymc/Aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/Aureways/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -13,27 +13,29 @@
 
 </div>
 
-它实现 [Agent Client Protocol](https://agentclientprotocol.com)，在同一进程里把本机命令行 Agent 作为子进程拉起，走 stdio NDJSON。没有远程后端，也没有单独的 HTTP 服务——客户端直接驱动 agent。
+它实现 [Agent Client Protocol](https://agentclientprotocol.com)，把本机命令行 Agent 作为子进程拉起，走 stdio NDJSON。没有远程后端，也没有单独的 HTTP 服务。
+
+会话打开后，输入框是叠在系统 Liquid Glass 上的第二个透明 WebView，对话可以在玻璃下面滚过。玻璃只用 `NSGlassEffectView`。
 
 ## 能做什么
 
-- **原生 Mac 界面**：统一工具栏、侧栏、系统偏好设置（`⌘,`）、浅色 / 深色跟随系统（可在偏好设置里覆盖）；文件在 Finder 中显示，终端是本机 PTY。
-- **任意 ACP Agent**：内置九家常用命令行 Agent，也可以在偏好设置里添加任意启动命令。会话按工作区列在侧栏，Agent 支持时可跨启动恢复。
-- **流式对话**：Markdown 正文、可展开的思考、分组的工具调用、计划步骤。输入框支持 `/` 命令、`@` 引用工作区文件，以及图片和文件附件。超长转录已虚拟化，滚动成本只跟可见内容成正比。
-- **权限**：Agent 读写文件、执行命令前先征求确认；也可以改成由客户端代为批准。
-- **右侧工作台**（`⌘B`）：文件浏览器、文本编辑器（行号、`⌘S`、与 Agent 同时改文件时的冲突处理）、交互终端。每个打开的文件和终端各占一个标签，来回切换不丢状态。
-- **Markdown 文档**：Finder、Dock、`open -a` 和「文件 → 打开 Markdown」（`⌘O`）会在右侧工作台标签里打开 `.md`（预览和对话区同一套渲染器）。若希望双击即打开，在偏好设置里设为默认 Markdown 打开方式。
+- **窗口壳**：隐藏标题栏，红绿灯嵌进侧栏，浅色 / 深色跟随系统（可在设置里覆盖）。关窗口或按 `⌘Q` 只收到菜单栏，进程还在。真正退出是菜单栏里的「退出」。
+- **任意 ACP Agent**：内置九家，也可以在设置里添加启动命令。会话按工作区排列；Agent 声明 `session/load` 时，下次启动可以恢复。
+- **流式对话**：Markdown（marked、DOMPurify、按需加载的 Shiki）、可折叠的思考、按 `toolCallId` 合并的工具行、计划步骤。列表按窗口绘制。停在底部时，最后一行在输入框上方。
+- **输入框**：Return 发送，Shift+Return 换行。支持 `/` 命令、`@` 工作区文件、图片和文件附件。权限、计划审批、选择题出现在输入框上方。
+- **检查器**（`⌥⌘I`）：文件树、文本编辑器（`⌘S`，按 mtime 检查冲突）、Git 变更、交互终端。终端是 xterm.js，背后是无界面的 SwiftTerm PTY。每个文件和终端各占一个标签。
+- **Markdown**：Finder、Dock、`open -a` 和「文件 → 打开 Markdown」（`⌘O`）会在检查器里打开 `.md`。要双击打开，在设置里把 Aureways 设为默认 Markdown 应用。
+- **用量**：账号额度由单独的 `QuotaStore` 缓存并限流读取，不从 ACP 会话里算。设置里的用量页和菜单栏看的是同一份快照。
 
 ```
 ┌──────────────┬────────────────────────────────────────────┬──────────────┐
-│ 侧栏          │  统一工具栏：工作区 · 会话状态 · 搜索        │ 工作台 ⌘B     │
-│  • 新对话 ⌘N  │                                            │  • 文件浏览器  │
-│  • 工作区      ├────────────────────────────────────────────┤  • 文本编辑器  │
-│    会话 ⌘1…⌘9│  对话流（居中，流式）                       │  • 交互终端    │
-│               │  用户气泡 · Agent 正文 · 思考 · 工具卡片    │  • 会话信息    │
-│               │  · 计划步骤                                │               │
-│               ├────────────────────────────────────────────┤               │
-│               │  悬浮输入框（⌘Return 发送）                │               │
+│ 侧栏          │  顶栏：工作区 · 会话 · Agent               │ 检查器        │
+│  • 新对话     │                                            │  • 文件      │
+│  • 工作区      ├────────────────────────────────────────────┤  • 编辑器    │
+│    会话 ⌘1…⌘9 │  对话流（栏宽 768px，流式）                │  • 变更      │
+│               │                                            │  • 终端      │
+│               ├────────────────────────────────────────────┤              │
+│               │  玻璃输入框（Return 发送）                 │              │
 └──────────────┴────────────────────────────────────────────┴──────────────┘
 ```
 
@@ -51,13 +53,13 @@
 | Oh My Pi | `omp acp` |
 | Qoder | `qoder --acp` / `qoderclicn --acp` |
 
-对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理，不进 Aureways 的设置。自定义 Agent 在偏好设置（`⌘,`）里添加。
+对应命令行需事先安装并完成登录。登录和密钥由各 Agent 自己的 CLI 管理。自定义 Agent 在设置（`⌘,`）里添加。
 
 Oh My Pi 依赖 Bun（`>= 1.3.14`）。安装：`bun install -g @oh-my-pi/pi-coding-agent`，登录在 `omp` 里完成。自动批准会启动 `omp acp --yolo`。
 
-Qoder 同时支持国际版（`qoder`，安装 `@qoder-ai/qodercli`）与国内版（`qoderclicn`，安装 `@qodercn-ai/qoderclicn`）。Aureways 会自动检测 PATH 上已安装的 CLI。登录分别在 `qoder login` 或 `qoderclicn login` 中完成。自动批准会启动 `[qoder|qoderclicn] --acp --yolo`。
+Qoder 同时支持国际版（`qoder`，包 `@qoder-ai/qodercli`）与国内版（`qoderclicn`，包 `@qodercn-ai/qoderclicn`）。Aureways 使用 PATH 上已有的那个二进制。登录分别在 `qoder login` 或 `qoderclicn login` 中完成。自动批准会加上 `--yolo`。
 
-Antigravity 的 `agy` CLI **没有** `--acp`。Google 另发一个 ACP 包：`agy_acp_server.par` 和 `localharness_external` 必须放在同一目录。Apple Silicon：
+Antigravity 的 `agy` CLI 没有 `--acp`。Google 另发一个 ACP 包：`agy_acp_server.par` 和 `localharness_external` 必须放在同一目录。Apple Silicon：
 
 ```bash
 mkdir -p ~/.local/share/antigravity-acp ~/.local/bin
@@ -75,30 +77,28 @@ chmod +x ~/.local/bin/agy_acp_server
 
 不要只把 `.par` 软链到 `PATH`——进程会在可执行文件旁边找 `localharness_external`。首次连接走 Google 登录（`oauth-personal`）。可用 `AGY_ACP_BIN` 指定二进制路径。
 
+额度读取器：Grok（billing API）、Codex（用量 API，失败再读本地会话日志）、Claude（OAuth 用量，只认文件里的凭据）、Antigravity（Cloud Code）。macOS 上 Claude 的令牌通常在钥匙串里；Aureways 不读钥匙串，这时会显示未配置。Copilot、Cursor、OpenCode、Oh My Pi、Qoder 没有额度源。
+
 ## 运行
 
-**安装**——从 [Releases](https://github.com/nullskymc/Aureways/releases) 下载 `.dmg`，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证；首次启动若被 Gatekeeper 拦截：
+**安装**——从 [Releases](https://github.com/nullskymc/Aureways/releases) 下载 `.dmg`，把 `Aureways.app` 拖进 `Applications`。产物是 ad-hoc 签名、未经公证。首次启动若被 Gatekeeper 拦截：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app
 ```
 
-**源码编译**——要求 macOS 26+、Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。在**仓库根目录**操作（能看到 `Makefile` 和 `Aureways.xcodeproj` 的那一层，不是内层 `Aureways/` 源码目录）：
+**源码编译**——macOS 26+、Xcode 26+（本仓库用 Xcode 27 开发）。应用未开启 App Sandbox。在**仓库根目录**操作（能看到 `Makefile` 和 `Aureways.xcodeproj` 的那一层）：
 
 ```bash
 make open
 ```
 
-或打开工程后，在 Xcode 里选 scheme **Aureways**、目的地 **My Mac**，按 `⌘R`：
+或打开 `Aureways.xcodeproj`，选 scheme **Aureways**、目的地 **My Mac**，按 `⌘R`。
+
+`make` 使用 `xcode-select -p`。若该路径仍是 Command Line Tools，会按这个顺序找完整 Xcode：`/Applications/Xcode.app`、`/Applications/Xcode-beta.app`、`/Volumes/app/Applications/Xcode.app`、`/Volumes/app/Applications/Xcode-beta.app`，最后再用 Spotlight。指定某一个：
 
 ```bash
-open Aureways.xcodeproj
-```
-
-默认使用当前 `xcode-select` 工具链。若要用某个 Xcode.app：
-
-```bash
-make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+make open DEVELOPER_DIR=/Volumes/app/Applications/Xcode.app/Contents/Developer
 ```
 
 | 命令 | 作用 |
@@ -106,10 +106,11 @@ make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 | `make build` | Debug 编译 |
 | `make open` | 编译并打开 `.app` |
 | `make test` | 跑 `AurewaysTests` |
-| `make release` | Release 构建（发版用） |
+| `make release` | Release 构建 |
 | `make clean` | 删除 `.derived` |
+| `make web` | 把 `WebApp/` 重新打进 `Aureways/WebAppBundle/` |
 
-首次命令行构建若提示缺少 Metal 工具链：
+Web 产物已提交，编 App 不需要 Node。只有改了 `WebApp/src` 才跑 `make web`。首次命令行构建若提示缺少 Metal 工具链：
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
@@ -122,10 +123,17 @@ xcodebuild -downloadComponent MetalToolchain
 | `⌘N` | 新对话 |
 | `⌘O` | 打开 Markdown |
 | `⌘1` … `⌘9` | 选择会话 |
-| `⌘B` / `⌥⌘I` | 展开 / 折叠工作台 |
-| `⌘,` | 偏好设置 |
-| `⌘Return` | 发送消息 |
+| `⌃⌘S` | 切换侧栏 |
+| `⌥⌘I` | 切换检查器 |
+| `⇧⌘E` | 检查器：文件 |
+| `⇧⌘G` | 检查器：变更 |
+| `⌃\`` | 新建终端 |
+| `⌘F` | 查找 |
+| `⌘,` | 设置 |
+| `Return` | 发送 |
+| `⇧Return` | 换行 |
 | `⌘.` | 停止生成 |
+| `⌘Q` | 关闭窗口，留在菜单栏 |
 | 输入框 `/` | Slash 命令 |
 | 输入框 `@` | 引用工作区文件 |
 
@@ -135,22 +143,23 @@ xcodebuild -downloadComponent MetalToolchain
 | --- | --- |
 | [文档目录](docs/README.md) | 索引与阅读顺序 |
 | [目录结构](docs/directory.md) | 仓库与源码树 |
-| [架构](docs/architecture.md) | 前后端职责、会话与持久化 |
-| [前端](docs/frontend.md) | SwiftUI 界面与状态 |
-| [后端](docs/backend.md) | 连接、进程、文件系统、终端 |
-| [协议](docs/protocol.md) | 已实现的 ACP 方法 |
-| [开发与运行](docs/development.md) | 工具链、测试、调试连接失败 |
+| [架构](docs/architecture.md) | 窗口壳、Web 界面、ACP |
+| [Web shell](docs/web-shell.md) | 窗口、玻璃、桥 |
+| [前端](docs/frontend.md) | Preact 界面 |
+| [后端](docs/backend.md) | 进程、文件、终端、额度 |
+| [协议](docs/protocol.md) | 本客户端实现的 ACP 方法 |
+| [开发与运行](docs/development.md) | 工具链、测试、连接失败 |
 
 ## 发版
 
-约定：**只有打 tag 才触发构建**，分支与 PR 不跑 CI。工作流见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+只有打 `v*` tag 才触发 CI，分支和 PR 不构建。工作流见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 创建 GitHub Release 并附带产物。
+流程：`make test` → Release 构建 → 打包 `Aureways-<tag>.dmg` → 创建 GitHub Release。
 
 ## License
 

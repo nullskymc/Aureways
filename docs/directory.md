@@ -1,141 +1,108 @@
 # 目录结构
 
-仓库根目录（`Aureways.xcodeproj` 所在层）才是工程根。内层 `Aureways/` 只是应用源码文件夹。
+仓库根目录（`Aureways.xcodeproj` 所在层）才是工程根。内层 `Aureways/` 是应用源码。
 
 ```
-Aureways/                          # 仓库根
+Aureways/                              # 仓库根
 ├── README.md
-├── LICENSE                        # MIT
-├── Makefile                       # build / release / test / open / clean
-├── .github/workflows/
-│   └── release.yml                # tag 触发的构建发版工作流
-├── docs/                          # 本目录：项目文档
-│   ├── README.md
-│   ├── directory.md
-│   ├── architecture.md
-│   ├── frontend.md
-│   ├── backend.md
-│   ├── protocol.md
-│   ├── development.md
-│   └── brand/app-icon.md          # A 轨道 App Icon 规范
-├── design/app-icon/               # 图标几何源：build_icon.py + reference/，SVG 与 PNG 均为生成物
-├── Vendor/
-│   └── SwiftStreamingMarkdown/  # 本地化的正文渲染库（LaTeX 流式去重，见 PATCHES.md）
+├── README.zh-CN.md
+├── LICENSE                            # MIT
+├── Makefile                           # build / open / test / release / clean / web
+├── .github/workflows/release.yml      # 只有 v* tag 才构建发版
+├── docs/
+├── design/app-icon/                   # 图标几何源与生成的 SVG / PNG
+├── WebApp/                            # 窗口里的 Preact 应用
+│   ├── src/
+│   ├── package.json
+│   └── package-lock.json
 ├── Aureways.xcodeproj/
-│   ├── project.pbxproj            # 两个 target：Aureways、AurewaysTests
-│   └── xcshareddata/xcschemes/
-│       └── Aureways.xcscheme
-├── Aureways/                      # 应用源码（bundle id: ai.aureways.client）
-│   ├── AurewaysApp.swift          # @main，主窗口 + Settings + 退出清理
-│   ├── Info.plist                 # 与 GENERATE_INFOPLIST_FILE 合并：Markdown 文档类型
-│   ├── Localization.swift         # L10n / String.localized
-│   ├── Localizable.xcstrings      # zh-Hans 源文案 + en 翻译
-│   ├── AppModel.swift             # 应用状态
-│   ├── AppModel+Workspace.swift   # 工作区目录
-│   ├── AppModel+Sessions.swift    # 会话列表 / 发送 / 关闭 / 删除
-│   ├── AppModel+Runtime.swift     # ACP 进程、prompt、权限桥
-│   ├── AppModel+Inspector.swift   # 面板标签、编辑保存/冲突、超长粘贴草稿
-│   ├── ChatSession.swift          # 单会话 transcript 状态
-│   ├── SessionStore.swift         # sqlite 会话列表缓存
-│   ├── AppIcon.icon/              # macOS 26+ Icon Composer（A / 轨道 / 星）
-│   ├── Assets.xcassets/           # AccentColor、BrandMark 平面标志、AppIcon.appiconset 扁平回退
-│   ├── Harness/                   # 各家 ACP 运行时
-│   │   ├── Harness.swift          # 基类、配方、PATH、注册表
-│   │   ├── HarnessRuntime.swift   # 共用 stdio 连接生命周期
-│   │   ├── GrokBuild.swift
-│   │   ├── GrokExt.swift          # Grok `_x.ai/exit_plan_mode` / `ask_user_question` 解析
-│   │   ├── Codex.swift
-│   │   ├── ClaudeCode.swift
-│   │   ├── Antigravity.swift      # 取代 Gemini CLI
-│   │   ├── Copilot.swift
-│   │   ├── Cursor.swift
-│   │   ├── OpenCode.swift
-│   │   ├── OhMyPi.swift
-│   │   ├── Qoder.swift
-│   │   └── CustomHarness.swift
-│   ├── ACP/                       # 后端：协议与进程
-│   │   ├── JSONRPC.swift          # JSON-RPC 2.0 NDJSON + JSONValue
-│   │   ├── Models.swift           # initialize / capabilities
-│   │   ├── SessionModels.swift    # session/new|load|list|prompt
-│   │   ├── UpdateModels.swift     # session/update、tool、permission
-│   │   ├── Connection.swift       # 子进程 + 双向 RPC
-│   │   └── ClientOps.swift        # fs/*、terminal/*
-│   ├── MarkdownFile.swift          # Markdown 扩展名、读盘、默认打开方式
-│   ├── MarkdownDocumentCache.swift # 已解析 Markdown 文档缓存
-│   ├── TranscriptVirtualizer.swift # 对话流可见窗口与行高缓存
-│   └── Views/                     # 前端
-│       ├── Palette.swift          # 色彩、BrandMark、AppIconImage
-│       ├── Chrome.swift           # Liquid Glass 修饰器
-│       ├── RootView.swift         # NavigationSplitView
-│       ├── Sidebar.swift          # 新对话、底栏
-│       ├── WorkspaceTree.swift    # 工作区树
-│       ├── Transcript.swift       # 窗口化对话流、位置跟随
-│       ├── TranscriptBlocks.swift # 用户/助手/思考块；展开状态不跟视图走
-│       ├── ToolViews.swift        # 工具卡片（命令 / 编辑 / 读取 / 搜索 / 抓取）
-│       ├── MarkdownBody.swift     # vendored SwiftStreamingMarkdown + 流式单通道 parse
-│       ├── Composer.swift         # 输入框（超长粘贴为字数占位卡）
-│       ├── ComposerTextView.swift # NSTextView 输入与拖拽；超长粘贴不进输入框
-│       ├── CompletionPopup.swift  # / 与 @ 补全
-│       ├── PermissionCard.swift   # 权限确认
-│       ├── PlanApprovalCard.swift # Grok 计划审批 + 选择题
-│       ├── InspectorViews.swift   # 右栏面板容器与信息标签
-│       ├── SplitResize.swift      # 分栏拖动状态机（按指针按下/抬起冻结内容宽度）
-│       ├── PaneTabBar.swift       # 面板统一标签条
-│       ├── FileBrowserTab.swift   # 工作区目录树
-│       ├── FileEditorTab.swift    # 文本编辑器（Markdown 可预览）
-│       ├── TerminalTab.swift      # SwiftTerm 交互终端
-│       ├── EmptyWorkspace.swift   # 空白画布
-│       ├── AgentSheets.swift      # 自定义 Agent
-│       └── SettingsView.swift     # 设置中心
+├── Aureways/                          # 应用源码（bundle id: ai.aureways.client）
+    ├── AurewaysApp.swift              # @main：主窗口 + 菜单栏 + 菜单命令
+    ├── AppActivation.swift            # 关窗口留在菜单栏、重新打开、用本应用打开文件
+    ├── WebShellView.swift             # 窗口宿主、玻璃层、输入框浮层
+    ├── WebShellBridge.swift           # AppModel ↔ 页面
+    ├── WebShellServices.swift         # fs / git / 终端 / 选择器的 rpc
+    ├── WebShellSettings.swift         # 设置与 Agent 目录的 rpc
+    ├── WebAssetScheme.swift           # aureways-web://app/ 提供页面资源
+    ├── WebTerminalService.swift       # 检查器终端的无界面 PTY
+    ├── AttentionNotifier.swift        # 后台会话的系统通知与 Dock 角标
+    ├── WebAppBundle/                  # make web 的产物，已提交
+    ├── AppModel.swift
+    ├── AppModel+Workspace.swift
+    ├── AppModel+Sessions.swift
+    ├── AppModel+Runtime.swift
+    ├── AppModel+Inspector.swift
+    ├── Domain/
+    │   ├── Session/                   # ChatSession、SessionStore（sqlite）
+    │   └── Workspace/                 # 文件树与 @ 补全用的索引
+    ├── Harness/                       # 各家启动命令与协议偏差
+    ├── ACP/                           # JSON-RPC、会话模型、fs / terminal
+    ├── Quota/                         # QuotaStore、各家额度源
+    ├── ComposerAttachment.swift
+    ├── MarkdownFile.swift
+    ├── Localization.swift
+    ├── Localizable.xcstrings
+    ├── AppIcon.icon/
+    └── Assets.xcassets/
 └── AurewaysTests/
-    ├── ProtocolTests.swift        # JSON-RPC 与 mock agent 集成测试
-    ├── MarkdownFileTests.swift    # Markdown 扩展名与 UTF-8 读盘
-    ├── SplitResizeEngineTests.swift # 分栏拖动：指针判据 + 只在边沿翻转 observable 状态
-    └── ComposerTextViewTests.swift
 ```
+
+`Aureways/Views/` 和 `Vendor/` 已经删掉。主窗口不再用 SwiftUI 排对话和检查器。
+
+## WebApp/src
+
+| 路径 | 职责 |
+| --- | --- |
+| `main.tsx` | 启动。`#menubar` 走菜单栏页，否则走主窗口 |
+| `components/App.tsx` | 侧栏、顶栏、对话、停靠区、检查器、设置路由 |
+| `components/VirtualList.tsx` | 窗口化列表与底部钉住 |
+| `components/Composer.tsx` | 输入框。会话打开且原生浮层开启时，主页面只留一个等高的槽 |
+| `components/ComposerOverlay.tsx` | 浮层 WebView 里的输入框，并回报卡片高度 |
+| `components/MenuBar.tsx` | 菜单栏：额度、最近会话、打开主窗口、退出 |
+| `inspector/` | 文件树、编辑器、变更、xterm 终端 |
+| `settings/` | 通用、Agent、用量、工作区、权限、MCP |
+| `markdown/` | marked 分块、DOMPurify、按需 Shiki |
+| `glass.ts` | 把 `data-glass` 矩形发给原生玻璃层 |
+| `bridge.ts` / `rpc.ts` / `store.ts` | 消息、请求、状态 |
+| `demo.ts` | 没有 `webkit.messageHandlers.aureways` 时的演示数据 |
 
 ## Xcode Target
 
 | Target | 类型 | 源码 |
 | --- | --- | --- |
-| **Aureways** | macOS Application | `Aureways/` 下全部 Swift 与 Assets |
-| **AurewaysTests** | Unit Test Bundle | `AurewaysTests/ProtocolTests.swift`，并**再编译一份** `Aureways/ACP/*.swift` 与 `Aureways/Harness/*.swift`（不依赖把 SwiftUI 应用当 TEST_HOST） |
+| **Aureways** | macOS Application | `Aureways/` 下的 Swift、资源、`WebAppBundle` |
+| **AurewaysTests** | Unit Test Bundle | `AurewaysTests/`。不把 `.app` 当 TEST_HOST |
 
-构建设置要点（见 `project.pbxproj`）：
+构建设置（`project.pbxproj`）：
 
 - `MACOSX_DEPLOYMENT_TARGET = 26.0`
+- `MARKETING_VERSION = 0.2.4`，`CURRENT_PROJECT_VERSION = 17`
 - `PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client`
-- `ENABLE_APP_SANDBOX` 未开启（需 spawn CLI、读写工作区）
-- Debug：`CODE_SIGN_IDENTITY = "-"`（Sign to Run Locally）、`ENABLE_DEBUG_DYLIB = NO`、`ENABLE_PREVIEWS = NO`
+- App Sandbox 未开启（要拉起 CLI、读写工作区）
+- Debug：`CODE_SIGN_IDENTITY = "-"`，`ENABLE_DEBUG_DYLIB = NO`，`ENABLE_PREVIEWS = NO`
+
+Swift 包只有 [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0。它带一个 build tool 插件，`Makefile` 用 `-skipPackagePluginValidation` 跳过命令行确认。`swift-argument-parser` 是该插件的依赖。
 
 ## 运行时生成物（不入库）
 
 | 路径 | 说明 |
 | --- | --- |
-| `.derived/` | Makefile 指定的 DerivedData |
+| `.derived/` | Makefile 的 DerivedData |
 | `.derived/Build/Products/Debug/Aureways.app` | `make open` 打开的包 |
-| `~/Library/Preferences/` 下的 UserDefaults | `workspacePath`、`customAgents`、`selectedAgentId` |
-| `~/Library/Application Support/ai.aureways.client/aureways.sqlite` | harness 会话列表缓存、工作区目录列表 |
+| UserDefaults | 工作区、自定义 Agent、外观、菜单栏开关、额度源覆盖、MCP |
+| `~/Library/Application Support/ai.aureways.client/aureways.sqlite` | 会话链接与工作区目录 |
 
-`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build` 等。
+`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build`。`WebApp/node_modules` 不入库。
 
-## 源码职责一览
+## 源码职责
 
-| 路径 | 层 | 职责 |
-| --- | --- | --- |
-| `AppIcon.icon` | 品牌 | macOS 26 分层图标（A / 轨道 / 星） |
-| `AurewaysApp.swift` | 前端入口 | 窗口、暗色、⌘N |
-| `Views/*` | 前端 | 布局与交互 |
-| `Views/MarkdownBody.swift` | 前端 | vendored SwiftStreamingMarkdown 渲染 Agent 正文（配 `MarkdownDocumentCache` 解析缓存；流式单通道 parse） |
-| `Views/SplitResize.swift` | 前端 | 分栏拖动状态机：以指针按下/抬起为拖动判据；每帧宽度只写非 observable 字段，`isResizing` / `frozenWidth` 仅在开始与结束两个边沿变化 |
-| `Views/SettingsView.swift` | 前端 | 通用 / Agent / 工作区 / 权限 |
-| `AppModel.swift` 及 `AppModel+*` | 前后端交界 | 会话列表、connect/send/retry/cancel |
-| `ChatSession.swift` | 前后端交界 | 单会话 transcript |
-| `Harness/Harness.swift` | 后端 | 基类、AgentProfile、PATH |
-| `Harness/HarnessRuntime.swift` | 前后端交界 | 一 harness 一 ACP 进程 |
-| `Harness/*.swift` | 后端 | Grok / Codex / Claude / Antigravity / Oh My Pi / Qoder 等各自启动参数与 `normalizeToolCall` |
-| `Harness/ToolCallNormalization.swift` | 后端 | 工具卡片 JSON 改写的共用铅笔（别名、信封、locations）；映射表在各 Harness 里 |
-| `SessionStore.swift` | 本地缓存 | sqlite `session_links` |
-| `ACP/Connection.swift` | 后端 | JSON-RPC 连接生命周期 |
-| `ACP/JSONRPC.swift` / `Models.swift` / `SessionModels.swift` / `UpdateModels.swift` | 后端 | 编解码 |
-| `ACP/ClientOps.swift` | 后端 | 客户端能力：读文件、写文件、终端 |
+| 路径 | 职责 |
+| --- | --- |
+| `AurewaysApp.swift` | 窗口场景、菜单栏场景、菜单快捷键 |
+| `WebShellView.swift` | 玻璃、主 WebView、输入框浮层的位置 |
+| `WebShellBridge.swift` | 状态快照、转录补丁、命令、浮层高度 |
+| `AppModel.swift` 及 `AppModel+*` | 会话、发送、工作区、检查器草稿 |
+| `Harness/` | 启动参数、PATH、工具卡片形状 |
+| `ACP/` | JSON-RPC 与 Client 被调用的方法 |
+| `Quota/` | 与会话无关的额度缓存和限流 |
+| `Domain/Session/SessionStore.swift` | sqlite：`session_links`、`workspaces` |

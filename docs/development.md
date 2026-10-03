@@ -2,166 +2,144 @@
 
 ## 工作目录
 
-必须在**仓库根**执行命令（能 `ls Makefile Aureways.xcodeproj`）。
+在仓库根执行命令（能 `ls Makefile Aureways.xcodeproj`）。
 
 ```
-…/Aureways/                 ← 在这里 make / open xcodeproj
+…/Aureways-webproto/        ← 在这里 make
 ├── Makefile
 ├── Aureways.xcodeproj
-└── Aureways/               ← 源码，这里没有 Makefile
+├── WebApp/                 ← 页面源码。改完要 make web
+└── Aureways/               ← Swift 源码，这里没有 Makefile
 ```
 
-提示符若是 `…/Aureways/Aureways`，先 `cd ..`。在内层跑 `make open` 会得到 `No rule to make target 'open'`。
+本仓库当前是 `proto/web-shell`。另一份工作区 `/Volumes/app/DevelopProject/Aureways` 的 `main` 还不包含这套 Web shell。
 
 ## 工具链
 
-本仓库用 **Xcode 27** 开发。`make` 默认走 `xcode-select -p`。若该路径仍是 **Command Line Tools**（`/Library/Developer/CommandLineTools`），`xcodebuild` 会报：
+用 Xcode 27 开发，最低部署 macOS 26。`make` 默认走 `xcode-select -p`。若该路径是 Command Line Tools，`xcodebuild` 会报：
 
 ```
 xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer directory '/Library/Developer/CommandLineTools' is a command line tools instance
 ```
 
-这不代表没装 Xcode。CLT 和完整 Xcode.app 是两套工具链；只装过 `xcode-select --install` 或装完 Xcode 没切过去，就会这样。本机若有 `/Applications/Xcode.app` 或 `Xcode-beta.app`，`Makefile` 会自动改用那个。也可一次切到系统默认：
+这只说明当前选中的开发者目录不是完整 Xcode。`Makefile` 在这种情况下按顺序查找：
+
+1. `/Applications/Xcode.app`
+2. `/Applications/Xcode-beta.app`
+3. `/Volumes/app/Applications/Xcode.app`
+4. `/Volumes/app/Applications/Xcode-beta.app`
+5. Spotlight（`mdfind` bundle id `com.apple.dt.Xcode`）
+
+找到就把 `DEVELOPER_DIR` 设为该 App 的 `Contents/Developer`。也可以自己指定，或一次性改掉系统默认：
 
 ```bash
-sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
-sudo xcodebuild -license accept   # 若尚未同意许可
+make open DEVELOPER_DIR=/Volumes/app/Applications/Xcode.app/Contents/Developer
+
+sudo xcode-select -s /Volumes/app/Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -license accept
 ```
 
-需要指定某个 Xcode 时覆盖：
+## Makefile
 
 ```bash
-make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
-make open DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-```
-
-## 用 Makefile
-
-```bash
-cd /path/to/Aureways          # 仓库根
-
-make open                     # 编译 Debug 并打开 .app
-make build                    # 只编译（Debug）
-make release                  # Release 构建（CI 发版用）
-make test                     # 跑 AurewaysTests
-make clean                    # 删除 .derived
+make open          # Debug 编译并打开
+make build         # 只编译 Debug
+make release       # Release
+make test          # AurewaysTests
+make clean         # 删除 .derived
+make web           # WebApp → Aureways/WebAppBundle
 ```
 
 产物：
 
 ```
-.derived/Build/Products/Debug/Aureways.app     # make open
-.derived/Build/Products/Release/Aureways.app   # make release
+.derived/Build/Products/Debug/Aureways.app
+.derived/Build/Products/Release/Aureways.app
 ```
 
-只打开已编译包：
+`make open` 若发现 `/Applications/Aureways.app` 已存在，会先换成这次编出来的包再打开。同一个 bundle id 只能有一个 Dock 图标；Applications 里的旧包会盖住 `.derived` 里的新图标。仍不刷新时执行 `killall Dock`。
 
-```bash
-open .derived/Build/Products/Debug/Aureways.app
-```
+改过 Swift 要重新 `make open` 或在 Xcode 里 Run。改过 `WebApp/src` 要先 `make web`，再编 App。已打开的窗口不会热更新。
 
-改过代码必须重新 `make open` 或 Xcode Run，已打开的窗口不会热更新。
+`make web` 在 `WebApp/` 里执行 `npm ci && npm run build`（类型检查、Vite、体积报告）。锁文件在 `WebApp/package-lock.json`，不在仓库根。
 
-`make open` 会 `lsregister` 刚编出来的包，Finder「打开方式」里才会出现 Aureways。双击 `.md` 仍走系统当前默认应用；要改成 Aureways，用偏好设置里的「设为默认 Markdown 打开方式」，或：
+`make open` 会 `lsregister` 刚编出来的包，Finder「打开方式」里才会出现 Aureways。双击 `.md` 仍走系统默认应用。要改成 Aureways，用设置里的「设为默认 Markdown 打开方式」，或：
 
 ```bash
 open -a Aureways README.md
 ```
 
-### Dock 仍是空图标
+## Xcode
 
-同一 bundle id `ai.aureways.client` 只能有一个「官方」图标。若 `/Applications/Aureways.app` 是更早、没有 App Icon 的包，Launch Services 会用它的空白占位，即使刚 `make open` 的 `.derived` 包图标是对的。`make open` 发现 Applications 里已有同名包时会先换上这次编出来的包再打开。仍不刷新时：
+打开 `Aureways.xcodeproj`，scheme 选 **Aureways**，目的地 **My Mac**，`⌘R` 运行，`⌘U` 测试。签名是 Sign to Run Locally。
 
-```bash
-killall Dock
-```
+SwiftTerm 带 build tool 插件。命令行构建由 Makefile 加上 `-skipPackagePluginValidation -skipMacroValidation`。在 Xcode 里第一次构建时按提示允许插件。
 
-## 用 Xcode
-
-```bash
-open Aureways.xcodeproj
-```
-
-若弹出选择 Xcode，选本机已安装的 Xcode（开发时用过 Xcode-beta）。
-
-1. 顶部 scheme：**Aureways**
-2. 目的地：**My Mac**
-3. `Cmd + R` 运行，`Cmd + U` 测试
-4. 停掉用 `Cmd + .`
-
-签名是 “Sign to Run Locally”，仅本机调试。
-
-## Swift 包
-
-直接依赖只有两个（声明在 `Aureways.xcodeproj` 的 package reference 里）：
-
-| 包 | 用途 |
-| --- | --- |
-| [SwiftStreamingMarkdown](https://github.com/microsoft/SwiftStreamingMarkdown)（本地 `Vendor/SwiftStreamingMarkdown`，上游 `5f7c04e0`） | Agent 正文 Markdown 渲染（`MarkdownBody.swift`）与解析缓存（`MarkdownDocumentCache.swift`）。流式 LaTeX 去重补丁见该目录 `PATCHES.md` |
-| [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 | 右侧面板交互终端（真实 PTY + 终端模拟） |
-
-其它库都是随它们传递进来的（`Package.resolved` 里可见 `swift-markdown` / `swift-cmark` 解析、`highlightswift` 代码高亮、`iosMath`、`SwiftUI-Shimmer`、`equatable` 等），精确版本锁在 `Aureways.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`。
-
-命令行构建的三个坑：
-
-- **SwiftTerm 带 build tool 插件**（生成构建信息），`xcodebuild` 默认要交互式确认。
-- **SwiftStreamingMarkdown 依赖 ordo-one/equatable（一个 swift-syntax 宏包）**，宏的交互确认是另一个开关。
-  这两项 Makefile 统一用 `-skipPackagePluginValidation -skipMacroValidation` 关掉；在 Xcode IDE 里首次构建按提示允许即可。
-- **SwiftTerm 的 Metal 渲染着色器**需要 Metal Toolchain。Xcode beta 默认不带，首次报 `cannot execute tool 'metal' due to missing Metal Toolchain` 时执行一次：
+SwiftTerm 的 Metal 着色器需要 Metal Toolchain。缺了会报 `cannot execute tool 'metal'`：
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-## 使用应用
+## 页面
 
-1. 工具栏选 workspace（agent 的 `cwd`）
-2. 侧栏绿点 harness 可点；灰点 = 启动器不在 PATH
-3. 等状态条变为就绪再输入
-4. 失败时看状态条原文，点 Retry；stderr 仍在会话 `logs` 里记录，但暂不提供面板展示
+```bash
+cd WebApp
+npm ci
+npm run dev     # 浏览器里的演示，没有原生桥
+npm run build   # 只构建，不复制进 Xcode 工程；make web 会做完整的一步
+```
 
-Harness 要自己安装并登录，例如：
+演示地址可以加 `?turns=8` 看长对话，`#settings` 看设置，`#menubar` 看菜单栏页。玻璃和输入框浮层要在编出来的 App 里看。
 
-- Grok Build：`grok` 在 PATH 且已 auth
-- Codex / Claude：Node.js + `npx`，以及各自 CLI 登录
-- Oh My Pi：Bun + `omp`（`bun install -g @oh-my-pi/pi-coding-agent`），登录在 omp 自己的配置里。启动命令是 `omp acp`，自动批准会加 `--yolo`
-- Antigravity：官方 ACP 包 `agy_acp_server.par`（与 `localharness_external` 同目录，默认 `~/.local/share/antigravity-acp/`，wrapper 为 `agy_acp_server`）。`agy` CLI 没有 `--acp`，也不要用第三方 `npx agy-acp`。安装命令见仓库 README
-- Qoder：国际版（`@qoder-ai/qodercli` / `qoder`）与国内版（`@qodercn-ai/qoderclicn` / `qoderclicn`）。分别执行 `qoder login` 或 `qoderclicn login`。启动命令为 `qoder --acp` 或 `qoderclicn --acp`（自动检测安装的二进制），自动批准会加 `--yolo`
+## 使用
+
+1. 选一个工作区作为 Agent 的 `cwd`。
+2. 选一个 PATH 上找得到的 Agent。
+3. 发送后等会话变为就绪。失败时看错误条，点重试。
+4. 登录在各 CLI 自己的工具里完成。
+
+安装示例见仓库根的 README。
 
 ## 测试
 
-测试 target **不**把 `.app` 当 TEST_HOST（SwiftUI 宿主会挂起）。它单独编译 ACP / Harness 源文件 + `ProtocolTests.swift`。
+`make test`。测试包单独编译被测 Swift，不把应用当 TEST_HOST。
 
-```bash
-make test
-```
+| 文件 | 覆盖 |
+| --- | --- |
+| `ProtocolTests.swift` | JSON-RPC、mock agent、sqlite、会话能力 |
+| `ToolCallNormalizationTests.swift` | 各 Harness 的工具 JSON |
+| `TerminalHostTests.swift` | Agent 侧 `terminal/create` 与 Grok 的 shell 改写 |
+| `QuotaStoreTests.swift` | 限流与退避 |
+| `HarnessQuotaTests.swift` | 额度响应解析 |
+| `SessionTranscriptTests.swift` | 转录合并 |
+| `MenuBarCommandTests.swift` | 菜单栏页的命令名，含 `quitApp` |
+| `LocalizationTests.swift` | 文案键 |
+| `MarkdownFileTests.swift` | Markdown 扩展名与读盘 |
+| `TextDiffTests.swift` | diff |
+| `GrokExtTests.swift` | 计划审批与选择题 |
 
-## 调试连接失败
+这些测试不启动真实的 Codex、Claude 或 Grok 二进制。
 
-1. 终端确认同一条命令能跑，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy_acp_server`、`omp acp`
-2. GUI PATH 不含 nvm / bun：把 `node`/`npx`/`bun`/`omp` 链到 `/opt/homebrew/bin` 或 `~/.bun/bin`，或自定义 agent 填绝对路径
-3. 右侧面板开一个交互终端，直接复现命令看输出
-4. `initialize` 卡死：确认对方 stdout 只有 NDJSON，没有横幅日志
+## 连接失败
 
-## CI 与发版
+1. 在终端用同一条命令试，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy_acp_server`、`omp acp`。
+2. GUI 的 PATH 不含 nvm。把可执行文件链到 `/opt/homebrew/bin` 或 `~/.local/bin`，或写绝对路径。
+3. 在检查器里开一个终端，看同一条命令的输出。
+4. `initialize` 卡住时，确认对方 stdout 只有 NDJSON，横幅不要打到 stdout。
 
-工作流：`.github/workflows/release.yml`。**约定只有打 tag 才构建**——分支 push 与 PR 不触发。
+## 发版
 
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
+`.github/workflows/release.yml` 只在推送 `v*` tag 时运行。Runner 是 `macos-26`，会选 `/Applications` 下版本最新的 Xcode，然后：
 
-Runner（`macos-26`）上自动选取最新 Xcode，然后：
+1. `make test`
+2. `make release`
+3. `diskutil image create` 生成 `Aureways-<tag>.dmg`，挂载后检查可执行文件和 Applications 快捷方式
+4. 创建 GitHub Release，并保留 Actions artifact
 
-1. `make test`（失败即中止发版）
-2. `make release`（Release 构建）
-3. `diskutil image create from` 生成 `Aureways-<tag>.dmg`（含 `/Applications` 快捷方式，挂载自检 app 可执行文件与快捷方式，产物异常即中止发版）
-4. 创建 GitHub Release 附产物，并保留 Actions artifact
+产物 ad-hoc 签名，未公证。
 
-产物为 ad-hoc 签名（`CODE_SIGN_IDENTITY = "-"`），未经 Apple 公证；他人下载后首次打开可能需要 `xattr -dr com.apple.quarantine`。
-
-## 版本与标识
+## 版本
 
 | 项 | 值 |
 | --- | --- |

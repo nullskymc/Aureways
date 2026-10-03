@@ -1,23 +1,29 @@
 # 后端
 
-后端是同进程 Swift 代码，入口 `ACPConnection`（`actor`）。职责：spawn harness、JSON-RPC、实现 Client 被调用的方法。
+后端是同进程的 Swift。ACP 入口是 `ACPConnection`（`actor`）：拉起 harness、收发 JSON-RPC、实现 Agent 回调的 Client 方法。窗口服务（文件、检查器终端、设置、额度）在 `WebShellServices`、`WebTerminalService`、`QuotaStore`，不进 ACP 连接。
 
 ## 模块
 
 | 文件 | 作用 |
 | --- | --- |
-| `Harness/Harness.swift` | 基类 `Harness`、`AgentProfile`、`HarnessRegistry`、`HostEnvironment` |
+| `Harness/Harness.swift` | 基类、`AgentProfile`、`HarnessRegistry`、`HostEnvironment` |
 | `Harness/*.swift` | 各家启动命令、可用性、`session/_meta`、`normalizeToolCall` |
-| `Harness/ToolCallNormalization.swift` | 工具卡片 JSON 改写的共用操作（各 Harness 自己决定改什么） |
-| `Harness/HarnessRuntime.swift` | 一 harness 一 ACP 进程 |
-| `JSONRPC.swift` | `JSONValue`、`JSONRPCMessage`（request / notification / response / error） |
-| `Models.swift` | ACP 载荷：initialize、session、content、tool call、permission |
-| `Connection.swift` | 子进程生命周期与方法路由 |
-| `ClientOps.swift` | `FileOps`、`AgentTerminal` / `TerminalHost` |
+| `Harness/ToolCallNormalization.swift` | 改写工具 JSON 的共用操作 |
+| `Harness/HarnessRuntime.swift` | 一个 harness 一个 ACP 进程 |
+| `Harness/HarnessQuota.swift` | 额度快照的形状，以及各家 HTTP / 本地解析 |
+| `ACP/JSONRPC.swift` | `JSONValue`、请求 / 通知 / 响应 |
+| `ACP/Models.swift` | `initialize` 与能力 |
+| `ACP/SessionModels.swift` | `session/new`、`load`、`list`、`prompt` |
+| `ACP/UpdateModels.swift` | `session/update`、工具、权限 |
+| `ACP/Connection.swift` | 子进程生命周期与方法路由 |
+| `ACP/ClientOps.swift` | Agent 调用的 `FileOps` 与 `TerminalHost` |
+| `Quota/QuotaStore.swift` | 缓存、限流、与会话解耦 |
+| `Quota/QuotaSources.swift` | 每家用哪些源 |
+| `WebTerminalService.swift` | 用户终端的 PTY |
 
-`AppModel.ensureRuntime` 按 Agent 复用进程：`Harness.makeRuntime()` → launch → initialize → 若 `authMethods` 非空则先 `authenticate` 第一个方法。然后按能力 `session/list`，新对话 `session/new`，打开历史 `session/load`。`ACPConnection` 挂在 `HarnessRuntime` 上，不挂在单条 `ChatSession`。各家差异（参数、环境、`_meta`）写在对应 `Harness` 子类里，不要塞进 `AppModel`。
+`AppModel.ensureRuntime` 按 Agent 复用进程：`Harness.makeRuntime()` → launch → initialize → 若有 `authMethods` 则先 `authenticate`。然后按能力 `session/list`，新对话 `session/new`，打开历史 `session/load`。各家参数写在对应 `Harness` 子类里。
 
-## 启动 Harness
+## 启动
 
 `ACPLaunch`：`command`、`arguments`、`cwd`、`environment`。
 
@@ -27,63 +33,74 @@
 - `~/.local/bin`、`~/.bun/bin`、`~/.cargo/bin`、`~/.volta/bin`
 - `/usr/bin`、`/bin`
 
-`resolveExecutable` 按 PATH `isExecutableFile` 查找。找不到则 `ACPError.launch("Command not found: …")`，前端 `phase = .failed`。
+`resolveExecutable` 按 PATH 查找可执行文件。找不到则启动失败，会话 `phase = .failed`。侧栏上的可用状态表示启动命令在 PATH 上，不表示已经登录或 `initialize` 能成功。
 
-侧栏绿点 = 启动命令（如 `grok`、`npx`）在 PATH 上，不保证该 harness 已登录或能完成 `initialize`。
+从 Finder 打开的 App 没有 shell 里的 nvm PATH。若 `npx` 只在 `~/.nvm/.../bin`，Codex 和 Claude 会显示不可用。把 `node` 链到 `/opt/homebrew/bin`，或在自定义 Agent 里写绝对路径。
 
-Auto-approve 时由当前 `Harness.sessionMeta` / `launchArguments` 决定透传。Grok Build 把参数换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 里再声明一次。Oh My Pi 把参数换成 `["acp", "--yolo"]`，Qoder 换成 `["--acp", "--yolo"]`。
+自动批准时由 `Harness.launchArguments` 和 `sessionMeta` 决定怎么传。Grok Build 换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 再声明一次。Oh My Pi 换成 `["acp", "--yolo"]`，Qoder 换成 `["--acp", "--yolo"]`。
 
-## JSON-RPC 循环
+## JSON-RPC
 
-- 写出：`stdin` 一行一个 message
-- 读入：后台队列按 `\n` 切行，经 `AsyncStream` 回到 actor，保证顺序。EOF 时若 buffer 里还有未以换行结束的一行，仍会派发
-- Client 发起的调用放进 `pending[id]`，对上 response / error。写失败或 `shutdown` 只会 resume 仍在 `pending` 里的 continuation，避免 double-resume
-- Agent 的 notification：目前处理 `session/update`
-- Agent 的 request：`perform(method:)` 处理后 `write` response
+- 写出：stdin 一行一条消息。
+- 读入：后台按 `\n` 切行，经 `AsyncStream` 回到 actor。EOF 时缓冲区里最后一行没有换行也会派发。
+- Client 发出的调用放在 `pending[id]`，对上 response 或 error。
+- Agent 的通知目前处理 `session/update`。
+- Agent 的请求由 `perform` 处理后写回 response。
 
-`shutdown` 终止子进程、取消 pending、关掉 stdin。进程退出码进 stderr 日志。
+`shutdown` 终止子进程、取消 pending、关掉 stdin。
 
-## Client 能力
+## Agent 能调用的 Client 方法
 
-`InitializeRequest` 声明：
-
-- `fs.readTextFile` / `fs.writeTextFile`
-- `terminal: true`
-- `clientInfo`: name `aureways`，title `Aureways`，version `0.2.4`
-
-Agent 回调实现：
+`initialize` 声明 `fs.readTextFile`、`fs.writeTextFile`、`terminal: true`。`clientInfo` 的 name 是 `aureways`，version 取应用的 marketing version。
 
 | 方法 | 行为 |
 | --- | --- |
-| `session/request_permission` | 交给 UI；Auto-approve 则选 allow |
-| `fs/read_text_file` | 读工作区内路径；支持 `line`（1-based）、`limit` |
-| `fs/write_text_file` | 工作区内创建父目录后原子写 |
-| `terminal/create` | 再 spawn 一条命令，截断输出字节 |
-| `terminal/output` | 返回累计 stdout+stderr |
+| `session/request_permission` | 交给页面；自动批准则选 allow |
+| `fs/read_text_file` | 读工作区内的路径，支持 `line`（从 1 计）和 `limit` |
+| `fs/write_text_file` | 在工作区内创建父目录后原子写 |
+| `terminal/create` | 再起一个 `Process`，截断输出。这不是交互终端 |
+| `terminal/output` | 累计的 stdout 和 stderr |
 | `terminal/wait_for_exit` | 等到退出码 |
-| `terminal/kill` / `release` | SIGTERM 并可选丢弃 |
+| `terminal/kill` / `release` | SIGTERM，可选丢掉缓冲 |
 
-Agent 侧终端不是完整 PTY，是 `Process` + Pipe（stdin 为 `/dev/null`，输出进环形缓冲）；`fs/*` 限制在已添加的工作区目录之下（当前 `cwd` 以及工作区目录列表里的路径）；终端命令仍按 harness 传入的 `cwd`/`env` 执行。应用未开 App Sandbox。
+Agent 侧终端的 stdin 是 `/dev/null`。`fs/*` 限制在已添加的工作区之下。应用未开 App Sandbox。
 
-右侧面板的**用户交互终端**是另一套：[SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 的真实 PTY（`LocalProcessTerminalView`），由 `AppModel.openTerminalTab()` 创建、以登录 shell 和 `HostEnvironment.augmented()` 的完整环境启动，与 ACP 的 `terminal/*` 无关。关闭标签即终止进程，应用退出时经 `AppDelegate` 统一清理。
+Grok 的 `_x.ai/exit_plan_mode` 和 `_x.ai/ask_user_question` 是带 id 的请求。`ACPConnection` 交给 `onExtRequest`，页面点完再回包。自动批准不会自动回答选择题。其它未知扩展请求仍返回 32601。
+
+## 用户终端
+
+检查器里的终端是另一套。`WebTerminalService` 用 SwiftTerm 的 `LocalProcess` 开真实 PTY，登录 shell，环境是 `HostEnvironment.augmented()`。xterm.js 负责画。输出大约每 8 ms 合并一次，以 base64 发给页面。关掉标签或应用退出就终止进程。它和 ACP 的 `terminal/*` 无关。
 
 ## 发给 Agent 的方法
 
 | 方法 | 时机 |
 | --- | --- |
 | `initialize` | 连接后第一条 |
-| `session/new` | 新对话 |
-| `session/load` | 打开 harness 已有 session；回放历史 |
-| `session/list` | 刷新该 Agent 的侧栏缓存 |
-| `session/delete` | 从 harness 删除会话 |
-| `session/prompt` | 用户发送；`prompt: [{type:text}]` |
+| `session/new` | 新对话。带工作区、已启用的 MCP、Harness 的 `_meta` |
+| `session/load` | 打开已有会话并回放 |
+| `session/list` | 刷新侧栏里已有条目的标题 |
+| `session/delete` | 从 harness 删除 |
+| `session/prompt` | 用户发送。块由 `OutgoingMessage.contentBlocks` 组装 |
 | `session/cancel` | 通知，无 id |
-| `authenticate` | initialize 若返回 `authMethods`，连接时用第一个 methodId 调用 |
+| `session/set_config_option` | 输入框上的模型、力度等 |
+| `session/set_mode` | 没有 `configOptions` 时的旧退路 |
+| `authenticate` | `initialize` 返回了 `authMethods` 时，用第一个 |
 
-Grok 还会发 `_x.ai/exit_plan_mode`、`_x.ai/ask_user_question`（带 JSON-RPC id）。`ACPConnection` 把 `x.ai/` / `_x.ai/` request 交给 `onExtRequest`，由 Grok 会话弹出计划审批 / 选择题卡后再回包。未知扩展仍 32601。`--no-leader` 下没有 TUI，这两条必须由本客户端实现。
+未实现：`session/resume`，以及 WebSocket / HTTP 传输。
 
-未实现：`session/resume`、WebSocket / HTTP 传输。
+## 额度
 
-## 环境注意
+`QuotaStore` 不从 ACP 的 `usage_update` 推算限额。会话用量只作为补充，和账号额度并排显示。
 
-从 Finder / `open *.app` 启动时没有 shell 的 nvm PATH。若 `npx` 只在 `~/.nvm/versions/node/.../bin`，侧栏 Codex / Claude 会灰。把 node 链进 `/opt/homebrew/bin` 或在自定义 agent 里填绝对路径。
+每个源有自己的上次请求时间和退避，写在缓存里，重启仍然有效。默认间隔：自动刷新 5 分钟，手动刷新 30 秒，后台轮询 10 分钟，失败退避从 60 秒起、上限 30 分钟。429 遵守 `Retry-After`。未登录退避 30 分钟，手动刷新仍可在 30 秒后重试，但不能打断服务器给的 429 窗口。
+
+| Agent id | 源（按顺序） |
+| --- | --- |
+| `grok-build` | `grok.billing` |
+| `codex` | `codex.usage-api`，然后 `codex.session-log`（本地 rollout 日志，无网络） |
+| `claude` | `claude.oauth-usage`。只读 `~/.claude/.credentials.json`（或 `CLAUDE_CONFIG_DIR`）。不读钥匙串，macOS 上因此经常是未配置 |
+| `antigravity` | `antigravity.cloudcode` |
+
+其余内置 Agent 没有额度源。可用 `defaults write ai.aureways.client quotaSourceMap …` 覆盖；空列表表示关掉这一家。
+
+页面上，只有错误、没有用量数字的快照不画严重程度点。支持额度但未登录的 Agent 会说明未登录。

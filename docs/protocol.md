@@ -7,8 +7,8 @@
 | 方法 | 实现 | 说明 |
 | --- | --- | --- |
 | `initialize` | 有 | capabilities + clientInfo |
-| `session/new` | 有 | `cwd`、空 `mcpServers`；可选 `_meta`（由当前 Harness 提供，Grok 为 `yoloMode`） |
-| `session/prompt` | 有 | 仅 text content block |
+| `session/new` | 有 | `cwd`、设置里启用的 `mcpServers`；可选 `_meta`（由当前 Harness 提供，Grok 为 `yoloMode`） |
+| `session/prompt` | 有 | `text`；图片在能力允许且体积内时为 `image`，否则和文件、`@` 引用一样走 `resource` / `resource_link` |
 | `session/cancel` | 有 | notification |
 | `authenticate` | 有 | initialize 返回 `authMethods` 时用第一个 method 调用 |
 | `session/load` | 有 | Agent 声明 `loadSession` 时；回放 `session/update` |
@@ -42,7 +42,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 `Harness.normalizeToolCall`（`session/update` 的 `tool_call` / `tool_call_update`，以及
 `session/request_permission` 里的 `toolCall`，由 `normalizeNotification` 走进去）。
 默认都是空实现。这样每条偏差都归属到需要它的那个 agent，`ACP/` 目录保持按规范直读。
-新增偏差请加在对应 Harness 里，不要写进 `ACPConnection` 或 `ToolCallView`。
+新增偏差请加在对应 Harness 里，不要写进 `ACPConnection` 或页面组件。
 
 | Agent | 偏差 | 客户端怎么处理 |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | Oh My Pi | 文件工具用 `path`；move 用 `oldPath`/`newPath`；完成后的 diff 在 `rawOutput.details` | `normalizeToolCall`：补 locations，把 nested diff 提升到 `content` |
 | Qoder | `initialize` 按规范（protocolVersion 1、`loadSession`、图片输入）；未登录时 `session/new` 直接回 `-32000 Authentication required`；`--acp` / `--yolo` 都不在 `--help` 里；国际版（`qoder`）与国内版（`qoderclicn`）协议一致 | 暂无改写钩子。自动检测已安装的 CLI（优先 `qoder`，次选 `qoderclicn`）。鉴权走 `HarnessRuntime.withAuthentication` 的懒重试，取第一个 authMethod |
 | Antigravity | MCP 信封 `{ServerName,ToolName,Arguments:{CommandLine,Cwd}}` 且 `kind: other`；文件键是 `TargetFile`；输出是 `combinedOutput`/`exitCode` | `normalizeToolCall`：拆信封、Pascal/snake 别名、按工具名表填 `kind` |
-| Copilot / Cursor | ACP 适配器闭源，键名未核实 | 保守地走同一套常见别名；不要把猜测写进 `ToolCallView` |
+| Copilot / Cursor | ACP 适配器闭源，键名未核实 | 保守地走同一套常见别名；不要把猜测写进页面 |
 
 `ACP/` 层不做任何猜测：`TerminalHost.create` 里 `command` 解析不到就报
 `terminal command not found on PATH: …`，不会替 agent 改写成 shell 调用。想让某个 agent
@@ -72,7 +72,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | `agent_message_chunk` | Agent 气泡，流式拼接 |
 | `agent_thought_chunk` | Thinking 折叠 |
 | `user_message_chunk` | 与本地已插入的用户气泡合并，避免重复 |
-| `tool_call` / `tool_call_update` | ToolCard，按 `toolCallId` 合并 |
+| `tool_call` / `tool_call_update` | 工具行，按 `toolCallId` 合并 |
 | `plan` | 步骤列表 |
 | `available_commands_update` | Composer 上方 `/command` |
 | `current_mode_update` | 灰色 status |

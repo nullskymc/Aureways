@@ -4,7 +4,7 @@
 
 # Aureways
 
-**A native macOS client for agentic coding.** A SwiftUI app — not a web view, not an Electron shell. Pick a workspace, talk to an agent that's already installed on your Mac, and let it edit files and run terminals in a native window.
+**A macOS client for agentic coding.** The window is a native shell. The interface inside it — sidebar, transcript, composer, inspector, settings — is one Preact app in a `WKWebView`. Pick a workspace and talk to an agent that is already installed on the Mac.
 
 [![Release](https://github.com/nullskymc/Aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/Aureways/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -13,27 +13,29 @@
 
 </div>
 
-Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com) and launches your local CLI agent as a child process over stdio NDJSON. There is no remote backend and no separate HTTP service — the client runs the agent directly, in-process.
+Aureways speaks the [Agent Client Protocol](https://agentclientprotocol.com). It launches the local CLI agent as a child process and talks stdio NDJSON. There is no remote backend and no separate HTTP service.
+
+With a session open, the composer is a second transparent web view sitting on system Liquid Glass, so the transcript can scroll underneath the input. Glass is `NSGlassEffectView` only.
 
 ## Features
 
-- **Native Mac surfaces** — unified toolbar, sidebar, system Settings (`⌘,`), light/dark following the system (overridable in Settings). "Reveal in Finder" and a real PTY terminal, not a web approximation.
-- **Any ACP agent** — nine agents ship built in, or add any launch command from Settings. Sessions live under their workspace in the sidebar and restore across launches when the agent supports it.
-- **Streaming transcript** — Markdown body, collapsible thinking, grouped tool calls, plan steps. The composer takes `/` commands, `@` workspace-file references, and image/file attachments. Long transcripts are virtualized so scrolling stays cheap.
-- **Permissions** — the agent asks before reading/writing files or running commands; you can instead let the client approve on its behalf.
-- **Workbench** (`⌘B`) — a file browser, a text editor (line numbers, `⌘S`, conflict handling when you and the agent edit the same file), and interactive terminals. Every open file and terminal keeps its own tab, so switching doesn't lose state.
-- **Markdown documents** — Finder, Dock, `open -a`, and File → Open Markdown (`⌘O`) open `.md` files as workbench tabs (same preview renderer as the transcript). Set Aureways as the default Markdown app in Settings if you want double-click.
+- **Shell** — hidden title bar, traffic lights inset into the sidebar, system light/dark (overridable in Settings). Closing the window or pressing `⌘Q` leaves the process in the menu bar. Quit is the menu-bar item.
+- **Any ACP agent** — nine agents ship built in, or add a launch command in Settings. Sessions are grouped by workspace and restore across launches when the agent supports `session/load`.
+- **Streaming transcript** — Markdown (marked, DOMPurify, lazy Shiki), collapsible thinking, tool rows merged by `toolCallId`, plan steps. The list is windowed. At rest the last line sits above the composer.
+- **Composer** — Return sends, Shift+Return inserts a newline. `/` commands, `@` workspace files, images and file attachments. Permission, plan-approval, and question cards sit above the input.
+- **Inspector** (`⌥⌘I`) — file tree, text editor (`⌘S`, mtime conflict check), git changes, and interactive terminals. Terminals are xterm.js fed by headless SwiftTerm PTYs. Each file and terminal keeps its own tab.
+- **Markdown** — Finder, Dock, `open -a`, and File → Open Markdown (`⌘O`) open `.md` files as inspector tabs. Set Aureways as the default Markdown app in Settings to use it on double-click.
+- **Usage** — account quota is a separate, cached, throttled read (`QuotaStore`). It is not taken from the ACP session. The settings Usage page and the menu bar show the same snapshot.
 
 ```
 ┌──────────────┬────────────────────────────────────────────┬──────────────┐
-│ Sidebar      │  Unified toolbar: workspace · status · search │ Inspector ⌘B │
-│  • New chat ⌘N│                                            │  • File browser│
-│  • Workspace  ├────────────────────────────────────────────┤  • Text editor │
-│    sessions   │  Transcript (centered, streaming)          │  • Terminal    │
-│    ⌘1 … ⌘9   │   user bubble · agent message · thinking    │  • Info        │
-│               │   tool cards · plan steps                  │               │
-│               ├────────────────────────────────────────────┤               │
-│               │  Floating composer (⌘Return to send)       │               │
+│ Sidebar      │  Header: workspace · session · agent       │ Inspector    │
+│  • New chat  │                                            │  • Files     │
+│  • Workspace ├────────────────────────────────────────────┤  • Editor    │
+│    sessions  │  Transcript (column 768px, streaming)      │  • Changes   │
+│    ⌘1 … ⌘9   │                                            │  • Terminal  │
+│              ├────────────────────────────────────────────┤              │
+│              │  Glass composer (Return to send)           │              │
 └──────────────┴────────────────────────────────────────────┴──────────────┘
 ```
 
@@ -51,13 +53,13 @@ Aureways implements the [Agent Client Protocol](https://agentclientprotocol.com)
 | Oh My Pi | `omp acp` |
 | Qoder | `qoder --acp` / `qoderclicn --acp` |
 
-Install and sign in to the matching CLI first. Login and API keys live in each vendor's own tool — they don't go through Aureways. Add custom agents in Settings (`⌘,`).
+Install and sign in with each vendor's own CLI. Login and API keys do not go through Aureways. Custom agents are added in Settings (`⌘,`).
 
 Oh My Pi is a Bun CLI (`engines.bun >= 1.3.14`). Install with `bun install -g @oh-my-pi/pi-coding-agent`, then authenticate inside `omp`. Auto-approve launches `omp acp --yolo`.
 
-Qoder supports both the international CLI (`qoder`, via `@qoder-ai/qodercli`) and mainland-China CLI (`qoderclicn`, via `@qodercn-ai/qoderclicn`). Aureways automatically detects whichever binary is available on PATH. Run `qoder login` or `qoderclicn login` first. Auto-approve launches with `--acp --yolo`.
+Qoder supports the international CLI (`qoder`, package `@qoder-ai/qodercli`) and the mainland-China CLI (`qoderclicn`, package `@qodercn-ai/qoderclicn`). Aureways uses whichever binary is on `PATH`. Run `qoder login` or `qoderclicn login` first. Auto-approve adds `--yolo`.
 
-Antigravity's CLI (`agy`) has no `--acp` mode. Google publishes a separate ACP server (`agy_acp_server.par` + `localharness_external` in the same directory). On Apple Silicon:
+Antigravity's `agy` CLI has no `--acp` mode. Google ships a separate ACP server (`agy_acp_server.par` and `localharness_external` in the same directory). On Apple Silicon:
 
 ```bash
 mkdir -p ~/.local/share/antigravity-acp ~/.local/bin
@@ -73,32 +75,30 @@ EOF
 chmod +x ~/.local/bin/agy_acp_server
 ```
 
-Do not symlink only the `.par` onto `PATH` — the server looks for `localharness_external` next to the executable. First connect authenticates with Google (`oauth-personal`). Override the binary with `AGY_ACP_BIN`.
+Do not symlink only the `.par` onto `PATH` — the server looks for `localharness_external` next to the executable. The first connect authenticates with Google (`oauth-personal`). Override the binary with `AGY_ACP_BIN`.
+
+Quota readers exist for Grok (billing API), Codex (usage API, then local session logs), Claude (OAuth usage, file credentials only), and Antigravity (Cloud Code). Claude on macOS usually keeps its token in the Keychain; Aureways does not read the Keychain, so that source reports not configured. Copilot, Cursor, OpenCode, Oh My Pi, and Qoder have no quota source.
 
 ## Getting started
 
-**Install** — grab the `.dmg` from [Releases](https://github.com/nullskymc/Aureways/releases) and drag `Aureways.app` into `Applications`. Builds are ad-hoc signed and not notarized; if Gatekeeper blocks first launch:
+**Install** — download the `.dmg` from [Releases](https://github.com/nullskymc/Aureways/releases) and drag `Aureways.app` into `Applications`. Builds are ad-hoc signed and not notarized. If Gatekeeper blocks the first launch:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Aureways.app
 ```
 
-**Build from source** — requires macOS 26+ and Xcode 26+ (developed against Xcode 27). The app sandbox is off. Run from the **repository root** (where `Makefile` and `Aureways.xcodeproj` live, not the inner `Aureways/` source directory):
+**Build from source** — macOS 26 or later, Xcode 26 or later (developed on Xcode 27). The app sandbox is off. Run from the repository root (the directory that contains `Makefile` and `Aureways.xcodeproj`):
 
 ```bash
 make open
 ```
 
-Or open the project in Xcode, pick scheme **Aureways** and destination **My Mac**, then press `⌘R`:
+Or open `Aureways.xcodeproj`, select scheme **Aureways** and destination **My Mac**, then press `⌘R`.
+
+`make` uses `xcode-select -p`. If that path is still Command Line Tools, it looks for a full Xcode in this order: `/Applications/Xcode.app`, `/Applications/Xcode-beta.app`, `/Volumes/app/Applications/Xcode.app`, `/Volumes/app/Applications/Xcode-beta.app`, then Spotlight. To force one toolchain:
 
 ```bash
-open Aureways.xcodeproj
-```
-
-To build with a specific Xcode instead of the current `xcode-select` toolchain:
-
-```bash
-make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+make open DEVELOPER_DIR=/Volumes/app/Applications/Xcode.app/Contents/Developer
 ```
 
 | Command | What it does |
@@ -106,10 +106,11 @@ make open DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 | `make build` | Debug build |
 | `make open` | Build and open the `.app` |
 | `make test` | Run `AurewaysTests` |
-| `make release` | Release build (for shipping) |
+| `make release` | Release build |
 | `make clean` | Remove `.derived` |
+| `make web` | Rebuild `WebApp/` into `Aureways/WebAppBundle/` |
 
-If the first command-line build reports a missing Metal toolchain:
+The web bundle is committed, so an app build does not need Node. Run `make web` only after editing `WebApp/src`. If the first command-line build reports a missing Metal toolchain:
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
@@ -122,37 +123,45 @@ xcodebuild -downloadComponent MetalToolchain
 | `⌘N` | New chat |
 | `⌘O` | Open Markdown |
 | `⌘1` … `⌘9` | Select session |
-| `⌘B` / `⌥⌘I` | Toggle the workbench |
+| `⌃⌘S` | Toggle sidebar |
+| `⌥⌘I` | Toggle inspector |
+| `⇧⌘E` | Inspector: files |
+| `⇧⌘G` | Inspector: changes |
+| `⌃\`` | New terminal |
+| `⌘F` | Find |
 | `⌘,` | Settings |
-| `⌘Return` | Send message |
+| `Return` | Send |
+| `⇧Return` | New line |
 | `⌘.` | Stop generation |
-| `/` in composer | Slash commands |
-| `@` in composer | Reference workspace files |
+| `⌘Q` | Close the window and stay in the menu bar |
+| `/` in the composer | Slash commands |
+| `@` in the composer | Reference a workspace file |
 
 ## Documentation
+
+The in-depth docs are in Chinese.
 
 | Document | Covers |
 | --- | --- |
 | [Index](docs/README.md) | Reading order |
-| [Directory](docs/directory.md) | Repo and source tree |
-| [Architecture](docs/architecture.md) | Front/back responsibilities, session lifecycle |
-| [Frontend](docs/frontend.md) | SwiftUI UI and state |
-| [Backend](docs/backend.md) | Connection, process, filesystem, terminal |
-| [Protocol](docs/protocol.md) | Which ACP methods are implemented |
-| [Development](docs/development.md) | Toolchain, tests, debugging connection failures |
-
-The in-depth docs are written in Chinese.
+| [Directory](docs/directory.md) | Repository tree |
+| [Architecture](docs/architecture.md) | Shell, web app, ACP |
+| [Web shell](docs/web-shell.md) | Window, glass, bridge |
+| [Frontend](docs/frontend.md) | Preact UI |
+| [Backend](docs/backend.md) | Process, files, terminal, quota |
+| [Protocol](docs/protocol.md) | ACP methods in this client |
+| [Development](docs/development.md) | Toolchain, tests, connection failures |
 
 ## Releasing
 
-By convention, only a `v*` tag triggers CI — branches and PRs don't build. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
+Only a `v*` tag triggers CI. Branches and pull requests do not build. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Pipeline: `make test` → Release build → package `Aureways-<tag>.dmg` → create a GitHub Release with the artifact.
+The pipeline runs `make test`, a Release build, packages `Aureways-<tag>.dmg`, and publishes a GitHub Release.
 
 ## License
 

@@ -252,7 +252,7 @@ GUI 的改动冲掉——只有**改了 GUI 里脚本没覆盖的项**时才需�
 |---|---|
 | 原图（标志 + 地球） | 官网头图、启动画面、宣传海报、壁纸。**不是 App Icon。** |
 | 蓝底白标 / 分层 `.icon` | Dock、Launchpad、Finder、App Store、设置「关于」、通知。 |
-| 白底蓝标 / 深色白标矢量 | 空白画布 `BrandMark`、文档页眉、PPT、打印物料、浅色网页。 |
+| 白底蓝标 / 深色白标矢量 | 文档页眉、PPT、打印物料、浅色网页。主窗口空白页显示的是当前 Agent 的图标，不用这套平面标志。 |
 | 单色剪影 | Clear / Tinted、菜单栏精简、模板水印。 |
 
 ---
@@ -263,7 +263,7 @@ GUI 的改动冲掉——只有**改了 GUI 里脚本没覆盖的项**时才需�
 |---|---|
 | `Aureways/AppIcon.icon/` | Xcode 26+ 工程图标（`ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`） |
 | `Aureways/Assets.xcassets/AppIcon.appiconset/` | 扁平回退 PNG（16–1024） |
-| `Aureways/Assets.xcassets/BrandMark.imageset/` | 界面内平面标志（浅色蓝标 / 深色白标 SVG） |
+| `Aureways/Assets.xcassets/BrandMark.imageset/` | 浅色蓝标 / 深色白标 SVG。资源还在，当前页面不引用它 |
 | `Aureways/Assets.xcassets/AccentColor.colorset/` | 系统强调色，Orbit Blue / 深色提亮蓝 |
 | `design/app-icon/` | 分层 SVG、色版预览、重建脚本 `build_icon.py` |
 | `design/app-icon/reference/` | 三张 1408 参考稿，几何拟合的唯一依据 |

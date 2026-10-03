@@ -1,26 +1,29 @@
 # Aureways 文档
 
-Aureways 是 ACP 协议的 macOS 客户端雏形：SwiftUI 负责界面，同进程的 `ACPConnection` 负责拉起 harness、收发 JSON-RPC。
+Aureways 是 ACP 的 macOS 客户端。SwiftUI 只提供窗口和菜单栏。窗口里的界面是一个 Preact 应用，跑在 `WKWebView` 中。同进程的 `ACPConnection` 拉起本机 harness，收发 JSON-RPC。
 
 ```
-用户 ──► SwiftUI（前端） ──► AppModel ──► ACPConnection（后端）
-                                              │
-                                              ▼
-                                    harness 子进程（stdio）
-                                    Grok / Codex / Claude Code / …
+用户 ──► Preact（WKWebView）──► WebShellBridge ──► AppModel
+                                                      │
+                                                      ▼
+                                            ACPConnection（actor）
+                                                      │
+                                                      ▼
+                                            harness 子进程（stdio）
 ```
 
 | 文档 | 说明 |
 | --- | --- |
 | [directory.md](directory.md) | 仓库目录、Xcode target、生成物 |
-| [architecture.md](architecture.md) | 分层、会话生命周期、状态 |
-| [frontend.md](frontend.md) | 窗口、侧栏、会话区、权限、设置 |
-| [backend.md](backend.md) | 进程启动、PATH、JSON-RPC、fs/terminal |
-| [protocol.md](protocol.md) | 实现了哪些 ACP 方法、尚未做的 |
-| [protocol-latency.md](protocol-latency.md) | 协议交互延时排查：链路、候选点、测量缺口 |
-| [performance-plan.md](performance-plan.md) | 性能问题计划：任务清单、分期、验收标准 |
-| [development.md](development.md) | 编译、运行、测试、常见路径错误 |
-| [brand/app-icon.md](brand/app-icon.md) | A 轨道标志、App Icon 分层与交付 |
-| [vision.md](vision.md) | 远期目标与愿景：远端开发机 Agent、移动端伴侣与跨跳控制链 |
+| [architecture.md](architecture.md) | 分层、一次会话、持久化 |
+| [web-shell.md](web-shell.md) | 窗口壳、Liquid Glass、输入框浮层、Swift ↔ JS |
+| [frontend.md](frontend.md) | 侧栏、对话、输入框、检查器、设置、菜单栏 |
+| [backend.md](backend.md) | 进程、PATH、文件、两套终端、额度 |
+| [protocol.md](protocol.md) | 实现了哪些 ACP 方法、各家偏差 |
+| [development.md](development.md) | 编译、Web 包、测试、连接失败 |
+| [brand/app-icon.md](brand/app-icon.md) | A 轨道标志的图形规范 |
+| [vision.md](vision.md) | 还没做的远期设想：远端机器、离机控制 |
 
-阅读顺序建议：目录 → 架构 → 前端 / 后端 → 协议 → 开发。图标出稿看品牌规范。要动性能，先读 [protocol-latency.md](protocol-latency.md) 的事实，再按 [performance-plan.md](performance-plan.md) 执行。探索后续可能的功能演进看 [vision.md](vision.md)。
+阅读顺序：目录 → 架构 → Web shell → 前端 / 后端 → 协议 → 开发。改界面先看 [frontend.md](frontend.md) 和 [web-shell.md](web-shell.md)。改协议兼容先看 [protocol.md](protocol.md)。图标出稿看品牌规范。
+
+版本：0.2.4（build 17）。最低系统 macOS 26。Bundle ID `ai.aureways.client`。

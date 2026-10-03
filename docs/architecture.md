@@ -1,80 +1,105 @@
 # 架构
 
-Aureways 是 **ACP Client**，不是 Agent。Agent 是本机已安装的 harness 进程。
+Aureways 是 **ACP Client**。Agent 是本机已安装的 harness 进程。界面不在 SwiftUI 里排，窗口壳把一个 Web 应用铺满客户区。
 
 ## 分层
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  SwiftUI Views                                          │
-│  Sidebar / SessionStatusBar / Transcript / Composer     │
+│  Preact（WebApp/）                                      │
+│  侧栏 · 对话 · 输入框 · 检查器 · 设置 · 菜单栏页        │
 └──────────────────────────┬──────────────────────────────┘
-                           │ @Environment(AppModel)
+                           │ postMessage / evaluateJavaScript
+┌──────────────────────────▼──────────────────────────────┐
+│  WebShellBridge + WebShellServices                      │
+│  快照、转录补丁、rpc、玻璃矩形、输入框浮层              │
+└──────────────────────────┬──────────────────────────────┘
+                           │
 ┌──────────────────────────▼──────────────────────────────┐
 │  AppModel + HarnessRuntime + ChatSession                │
-│  一 Agent 一进程；会话身份是 harness 的 sessionId       │
+│  一个 Agent 一个进程；会话身份是 harness 的 sessionId   │
 └──────────────────────────┬──────────────────────────────┘
-                           │ ACPConnection.launch / list / load / prompt
+                           │ ACPConnection.launch / prompt
 ┌──────────────────────────▼──────────────────────────────┐
-│  ACP 后端（actor）                                      │
-│  JSON-RPC NDJSON · FileOps · TerminalHost               │
+│  ACP（actor）                                           │
+│  JSON-RPC NDJSON · FileOps · Agent 侧 TerminalHost      │
 └──────────────────────────┬──────────────────────────────┘
-                           │ stdin / stdout / stderr
+                           │ stdin / stdout
 ┌──────────────────────────▼──────────────────────────────┐
 │  Harness 子进程                                         │
-│  grok | npx …codex-acp | agy_acp_server | omp acp | qoder / qoderclicn --acp | … │
 └─────────────────────────────────────────────────────────┘
 ```
 
-前端不直接碰 `Process`。视图只读 `ChatSession` / `AppModel`，写操作走 `startNewSession`、`sendFromComposer`、`retry`、`cancel`、`resolvePermission`。
+页面不碰 `Process`。发送、取消、换会话、批权限都是发给原生的消息。文件、Git、检查器终端、设置走 `rpc`。额度不走 ACP 会话，由 `QuotaStore` 自己读各家 CLI 的账号接口或本地日志。
+
+窗口里有两层 WebView，只在打开会话并且原生报告 `composerOverlay` 时才拆开：
+
+- 主 WebView 画侧栏、对话、检查器。对话区铺到窗口底，输入框位置是一个等高的槽。
+- 浮层 WebView 透明，只画输入框，贴在一块系统玻璃上。原生按槽的位置摆这块玻璃。
+
+空白页和设置页的输入框仍在主 WebView 里。
 
 ## 一次会话
 
-1. 用户第一次发送 → `AppModel.sendFromComposer`（⌘N 只清空选中，不立刻 `session/new`）
-2. `ACPConnection.launch` 解析可执行文件并 `Process.run`
-3. Client → Agent：`initialize`（protocolVersion 1，声明 fs + terminal）
-4. 若 `authMethods` 非空，先 `authenticate` 第一个 method
-5. Client → Agent：`session/new`（`cwd` = 工具栏选中的 workspace；`_meta` 由当前 Harness 提供），或对已有 `sessionId` 调 `session/load`
-6. `ChatSession.phase = .ready`，输入框可用。`session/load` 期间 Agent 用 `session/update` 回放历史
-7. 用户发送 → `session/prompt`；期间 Agent 推 `session/update`，需要时反向调用 `session/request_permission`、`fs/*`、`terminal/*`
-8. 用户 ⌘. → `session/cancel` 并取消本地 prompt wait。关闭会话只卸 UI，同一 Agent 上其它会话仍占用该进程；没有活跃会话后才 `shutdown`
+1. `⌘N` 只清掉当前选中，不立刻 `session/new`。
+2. 用户第一次发送 → `AppModel.sendFromComposer`。
+3. `ACPConnection.launch` 解析可执行文件并 `Process.run`。
+4. Client → Agent：`initialize`（protocolVersion 1，声明 fs、terminal、clientInfo）。
+5. 若 `authMethods` 非空，先 `authenticate` 第一个 method。
+6. `session/new`（`cwd` 为选中的工作区，附上已启用的 MCP 和 Harness 的 `_meta`），或对已有 `sessionId` 调 `session/load`。
+7. `ChatSession.phase = .ready`。`session/load` 期间 Agent 用 `session/update` 回放历史。
+8. 之后每次发送是 `session/prompt`。Agent 推 `session/update`，需要时反向调用 `session/request_permission`、`fs/*`、`terminal/*`。Grok 还会发计划审批和选择题。
+9. `⌘.` → `session/cancel`。关掉一条会话只卸 UI；同一个 Agent 上还有别的会话时进程留着。没有活跃会话后才 `shutdown`。
 
-### Agentic 输入框
+`SessionPhase`：`.idle` / `.connecting` / `.ready` / `.failed`。同一个 Agent 的多个会话共用一个 `HarnessRuntime`，`session/update` 按 `sessionId` 路由。
 
-Composer 底层是 `ComposerTextView`（NSTextView wrapper，模板取自文件编辑器）：`paste:` 拦截剪贴板、注册 `.fileURL/.tiff/.png` 接收拖拽、`doCommandBy` 上报 Return/↑↓/Tab/Esc 给 `ComposerCard` 的补全状态机与提交（Esc 走 `complete:`，必须消费以免弹出系统补全面板）。输入卡高度由 TextKit `usedRect` 回报，不经隐藏 `Text` 镜像。超过 2000 UTF-16 单位的粘贴不进输入框：写成 `{cwd}/.aureways/pastes/` 下的草稿，输入卡只显示字数占位，点开后走检查器文件编辑器。卡片只用于渲染，避免把整段粘贴交给 `Text` 排版；发送前刷盘，再把草稿原文作为 `text` 发出。附件模型两段式：`ComposerAttachment`（含 NSImage 缩略图，Composer 侧）→ `TranscriptAttachment`（值类型，进 transcript 渲染）。发送时 `OutgoingMessage.contentBlocks()` 组装 ACP 内容块：文本与超长粘贴草稿 → `text`，粘贴/拖入的图片（≤10MB，超限 JPEG 重压后仍超则拒绝）→ base64 `image`，文件与 @ 引用 → `resource` / `resource_link`（agent 自己读）。能力门控读握手后的 `promptCapabilities.image`（经当前 Harness `normalizeCapabilities`）：明确 `false` 时图片附件加警示角标并禁发，未知照发。Grok 握手谎称 `image: false`，Harness 会改成 `true`，否则粘贴图片后发送按钮会一直灰。`/` 与 `@` 补全弹层挂在卡片 `overlay` 上方，不参与布局（开合不抖动 transcript）；工作区文件索引 `WorkspaceFileIndex` 后台 BFS 扫描（深度 6 / 4000 条封顶，排除 `node_modules` 等重目录）。
+## 页面怎么跟上转录
 
-`SessionPhase`：`.idle` / `.connecting` / `.ready` / `.failed(String)`。未 `.ready` 时 Composer 禁用（`.idle` / `.failed` 发送会先 load 或重连）。同一 Agent 的多个会话共用一个 `HarnessRuntime` 进程，`session/update` 按 `sessionId` 路由。
+`WebShellBridge` 用 `withObservationTracking` 看 `AppModel` 和当前 `ChatSession`。有变化就标脏，大约每 22 ms（约 45 Hz）刷一次，只发变了的部分：
+
+- `state`：整份应用快照，JSON 变了才发。
+- `transcript`：切换或重载会话时的全量条目。
+- `patch`：`upsert` / `append` / `remove`。正文续写走后缀 `append`，避免整段重传。
+
+页面用 `VirtualList` 只挂可见行。钉在底部时，测量行高造成的滚动不会被当成用户离开底部。底部留白是列表里一块真实垫片，高度为停靠区高度再加 24px，所以最后一行停在输入槽上方。详见 [frontend.md](frontend.md)。
 
 ## 传输
 
-ACP stdio：每条 JSON-RPC 消息一行 UTF-8，禁止嵌入换行。stdout 是协议，stderr 当日志记录进会话 `logs`（面板暂不展示）。
+ACP 只用 stdio：每条 JSON-RPC 一行 UTF-8，行内不能有换行。stdout 是协议，stderr 记进会话日志。
 
-JSON-RPC `id` 必须按数字解析。`NSNumber` 在 Swift 里可能桥成 `Bool`，`JSONValue` 对 `NSNumber` 先区分 CFBoolean 再当数字，否则 `initialize` 对不上 pending 请求。
+JSON-RPC `id` 必须按数字解析。`JSONValue` 对 `NSNumber` 先区分 CFBoolean 再当数字，否则 `initialize` 对不上 pending 请求。
 
 ## 持久化
 
-会话本体在 harness。Aureways 只缓存该 Agent `session/list`（以及本连接 `session/new`）返回的元数据，不存 transcript。
+会话正文在 harness 里。Aureways 只缓存链接，不存转录。
 
 | 位置 | 内容 |
 | --- | --- |
-| UserDefaults `workspacePath` | 当前选中的工作区绝对路径 |
-| sqlite `workspaces` | 用户添加的工作区目录（不含 `$HOME`；主目录只当未选工作区时的临时 cwd） |
-| UserDefaults `customAgents` | 用户添加的 `AgentProfile` JSON 数组 |
-| UserDefaults `selectedAgentId` / 外观 | 上次 Agent、浅色/深色、Liquid Glass |
-| `~/Library/Application Support/ai.aureways.client/aureways.sqlite` | `session_links`：`(agent_id, acp_session_id)`、cwd、title、时间戳 |
+| sqlite `session_links` | `(agent_id, acp_session_id)`、cwd、标题、时间 |
+| sqlite `workspaces` | 用户添加的工作区。主目录不当作已添加的工作区 |
+| UserDefaults `workspacePath` | 当前选中的工作区 |
+| UserDefaults `customAgents` | 用户添加的 Agent |
+| UserDefaults `selectedAgentId`、外观、`showMenuBarExtra` | 上次选择 |
+| UserDefaults `mcpServers` | 设置里的 MCP 列表 |
+| UserDefaults `quotaSourceMap` | 可选，覆盖某家 Agent 的额度源 |
 
-`initialize` 未声明 `loadSession` 的 Agent 不写 sqlite，退出后侧栏不保留。侧栏列出**本客户端 `session/new` 过的全部会话**（不按当前选中 harness 过滤）；每条会话绑定创建时的 Agent。`session/list` 只用来刷新已有条目的标题，不会把 harness 里其它会话灌进来。空白画布上选择的 harness / 工作区只作用于下一条新对话。打开历史走 `session/load`。右键「从列表移除」只摘本地缓存；「从 Agent 删除」仅在声明 `sessionCapabilities.delete` 时出现。
+`initialize` 未声明 `loadSession` 的 Agent 不写 sqlite，退出后侧栏不保留它。侧栏列出本客户端 `session/new` 过的会话，每条绑着创建时的 Agent。`session/list` 用来刷新已有条目的标题，不会把 harness 里其它会话灌进来。右键「从列表移除」只摘本地缓存；「从 Agent 删除」仅在声明 `sessionCapabilities.delete` 时出现。
 
 ## 设置分层
 
+设置是主窗口里的一条路由（`⌘,`），没有单独的 SwiftUI Settings 场景。
+
 | 层 | 谁拥有 | 出现位置 |
 | --- | --- | --- |
-| Client | 外观、默认 harness、工作区列表、权限默认策略 | Preferences 四页 |
-| 透传 | `configOptions` / `set_config_option`，旧 `modes` / `set_mode` | 已打开会话的 Composer 与检查器「信息」 |
-| Harness | API Key、CLI 登录、家目录配置 | 不进 Aureways；Agent 页只说明 |
+| Client | 外观、默认 Agent、工作区、权限默认策略、菜单栏、MCP | 设置六页 |
+| 透传 | `configOptions` / `set_config_option`，旧的 `modes` / `set_mode` | 已打开会话的输入框 |
+| Harness | API Key、CLI 登录 | 不进 Aureways。Agent 页只说明去哪登录 |
+| 额度 | `QuotaStore` 按源限流 | 设置「用量」、菜单栏 |
 
-Auto-approve 是 Client 如何回答 `session/request_permission`。是否再透传到 CLI，由各 `Harness` 子类决定（Grok 会加 `--always-approve` 与 `_meta.yoloMode`；Oh My Pi 与 Qoder 会加 `--yolo`）。
+自动批准决定 Client 如何回答 `session/request_permission`。是否再传给 CLI，由各 `Harness` 决定（Grok 加 `--always-approve` 和 `_meta.yoloMode`；Oh My Pi 与 Qoder 加 `--yolo`）。
 
-## 与「前后端分离」的关系
+## 窗口与进程
 
-没有独立 backend 仓库、没有 REST。所谓后端是 `Aureways/ACP/` 这一层，随 `.app` 一起分发。前端是 `Views/` + `AurewaysApp.swift`。`AppModel.swift` 两边都用。
+`⌘Q` 和关掉最后一个窗口都不会终止进程，只会收到菜单栏（`applicationShouldTerminate` 返回 `.terminateCancel`，除非菜单栏页发了 `quitApp`）。Dock 图标在没有主窗口时可以隐藏。点菜单栏或再次打开应用会把主窗口叫回来。
+
+Agent 进程退出后向其 stdin 写会触发 `SIGPIPE`。应用启动时忽略这个信号，避免整个 App 被杀掉。
