@@ -15,22 +15,33 @@ enum WebShellFlag {
 struct WebShellRoot: View {
     let model: AppModel
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         WebShellRepresentable(model: model)
             .ignoresSafeArea()
             .onAppear {
                 AppActivation.openMainWindow = { openWindow(id: AppActivation.mainWindowID) }
-                WebShellBridge.openSettingsAction = {
-                    AppActivation.prepareForSettings()
-                    openSettings()
-                }
                 AppActivation.flushPendingOpens()
             }
             .onReceive(NotificationCenter.default.publisher(for: .aurewaysRevealMainWindow)) { _ in
                 AppActivation.revealMainWindow()
             }
+    }
+}
+
+/// Menu bar extra content: same bundle at `#menubar`, fixed size.
+struct MenuBarWebView: NSViewRepresentable {
+    let model: AppModel
+    static let size = CGSize(width: 340, height: 470)
+
+    func makeNSView(context: Context) -> WebShellHostView {
+        WebShellHostView(model: model, role: .menuBar)
+    }
+
+    func updateNSView(_ nsView: WebShellHostView, context: Context) {}
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: WebShellHostView, context: Context) -> CGSize? {
+        Self.size
     }
 }
 
@@ -57,6 +68,7 @@ final class WebShellHostView: NSView {
 
     let bridge: WebShellBridge
     let webView: WKWebView
+    let role: WebShellBridge.Role
     private let backdrop = NSVisualEffectView()
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
@@ -64,8 +76,9 @@ final class WebShellHostView: NSView {
 
     override var isFlipped: Bool { true }
 
-    init(model: AppModel) {
-        bridge = WebShellBridge(model: model)
+    init(model: AppModel, role: WebShellBridge.Role = .main) {
+        self.role = role
+        bridge = WebShellBridge(model: model, role: role)
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(WebAssetSchemeHandler(), forURLScheme: WebAssetSchemeHandler.scheme)
         config.websiteDataStore = .nonPersistent()
@@ -74,15 +87,18 @@ final class WebShellHostView: NSView {
         config.preferences.isTextInteractionEnabled = true
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.suppressesIncrementalRendering = true
-        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 820), configuration: config)
+        let shellWebView = ShellWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 820), configuration: config)
+        webView = shellWebView
         super.init(frame: NSRect(x: 0, y: 0, width: 1280, height: 820))
 
-        backdrop.material = .sidebar
-        backdrop.blendingMode = .behindWindow
-        backdrop.state = .followsWindowActiveState
-        backdrop.frame = bounds
-        backdrop.autoresizingMask = [.width, .height]
-        addSubview(backdrop)
+        if role == .main {
+            backdrop.material = .sidebar
+            backdrop.blendingMode = .behindWindow
+            backdrop.state = .followsWindowActiveState
+            backdrop.frame = bounds
+            backdrop.autoresizingMask = [.width, .height]
+            addSubview(backdrop)
+        }
 
         // Transparent page background so the material shows through the sidebar.
         webView.setValue(false, forKey: "drawsBackground")
@@ -97,12 +113,15 @@ final class WebShellHostView: NSView {
         webView.autoresizingMask = [.width, .height]
         addSubview(webView)
 
-        dragStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
-        dragStrip.autoresizingMask = [.width, .maxYMargin]
-        addSubview(dragStrip)
+        if role == .main {
+            dragStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
+            dragStrip.autoresizingMask = [.width, .maxYMargin]
+            addSubview(dragStrip)
+        }
 
         bridge.webView = webView
         bridge.hostView = self
+        shellWebView.bridge = bridge
         bridge.onDragRegions = { [weak self] rects, height in
             guard let self else { return }
             self.dragStrip.exclusions = rects
@@ -112,7 +131,7 @@ final class WebShellHostView: NSView {
         }
         bridge.onAppearance = { [weak self] value in self?.applyAppearance(value) }
         navigationGuard.onTerminate = { [weak self] in self?.reload() }
-        WebShellBridge.current = bridge
+        if role == .main { WebShellBridge.current = bridge }
         reload()
     }
 
@@ -121,7 +140,12 @@ final class WebShellHostView: NSView {
 
     func reload() {
         bridge.webWillReload()
-        webView.load(URLRequest(url: WebAssetSchemeHandler.indexURL))
+        var url = WebAssetSchemeHandler.indexURL
+        if role == .menuBar, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.fragment = "menubar"
+            url = components.url ?? url
+        }
+        webView.load(URLRequest(url: url))
     }
 
     override func viewDidMoveToWindow() {
@@ -129,6 +153,10 @@ final class WebShellHostView: NSView {
         windowObservers.forEach(NotificationCenter.default.removeObserver)
         windowObservers.removeAll()
         guard let window else { return }
+        guard role == .main else {
+            applyAppearance(bridge.model.appearance)
+            return
+        }
         if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
         if window.titleVisibility != .hidden { window.titleVisibility = .hidden }
         if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
@@ -184,6 +212,44 @@ final class WebShellHostView: NSView {
         // it on our own view tree too (vibrancy + WKWebView follow the view).
         if window?.appearance != appearance { window?.appearance = appearance }
         if self.appearance != appearance { self.appearance = appearance }
+    }
+}
+
+/// Files dragged in from Finder become composer attachments natively (the
+/// page only sees sandboxed File objects without paths). Other drags (text
+/// into the composer) go to WebKit as usual.
+final class ShellWebView: WKWebView {
+    weak var bridge: WebShellBridge?
+
+    private func fileURLs(_ info: NSDraggingInfo) -> [URL] {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !fileURLs(sender).isEmpty else { return super.draggingEntered(sender) }
+        bridge?.sendCommand("dropHover")
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        fileURLs(sender).isEmpty ? super.draggingUpdated(sender) : .copy
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let sender, !fileURLs(sender).isEmpty {
+            bridge?.sendCommand("dropEnd")
+            return
+        }
+        super.draggingExited(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = fileURLs(sender)
+        guard !urls.isEmpty else { return super.performDragOperation(sender) }
+        bridge?.sendCommand("dropEnd")
+        bridge?.pendingAttachments.append(contentsOf: ComposerAttachment.fromFileURLs(urls))
+        bridge?.sendCommand("focusComposer")
+        return true
     }
 }
 

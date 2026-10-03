@@ -232,6 +232,10 @@ extension AppModel {
             }
             return
         }
+        if let bridge = WebShellBridge.current {
+            bridge.openFiles(markdown.map { $0.standardizedFileURL.path })
+            return
+        }
         for url in markdown {
             openFileTab(path: url.standardizedFileURL.path)
         }
@@ -398,6 +402,7 @@ extension AppModel {
     func agentWroteFile(_ rawPath: String) {
         browserInvalidationToken += 1
         let path = normalizeWorkspacePath(rawPath)
+        WebShellBridge.current?.notifyFileChanged(path)
         guard fileTabStates[path] != nil else { return }
         if fileTabStates[path]?.isDirty == true {
             fileTabStates[path]?.externallyModified = true

@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     nonisolated func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppModel.shared?.terminateAllTerminals()
+            WebShellBridge.current?.terminals.closeAll()
         }
     }
 
@@ -92,10 +93,21 @@ struct AurewaysApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
                 Button("打开 Markdown…".localized) {
-                    model.pickAndOpenMarkdownDocuments()
+                    if let bridge = WebShellBridge.current {
+                        AppActivation.revealMainWindow()
+                        bridge.sendCommand("openMarkdown")
+                    } else {
+                        model.pickAndOpenMarkdownDocuments()
+                    }
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-                .disabled(!legacyUI)
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…".localized) {
+                    AppActivation.revealMainWindow()
+                    WebShellBridge.current?.sendCommand("openSettings")
+                }
+                .keyboardShortcut(",", modifiers: [.command])
             }
             CommandGroup(after: .pasteboard) {
                 Divider()
@@ -110,7 +122,23 @@ struct AurewaysApp: App {
                     WebShellBridge.current?.sendCommand("toggleSidebar")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
-                .disabled(legacyUI)
+                Button("切换检查器".localized) {
+                    WebShellBridge.current?.sendCommand("toggleInspector")
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                Button("文件".localized) {
+                    WebShellBridge.current?.sendCommand("showFiles")
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                Button("变更".localized) {
+                    WebShellBridge.current?.sendCommand("showChanges")
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                Button("新建终端".localized) {
+                    WebShellBridge.current?.sendCommand("newTerminal")
+                }
+                .keyboardShortcut("`", modifiers: [.control])
+                Divider()
             }
             CommandMenu("会话".localized) {
                 Button("停止".localized) {
@@ -135,19 +163,9 @@ struct AurewaysApp: App {
             }
         }
 
-        Settings {
-            SettingsView()
-                .environment(model)
-                .environment(\.locale, model.displayLocale)
-                .preferredColorScheme(model.colorScheme)
-                .id(model.appLanguage)
-        }
-
         MenuBarExtra(isInserted: $showMenuBarExtra) {
-            StatusMenuView()
-                .environment(model)
-                .environment(\.locale, model.displayLocale)
-                .id(model.appLanguage)
+            MenuBarWebView(model: model)
+                .frame(width: MenuBarWebView.size.width, height: MenuBarWebView.size.height)
         } label: {
             MenuBarExtraLabel()
         }

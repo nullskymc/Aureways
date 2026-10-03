@@ -13,7 +13,6 @@ import WebKit
 final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
     static let handlerName = "aureways"
     static weak var current: WebShellBridge?
-    static var openSettingsAction: (() -> Void)?
 
     struct Chrome: Equatable {
         var trafficLights: CGRect
@@ -21,7 +20,10 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
         var titlebarHeight: CGFloat
     }
 
+    enum Role { case main, menuBar }
+
     let model: AppModel
+    let role: Role
     weak var webView: WKWebView?
     weak var hostView: NSView?
     var onDragRegions: (([CGRect], CGFloat?) -> Void)?
@@ -40,13 +42,27 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
     private var sentItems: [UUID: TranscriptItem] = [:]
     private var sentRuns: [UUID: ActivityRun] = [:]
 
-    private var pendingAttachments: [ComposerAttachment] = [] {
+    var pendingAttachments: [ComposerAttachment] = [] {
         didSet { scheduleFlush() }
     }
 
-    init(model: AppModel) {
+    let terminals = WebTerminalService()
+    var markdownDefaultCache = false
+    let notifier = AttentionNotifier()
+    static let uiPrefsKey = "webShellUIPrefs"
+    private var uiPrefs: [String: Any] = UserDefaults.standard.dictionary(forKey: WebShellBridge.uiPrefsKey) ?? [:]
+
+    init(model: AppModel, role: Role = .main) {
         self.model = model
+        self.role = role
         super.init()
+        guard role == .main else { return }
+        terminals.onEmit = { [weak self] payload in self?.post(payload) }
+        notifier.onActivate = { [weak self] sessionID in
+            guard let self, let session = self.model.sessions.first(where: { $0.id == sessionID }) else { return }
+            AppActivation.revealMainWindow()
+            self.model.select(session)
+        }
         #if DEBUG
         installDebugHooks()
         #endif
@@ -79,6 +95,38 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
     }
     #endif
 
+    // MARK: Menu bar extra
+
+    /// Actions from the menu bar page that leave the panel. Returns true when handled.
+    private func handleMenuBar(_ type: String, _ body: [String: Any]) -> Bool {
+        let dismiss = { [weak self] in self?.hostView?.window?.orderOut(nil) }
+        switch type {
+        case "newSession":
+            dismiss()
+            AppActivation.revealMainWindow()
+            model.startNewSession()
+            WebShellBridge.current?.sendCommand("focusComposer")
+        case "selectSession":
+            dismiss()
+            AppActivation.revealMainWindow()
+            if let session = session(body) { model.select(session) }
+        case "openApp":
+            dismiss()
+            AppActivation.revealMainWindow()
+        case "openSettings":
+            dismiss()
+            AppActivation.revealMainWindow()
+            WebShellBridge.current?.sendCommand("openSettings")
+        case "quit":
+            AppActivation.terminate()
+        case "dragRegions", "uiPrefs", "term.input", "term.resize", "term.close":
+            break
+        default:
+            return false
+        }
+        return true
+    }
+
     // MARK: Lifecycle
 
     func webWillReload() {
@@ -100,11 +148,19 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
         scheduleFlush()
     }
 
+    /// Commands sent before the page is ready (e.g. Finder "Open With" at
+    /// launch) are queued and replayed on `ready`.
+    private var queuedCommands: [[String: Any]] = []
+
     func sendCommand(_ name: String, _ extra: [String: Any] = [:]) {
         var payload = extra
         payload["type"] = "command"
         payload["name"] = name
-        send(payload)
+        guard isReady else {
+            queuedCommands.append(payload)
+            return
+        }
+        post(payload)
     }
 
     // MARK: Flush
@@ -128,10 +184,10 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
             Task { @MainActor [weak self] in self?.scheduleFlush() }
         }
         guard isReady else { return }
-        for payload in outgoing { send(payload) }
+        for payload in outgoing { post(payload) }
     }
 
-    private func send(_ payload: [String: Any]) {
+    func post(_ payload: [String: Any]) {
         guard isReady, let webView,
               let data = try? JSONSerialization.data(withJSONObject: payload, options: [.fragmentsAllowed]),
               let json = String(data: data, encoding: .utf8) else { return }
@@ -152,7 +208,7 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
             lastStateJSON = json
             out.append(["type": "state", "state": state])
         }
-        if let transcript = collectTranscript() {
+        if role == .main, let transcript = collectTranscript() {
             out.append(transcript)
         }
         return out
@@ -277,8 +333,23 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
                 "createdAt": session.createdAt.timeIntervalSince1970 * 1000,
             ]
             if case .failed(let message) = session.phase { row["error"] = message }
+            // Cross-session cards: the web shows these for sessions that aren't selected.
+            if session.id != selected?.id {
+                if let prompt = session.pendingPermission {
+                    row["permission"] = Self.encode(prompt)
+                } else if session.pendingPlanApproval != nil {
+                    row["pendingKind"] = "plan"
+                } else if session.pendingUserQuestion != nil {
+                    row["pendingKind"] = "question"
+                }
+            }
             return row
         }
+        if role == .main { notifier.update(sessions: sessions, selectedID: selected?.id) }
+        state["uiPrefs"] = uiPrefs
+        state["settings"] = encodeSettings()
+        state["quota"] = encodeQuota()
+        state["inspectorRoot"] = model.inspectorRoot
         state["composer"] = encodeComposer(selected)
         if let selected {
             if let prompt = selected.pendingPermission {
@@ -314,6 +385,8 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
                     "name": attachment.name,
                     "kind": Self.attachmentKind(attachment.kind),
                 ]
+                if let path = attachment.url?.path { row["path"] = path }
+                if attachment.characterCount > 0 { row["chars"] = attachment.characterCount }
                 if attachment.kind == .image, let data = attachment.imageData, data.count < 4_000_000 {
                     row["src"] = "data:\(attachment.mimeType);base64,\(data.base64EncodedString())"
                 }
@@ -397,7 +470,7 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
         if let run = runs[item.id] {
             row["run"] = [
                 "s": run.startedAt.timeIntervalSince1970 * 1000,
-                "e": run.endedAt.map { $0.timeIntervalSince1970 * 1000 } ?? NSNull(),
+                "e": run.endedAt.map { $0.timeIntervalSince1970 * 1000 as Any } ?? NSNull(),
             ]
         }
         return row
@@ -527,11 +600,15 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
     }
 
     private func handle(_ type: String, _ body: [String: Any]) {
+        if role == .menuBar, handleMenuBar(type, body) { return }
         switch type {
         case "ready":
             isReady = true
             resetSentState()
             flush()
+            let queued = queuedCommands
+            queuedCommands = []
+            queued.forEach(post)
         case "log":
             NSLog("[web] %@", String(describing: body["message"] ?? ""))
         case "send":
@@ -569,7 +646,8 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
                 model.setSessionMode(session, modeId: modeId)
             }
         case "permission":
-            guard let session = model.selectedSession, session.pendingPermission != nil else { return }
+            guard let session = session(body, key: "sessionId") ?? model.selectedSession,
+                  session.pendingPermission != nil else { return }
             if let optionId = body["optionId"] as? String {
                 session.resumePermission(.selected(optionId))
             } else {
@@ -594,6 +672,43 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
                 mapped[question.id] = answers[question.id.uuidString] ?? []
             }
             session.resumeUserQuestion(.accepted(mapped))
+        case "rpc":
+            handleRPC(body)
+        case "term.input":
+            if let id = body["id"] as? String, let data = body["data"] as? String { terminals.input(id: id, data: data) }
+        case "term.resize":
+            if let id = body["id"] as? String {
+                terminals.resize(id: id, cols: (body["cols"] as? NSNumber)?.intValue ?? 0, rows: (body["rows"] as? NSNumber)?.intValue ?? 0)
+            }
+        case "term.close":
+            if let id = body["id"] as? String { terminals.close(id: id) }
+        case "uiPrefs":
+            if let prefs = body["prefs"] as? [String: Any] {
+                for (key, value) in prefs { uiPrefs[key] = value is NSNull ? nil : value }
+                UserDefaults.standard.set(uiPrefs, forKey: Self.uiPrefsKey)
+            }
+        case "pasteNative":
+            let attachments = ComposerAttachment.fromPasteboard(.general)
+            if attachments.isEmpty {
+                sendCommand("pasteFallback")
+            } else {
+                pendingAttachments.append(contentsOf: attachments)
+            }
+        case "pasteImage":
+            if let base64 = body["data"] as? String, let data = Data(base64Encoded: base64), let image = NSImage(data: data) {
+                pendingAttachments.append(ComposerAttachment(
+                    kind: .image, name: body["name"] as? String ?? "图片".localized, url: nil,
+                    mimeType: body["mime"] as? String ?? "image/png", imageData: data, thumbnail: image
+                ))
+            }
+        case "attachPaths":
+            let urls = (body["paths"] as? [String] ?? []).map { URL(fileURLWithPath: $0) }
+            pendingAttachments.append(contentsOf: ComposerAttachment.fromFileURLs(urls))
+        case "openPastedText":
+            if let raw = body["id"] as? String, let attachment = pendingAttachments.first(where: { $0.id.uuidString == raw }),
+               let path = attachment.url?.path {
+                openFiles([path])
+            }
         case "attach":
             presentOpenPanel()
         case "removeAttachment":
@@ -623,7 +738,7 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
         case "revealWorkspace":
             model.openWorkspaceInFinder(body["path"] as? String)
         case "openSettings":
-            Self.openSettingsAction?()
+            sendCommand("openSettings")
         case "dismissError":
             model.errorMessage = nil
         case "dragRegions":
@@ -642,7 +757,7 @@ final class WebShellBridge: NSObject, @preconcurrency WKScriptMessageHandler {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     let chosen = self.popUpMenu(items, at: point)
-                    self.send(["type": "menuResult", "token": token, "id": chosen ?? NSNull()])
+                    self.post(["type": "menuResult", "token": token, "id": chosen ?? NSNull()])
                 }
             }
         case "sessionMenu":
