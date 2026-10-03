@@ -5,13 +5,14 @@
 // burst of frames after each trigger follows CSS transitions.
 import { post } from './bridge'
 
-const INSET: Record<string, number> = { sidebar: 6 }
+const INSET: Record<string, number> = { sidebar: 8 }
 let last = ''
 let frames = 0
 let scheduled = false
 
 function measure() {
   const rects: { k: string; x: number; y: number; w: number; h: number; r: number }[] = []
+  // `slot`: where the native composer overlay goes (no glass of its own here).
   document.querySelectorAll<HTMLElement>('[data-glass]').forEach((el) => {
     const kind = el.dataset.glass!
     const b = el.getBoundingClientRect()

@@ -253,6 +253,10 @@ extension WebShellBridge {
     /// Native entry points (⌘O, Finder "Open With", Dock drop) land here.
     func openFiles(_ paths: [String]) {
         guard !paths.isEmpty else { return }
+        if role != .main, let main = WebShellBridge.current, main !== self {
+            main.openFiles(paths)
+            return
+        }
         sendCommand("openFiles", ["paths": paths])
     }
 

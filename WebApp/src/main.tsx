@@ -35,8 +35,14 @@ document.addEventListener('contextmenu', (e) => {
 })
 
 const isMenuBar = location.hash === '#menubar'
+const isComposer = location.hash === '#composer'
 if (isMenuBar) document.documentElement.classList.add('in-menubar')
-const Root = isMenuBar ? (await import('./components/MenuBar')).MenuBar : App
+if (isComposer) document.documentElement.classList.add('in-composer', 'glass')
+const Root = isMenuBar
+  ? (await import('./components/MenuBar')).MenuBar
+  : isComposer
+    ? (await import('./components/ComposerOverlay')).ComposerOverlay
+    : App
 render(<Root />, document.getElementById('app')!)
 post('ready')
 if (!inApp) import('./demo').then((m) => m.loadDemo())

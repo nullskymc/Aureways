@@ -25,11 +25,16 @@ export function App() {
   const sidebarOpen = prefs.sidebarOpen
   const sidebarWidth = prefs.sidebarWidth
   const dockHeight = useSignal(140)
+  /** Card height of the native composer overlay (sessions only; see ComposerOverlay.tsx). */
+  const composerH = useSignal(88)
   const dock = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const c = uiCommand.value
     switch (c?.name) {
+      case 'composerHeight':
+        if (typeof c.data?.h === 'number') composerH.value = c.data.h
+        break
       case 'toggleSidebar':
         sidebarOpen.value = !sidebarOpen.value
         break
@@ -69,6 +74,12 @@ export function App() {
   useEffect(() => {
     if (glass) installGlass()
   }, [glass])
+  // With a session open the composer is a native overlay (its own web view on
+  // glass) and the transcript scrolls underneath it to the window bottom.
+  const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('composer-overlay', overlay)
+  }, [overlay])
 
   const headH = headerHeight(state)
   useLayoutEffect(() => {
@@ -105,7 +116,7 @@ export function App() {
       <main class="main" style={{ '--dock-h': `${dockHeight.value}px` }}>
         <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
         {session ? (
-          <Transcript streaming={session.streaming} padBottom={glass ? 16 : dockHeight.value + 24} padTop={glass ? 12 : 64} />
+          <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} padTop={glass ? 12 : 64} />
         ) : (
           <Landing state={state} />
         )}
@@ -134,7 +145,7 @@ export function App() {
           {state.permission && <PermissionCard p={state.permission} />}
           {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
           {state.question && <QuestionCard q={state.question} />}
-          <Composer state={state} session={session} />
+          {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
         </div>
       </main>
       {inspectorOpen && <Inspector />}

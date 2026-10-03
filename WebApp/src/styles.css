@@ -589,15 +589,17 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 /* The native layer paints --main-bg edge to edge and floats glass under
    [data-glass] elements, so those (and the main column) stay transparent. */
 html.glass .main { background: transparent; border-left: 0; }
-html.glass .sidebar { padding: 0 6px 6px; }
+html.glass .sidebar { padding: 0 8px 8px; }
 html.glass .sidebar-resizer { margin: 0 -4px; }
 /* Header and dock float over nothing: the transcript scrolls between them
    (fading at both ends) so glass under the controls/composer stays clean. */
 html.glass .main-head { background: none; }
-html.glass .transcript { top: var(--head-h); bottom: calc(var(--dock-h) - 14px); }
+/* The transcript runs to the window bottom; the composer overlay's glass
+   refracts what scrolls behind it (bottom inset = dock height). */
+html.glass .transcript { top: var(--head-h); }
 html.glass .transcript .vscroll {
-  -webkit-mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 18px), transparent);
-  mask-image: linear-gradient(transparent, #000 12px, #000 calc(100% - 18px), transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 12px);
+  mask-image: linear-gradient(transparent, #000 12px);
 }
 html.glass .dock { background: none; }
 html.glass .composer { background: transparent; border-color: transparent; box-shadow: none; }
@@ -606,3 +608,9 @@ html.glass .composer.dropping { border-color: var(--accent); box-shadow: 0 0 0 3
 html.glass .head-tools { padding: 2px 3px; border-radius: 16px; gap: 0; box-shadow: inset 0 0 0 0.5px var(--border); }
 html.glass .head-tools .icon-btn:hover { background: color-mix(in oklch, var(--text) 8%, transparent); }
 html.glass .settings-mode .main { border-left: 0; }
+
+/* ---- Composer overlay page (#composer) ------------------------------------- */
+.composer-slot { pointer-events: none !important; }
+html.in-composer, html.in-composer body, html.in-composer #app { background: transparent; }
+.overlay-root { position: absolute; left: 0; right: 0; bottom: 0; }
+html.in-composer .slash-menu { box-shadow: none; }

@@ -3,6 +3,14 @@ import Observation
 import QuartzCore
 import WebKit
 
+/// Composer draft attachments, shared by the main and composer-overlay pages.
+@Observable
+@MainActor
+final class WebComposerDraft {
+    static let shared = WebComposerDraft()
+    var attachments: [ComposerAttachment] = []
+}
+
 /// Swift <-> JS bridge for the web shell (protocol: docs/web-shell.md).
 ///
 /// Observes `AppModel` / the selected `ChatSession` with
@@ -20,7 +28,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         var titlebarHeight: CGFloat
     }
 
-    enum Role { case main, menuBar }
+    enum Role { case main, menuBar, composer }
 
     let model: AppModel
     let role: Role
@@ -43,9 +51,19 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     private var sentItems: [UUID: TranscriptItem] = [:]
     private var sentRuns: [UUID: ActivityRun] = [:]
 
-    var pendingAttachments: [ComposerAttachment] = [] {
-        didSet { scheduleFlush() }
+    /// Shared by the main page and the composer overlay page (both bridges
+    /// observe it through `encodeState`).
+    var pendingAttachments: [ComposerAttachment] {
+        get { WebComposerDraft.shared.attachments }
+        set { WebComposerDraft.shared.attachments = newValue }
     }
+
+    /// Main bridge only: the composer overlay's bridge (composer page) and
+    /// host hooks for focus routing / overlay layout.
+    weak var composerPeer: WebShellBridge?
+    var onFocusComposer: (() -> Void)?
+    var onFocusMain: (() -> Void)?
+    var onComposerLayout: (([String: Any]) -> Void)?
 
     let terminals = WebTerminalService()
     var markdownDefaultCache = false
@@ -77,9 +95,15 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     private func installDebugHooks() {
         let center = DistributedNotificationCenter.default()
         center.addObserver(forName: Notification.Name("ai.aureways.debug.eval"), object: nil, queue: .main) { [weak self] note in
-            guard let js = note.object as? String else { return }
+            guard var js = note.object as? String else { return }
             MainActor.assumeIsolated {
-                self?.webView?.evaluateJavaScript(js) { result, error in
+                // "@composer <js>" targets the composer overlay page.
+                var target = self?.webView
+                if js.hasPrefix("@composer ") {
+                    js.removeFirst("@composer ".count)
+                    target = self?.composerPeer?.webView
+                }
+                target?.evaluateJavaScript(js) { result, error in
                     let text = error.map { "error: \($0)" } ?? String(describing: result ?? "nil")
                     try? text.write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
                 }
@@ -100,6 +124,28 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 ) else { return }
                 NSApp.sendEvent(event)
                 try? "sent \(key)".write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+            }
+        }
+        // "x,y" (window points, top-left origin) → class of the view that would
+        // receive a click there; used to check the moved titlebar doesn't eat
+        // clicks meant for the page.
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.hittest"), object: nil, queue: .main) { [weak self] note in
+            guard let spec = note.object as? String else { return }
+            let parts = spec.split(separator: ",").compactMap { Double($0) }
+            guard parts.count == 2 else { return }
+            MainActor.assumeIsolated {
+                guard let window = self?.hostView?.window, let frameView = window.contentView?.superview else { return }
+                let point = NSPoint(x: parts[0], y: window.frame.height - parts[1])
+                let hit = frameView.hitTest(point)
+                var text = hit.map { String(describing: type(of: $0)) } ?? "nil"
+                if hit === self?.composerPeer?.webView { text += " (composer)" }
+                if let overlay = self?.composerPeer?.webView {
+                    text += " overlay hidden=\(overlay.isHidden) frame=\(overlay.frame)"
+                }
+                if let close = window.standardWindowButton(.closeButton) {
+                    text += " close=\(close.convert(close.bounds, to: nil)) super=\(String(describing: close.superview?.superview.map { type(of: $0) }))"
+                }
+                try? text.write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
             }
         }
         // Toggles the menu bar extra panel (clicks our status item button).
@@ -187,6 +233,19 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         var payload = extra
         payload["type"] = "command"
         payload["name"] = name
+        if role == .main {
+            switch name {
+            case "focusComposer":
+                onFocusComposer?()
+                composerPeer?.sendCommand(name, extra)
+            case "dropHover", "dropEnd":
+                composerPeer?.sendCommand(name, extra)
+            case "find", "openSettings", "openMarkdown":
+                onFocusMain?()
+            default:
+                break
+            }
+        }
         guard isReady else {
             queuedCommands.append(payload)
             return
@@ -338,7 +397,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 ],
                 "fullscreen": chrome.fullscreen,
                 "titlebarHeight": chrome.titlebarHeight,
-                "glass": role == .main,
+                "glass": role != .menuBar,
+                "composerOverlay": role == .main,
             ],
         ]
         state["workspaces"] = model.workspaces.map { ["path": WorkspaceRecord.normalized($0.path), "name": $0.name] }
@@ -633,6 +693,17 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
 
     private func handle(_ type: String, _ body: [String: Any]) {
         if role == .menuBar, handleMenuBar(type, body) { return }
+        if role == .composer {
+            switch type {
+            case "composerLayout":
+                onComposerLayout?(body)
+                return
+            case "uiPrefs", "dragRegions", "glass":
+                return
+            default:
+                break
+            }
+        }
         switch type {
         case "ready":
             isReady = true
@@ -780,6 +851,8 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 return CGRect(x: x, y: y, width: w, height: h)
             }
             onDragRegions?(rects, (body["height"] as? NSNumber).map { CGFloat($0.doubleValue) })
+        case "composerInsert":
+            if let text = body["text"] as? String { composerPeer?.sendCommand("insertText", ["text": text]) }
         case "glass":
             let panels = (body["rects"] as? [[String: Any]] ?? []).compactMap { rect -> GlassLayerView.Panel? in
                 func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }

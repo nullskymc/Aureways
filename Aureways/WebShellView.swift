@@ -67,21 +67,15 @@ final class WebShellHostView: NSView {
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
     private var windowObservers: [NSObjectProtocol] = []
+    private var composerOverlay: ComposerOverlay?
+    private var trafficLights: TrafficLightLayout?
 
     override var isFlipped: Bool { true }
 
     init(model: AppModel, role: WebShellBridge.Role = .main) {
         self.role = role
         bridge = WebShellBridge(model: model, role: role)
-        let config = WKWebViewConfiguration()
-        config.setURLSchemeHandler(WebAssetSchemeHandler(), forURLScheme: WebAssetSchemeHandler.scheme)
-        config.websiteDataStore = .nonPersistent()
-        config.userContentController.add(WeakScriptMessageHandler(bridge), name: WebShellBridge.handlerName)
-        config.preferences.isElementFullscreenEnabled = false
-        config.preferences.isTextInteractionEnabled = true
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
-        config.suppressesIncrementalRendering = true
-        let shellWebView = ShellWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 820), configuration: config)
+        let shellWebView = Self.makeWebView(bridge: bridge, navigationGuard: navigationGuard)
         webView = shellWebView
         super.init(frame: NSRect(x: 0, y: 0, width: 1280, height: 820))
 
@@ -92,20 +86,18 @@ final class WebShellHostView: NSView {
             addSubview(glassLayer)
         }
 
-        // Transparent page background so the material shows through the sidebar.
-        webView.setValue(false, forKey: "drawsBackground")
-        webView.underPageBackgroundColor = .clear
-        webView.allowsMagnification = false
-        webView.allowsBackForwardNavigationGestures = false
-        webView.navigationDelegate = navigationGuard
-        #if DEBUG
-        webView.isInspectable = true
-        #endif
         webView.frame = bounds
         webView.autoresizingMask = [.width, .height]
         addSubview(webView)
 
         if role == .main {
+            // Composer overlay: glass + its own transparent web view, above the
+            // main page so the glass refracts the transcript scrolling behind it.
+            let overlay = ComposerOverlay(model: model, main: bridge)
+            composerOverlay = overlay
+            addSubview(overlay.glass)
+            addSubview(overlay.webView)
+
             dragStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
             dragStrip.autoresizingMask = [.width, .maxYMargin]
             addSubview(dragStrip)
@@ -122,10 +114,48 @@ final class WebShellHostView: NSView {
             }
         }
         bridge.onAppearance = { [weak self] value in self?.applyAppearance(value) }
-        bridge.onGlassRects = { [weak self] rects in self?.glassLayer.apply(rects) }
+        bridge.onGlassRects = { [weak self] rects in
+            guard let self else { return }
+            self.glassLayer.apply(rects.filter { $0.kind != "slot" })
+            self.composerOverlay?.slot = rects.first { $0.kind == "slot" }?.frame
+        }
+        bridge.onFocusComposer = { [weak self] in
+            guard let self, let window = self.window else { return }
+            if let overlay = self.composerOverlay, overlay.isShown {
+                window.makeFirstResponder(overlay.webView)
+            } else {
+                window.makeFirstResponder(self.webView)
+            }
+        }
+        bridge.onFocusMain = { [weak self] in
+            guard let self, let window = self.window else { return }
+            window.makeFirstResponder(self.webView)
+        }
         navigationGuard.onTerminate = { [weak self] in self?.reload() }
         if role == .main { WebShellBridge.current = bridge }
         reload()
+    }
+
+    static func makeWebView(bridge: WebShellBridge, navigationGuard: WebShellNavigationGuard) -> ShellWebView {
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(WebAssetSchemeHandler(), forURLScheme: WebAssetSchemeHandler.scheme)
+        config.websiteDataStore = .nonPersistent()
+        config.userContentController.add(WeakScriptMessageHandler(bridge), name: WebShellBridge.handlerName)
+        config.preferences.isElementFullscreenEnabled = false
+        config.preferences.isTextInteractionEnabled = true
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.suppressesIncrementalRendering = true
+        let webView = ShellWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 820), configuration: config)
+        // Transparent page background so the native layers show through.
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = .clear
+        webView.allowsMagnification = false
+        webView.allowsBackForwardNavigationGestures = false
+        webView.navigationDelegate = navigationGuard
+        #if DEBUG
+        webView.isInspectable = true
+        #endif
+        return webView
     }
 
     @available(*, unavailable)
@@ -157,17 +187,37 @@ final class WebShellHostView: NSView {
         window.isMovableByWindowBackground = false
         window.tabbingMode = .disallowed
         applyAppearance(bridge.model.appearance)
+        let lights = TrafficLightLayout(window: window)
+        lights.onChange = { [weak self] in self?.publishChrome() }
+        trafficLights = lights
         let names: [Notification.Name] = [
             NSWindow.didResizeNotification,
+            NSWindow.didEndLiveResizeNotification,
             NSWindow.didEnterFullScreenNotification,
             NSWindow.didExitFullScreenNotification,
             NSWindow.didChangeBackingPropertiesNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didResignKeyNotification,
         ]
         for name in names {
             windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.publishChrome() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.trafficLights?.apply()
+                    self.publishChrome()
+                    if name == NSWindow.didExitFullScreenNotification {
+                        // AppKit re-lays out the titlebar after the animation.
+                        DispatchQueue.main.async { [weak self] in
+                            MainActor.assumeIsolated {
+                                self?.trafficLights?.apply()
+                                self?.publishChrome()
+                            }
+                        }
+                    }
+                }
             })
         }
+        lights.apply()
         publishChrome()
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
@@ -194,6 +244,11 @@ final class WebShellHostView: NSView {
         ))
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        trafficLights?.apply()
+    }
+
     private func applyAppearance(_ value: String) {
         let appearance: NSAppearance?
         switch value {
@@ -213,6 +268,18 @@ final class WebShellHostView: NSView {
 /// into the composer) go to WebKit as usual.
 final class ShellWebView: WKWebView {
     weak var bridge: WebShellBridge?
+    /// When set (composer overlay), only these rects (own coordinates) take
+    /// mouse events; everything else falls through to the main page below.
+    var hitRegion: [CGRect]?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let hitRegion {
+            guard !isHidden, alphaValue > 0 else { return nil }
+            let local = convert(point, from: superview)
+            guard hitRegion.contains(where: { $0.contains(local) }) else { return nil }
+        }
+        return super.hitTest(point)
+    }
 
     private func fileURLs(_ info: NSDraggingInfo) -> [URL] {
         info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
@@ -394,5 +461,211 @@ private extension NSColor {
         var color = cgColor
         appearance.performAsCurrentDrawingAppearance { color = self.cgColor }
         return color
+    }
+}
+
+/// Insets the traffic lights inside the floating sidebar glass panel
+/// (`glass.ts` insets the panel 8 pt): first button 12 pt from the panel's
+/// left edge, vertically centred on a 52 pt header row (the web header
+/// follows via `chrome.trafficLights`). The titlebar container is grown to
+/// that height so the moved buttons stay inside it and clickable. Re-applied
+/// on resize / fullscreen exit / key / appearance changes and whenever AppKit
+/// re-lays out the titlebar (frame-change notifications). Fullscreen is left
+/// to AppKit.
+@MainActor
+final class TrafficLightLayout {
+    static let headerHeight: CGFloat = 52
+    static let leading: CGFloat = 20
+
+    private weak var window: NSWindow?
+    private var spacing: CGFloat?
+    private var applying = false
+    private var observers: [NSObjectProtocol] = []
+    var onChange: (() -> Void)?
+
+    init(window: NSWindow) {
+        self.window = window
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            observers.forEach(NotificationCenter.default.removeObserver)
+        }
+    }
+
+    private var buttons: [NSButton] {
+        guard let window else { return [] }
+        return [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap(window.standardWindowButton)
+    }
+
+    private func observe(_ views: [NSView]) {
+        guard observers.isEmpty else { return }
+        for view in views {
+            view.postsFrameChangedNotifications = true
+            observers.append(NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: view, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.applying else { return }
+                    DispatchQueue.main.async { [weak self] in
+                        MainActor.assumeIsolated { self?.apply() }
+                    }
+                }
+            })
+        }
+    }
+
+    func apply() {
+        guard let window, !applying, !window.styleMask.contains(.fullScreen) else { return }
+        let buttons = buttons
+        guard let close = buttons.first, let titlebar = close.superview, let container = titlebar.superview,
+              let frameView = container.superview else { return }
+        if spacing == nil, buttons.count > 1 {
+            spacing = buttons[1].frame.minX - buttons[0].frame.minX
+        }
+        applying = true
+        defer { applying = false }
+        var changed = false
+        let height = Self.headerHeight
+        let containerFrame = NSRect(x: 0, y: frameView.bounds.height - height, width: frameView.bounds.width, height: height)
+        if container.frame != containerFrame {
+            container.frame = containerFrame
+            changed = true
+        }
+        if titlebar.frame != container.bounds {
+            titlebar.frame = container.bounds
+            changed = true
+        }
+        let step = spacing ?? 20
+        for (index, button) in buttons.enumerated() {
+            let origin = NSPoint(
+                x: Self.leading + CGFloat(index) * step,
+                y: ((height - button.frame.height) / 2).rounded()
+            )
+            if button.frame.origin != origin {
+                button.setFrameOrigin(origin)
+                changed = true
+            }
+        }
+        observe([container, titlebar, close])
+        if changed { onChange?() }
+    }
+}
+
+/// The composer while a session is open: its own small transparent
+/// `WKWebView` (`#composer`) over an `NSGlassEffectView`, both above the main
+/// page so the glass refracts the transcript scrolling behind it.
+///
+/// Placement: the main page reports a `slot` rect (x, width and bottom of the
+/// composer's place in the dock); the composer page reports its content
+/// height and the card/popup rects (`composerLayout`). Only this overlay's
+/// frames are set; nothing feeds back into SwiftUI or the main page layout
+/// except the card height, which the main page uses for its bottom inset.
+@MainActor
+final class ComposerOverlay {
+    let bridge: WebShellBridge
+    let webView: ShellWebView
+    let glass = NSGlassEffectView()
+    private let navigationGuard = WebShellNavigationGuard()
+    private weak var main: WebShellBridge?
+    private var layout: Layout?
+    private var lastCardHeight: CGFloat = -1
+
+    struct Layout {
+        var height: CGFloat
+        var card: CGRect      // x, w, h; y = distance from the overlay's bottom
+        var radius: CGFloat
+        var popup: CGRect?
+    }
+
+    var slot: CGRect? {
+        didSet { if slot != oldValue { place() } }
+    }
+
+    private(set) var isShown = false
+
+    init(model: AppModel, main: WebShellBridge) {
+        self.main = main
+        bridge = WebShellBridge(model: model, role: .composer)
+        webView = WebShellHostView.makeWebView(bridge: bridge, navigationGuard: navigationGuard)
+        webView.bridge = bridge
+        // Transparent rather than hidden while unused: hidden web views stop
+        // rendering, so showing one again paints a beat late.
+        webView.frame = CGRect(x: 0, y: 0, width: 760, height: 120)
+        webView.alphaValue = 0
+        webView.hitRegion = []
+        // Between messages (live resize), stay bottom-anchored and roughly centred.
+        webView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
+        glass.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
+        glass.style = .regular
+        glass.cornerRadius = 22
+        glass.contentView = NSView()
+        glass.isHidden = true
+        bridge.webView = webView
+        bridge.hostView = webView
+        main.composerPeer = bridge
+        bridge.onComposerLayout = { [weak self] body in self?.receive(body) }
+        navigationGuard.onTerminate = { [weak self] in self?.reload() }
+        reload()
+    }
+
+    func reload() {
+        bridge.webWillReload()
+        var url = WebAssetSchemeHandler.indexURL
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.fragment = "composer"
+            url = components.url ?? url
+        }
+        webView.load(URLRequest(url: url))
+    }
+
+    private func receive(_ body: [String: Any]) {
+        func rect(_ any: Any?) -> CGRect? {
+            guard let dict = any as? [String: Any] else { return nil }
+            func number(_ key: String) -> CGFloat { CGFloat((dict[key] as? NSNumber)?.doubleValue ?? 0) }
+            return CGRect(x: number("x"), y: number("b"), width: number("w"), height: number("h"))
+        }
+        let height = CGFloat((body["h"] as? NSNumber)?.doubleValue ?? 0)
+        guard height > 0, let card = rect(body["card"]) else {
+            layout = nil
+            place()
+            return
+        }
+        let radius = CGFloat(((body["card"] as? [String: Any])?["r"] as? NSNumber)?.doubleValue ?? 22)
+        layout = Layout(height: height.rounded(.up), card: card, radius: radius, popup: rect(body["popup"]))
+        place()
+    }
+
+    private func place() {
+        guard let slot, let layout, slot.width > 0 else {
+            setShown(false)
+            return
+        }
+        let bottom = slot.maxY
+        let frame = CGRect(x: slot.minX, y: bottom - layout.height, width: slot.width, height: layout.height).integral
+        if webView.frame != frame { webView.frame = frame }
+        // Overlay-local rects (web view is flipped: y from its top).
+        func local(_ r: CGRect) -> CGRect {
+            CGRect(x: r.minX, y: frame.height - r.minY - r.height, width: r.width, height: r.height)
+        }
+        let card = local(layout.card)
+        webView.hitRegion = [card] + (layout.popup.map { [local($0)] } ?? [])
+        let glassFrame = card.offsetBy(dx: frame.minX, dy: frame.minY)
+        if glass.frame != glassFrame { glass.frame = glassFrame }
+        if glass.cornerRadius != layout.radius { glass.cornerRadius = layout.radius }
+        if abs(layout.card.height - lastCardHeight) > 0.5 {
+            lastCardHeight = layout.card.height
+            main?.sendCommand("composerHeight", ["h": layout.card.height])
+        }
+        setShown(true)
+    }
+
+    private func setShown(_ shown: Bool) {
+        guard shown != isShown else { return }
+        isShown = shown
+        webView.alphaValue = shown ? 1 : 0
+        if !shown { webView.hitRegion = [] }
+        glass.isHidden = !shown
+        if !shown, let window = webView.window, window.firstResponder === webView {
+            window.makeFirstResponder(main?.webView)
+        }
     }
 }

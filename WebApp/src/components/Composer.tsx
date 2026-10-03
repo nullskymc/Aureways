@@ -20,8 +20,19 @@ let insertSeq = 0
 export function mentionFile(path: string, root: string) {
   const r = root.replace(/\/+$/, '')
   const rel = path.startsWith(r + '/') ? path.slice(r.length + 1) : path
-  insertQueue.value = { text: '@' + rel + ' ', seq: ++insertSeq }
+  // With a session open the composer lives in the native overlay page.
+  if (document.documentElement.classList.contains('composer-overlay')) post('composerInsert', { text: '@' + rel + ' ' })
+  else queueInsert('@' + rel + ' ')
   post('attachPaths', { paths: [path] })
+}
+
+export function queueInsert(text: string) {
+  insertQueue.value = { text, seq: ++insertSeq }
+}
+
+/** Overlay page: the viewport is only as tall as the composer, so cap by a fixed height. */
+function maxAreaHeight() {
+  return document.documentElement.classList.contains('in-composer') ? 300 : Math.round(window.innerHeight * 0.4)
 }
 
 interface Mention { start: number; query: string }
@@ -56,6 +67,7 @@ export function Composer({ state, session }: { state: AppState; session: Session
     if (c?.name === 'focusComposer') area.current?.focus()
     if (c?.name === 'dropHover') dropping.value = true
     if (c?.name === 'dropEnd') dropping.value = false
+    if (c?.name === 'insertText' && typeof c.data?.text === 'string') queueInsert(c.data.text)
   }, [uiCommand.value])
 
   // Insertions from the file tree / file view.
@@ -122,7 +134,7 @@ export function Composer({ state, session }: { state: AppState; session: Session
     const el = area.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.4)) + 'px'
+    el.style.height = Math.min(el.scrollHeight, maxAreaHeight()) + 'px'
   }, [text.value])
 
   const canSend = (text.value.trim().length > 0 || composer.attachments.length > 0) && !connecting

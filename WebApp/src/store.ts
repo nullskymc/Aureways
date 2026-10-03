@@ -23,7 +23,7 @@ function reindex() {
   transcript.items.forEach((it, i) => transcript.index.set(it.id, i))
 }
 
-export type UICommand = { name: string; seq: number; paths?: string[] }
+export type UICommand = { name: string; seq: number; paths?: string[]; data?: Record<string, unknown> }
 export const uiCommand = signal<UICommand | null>(null)
 let commandSeq = 0
 
@@ -84,7 +84,7 @@ onMessage((m) => {
       break
     }
     case 'command':
-      uiCommand.value = { name: m.name, seq: ++commandSeq, paths: m.paths }
+      uiCommand.value = { name: m.name, seq: ++commandSeq, paths: m.paths, data: m as unknown as Record<string, unknown> }
       break
   }
 })
