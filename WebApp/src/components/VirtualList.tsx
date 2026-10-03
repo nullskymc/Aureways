@@ -10,6 +10,12 @@ const heightCache = new Map<string, number>()
 const OVERSCAN = 900
 const PIN_SLOP = 32
 
+/** Scroll so the tail, including the bottom inset, sits at the viewport bottom. */
+function pinToEnd(el: HTMLElement) {
+  const target = Math.max(0, el.scrollHeight - el.clientHeight)
+  if (Math.abs(el.scrollTop - target) > 1) el.scrollTop = target
+}
+
 export interface VirtualListHandle {
   scrollToIndex(i: number, align?: 'start' | 'center'): void
   scrollToBottom(): void
@@ -43,6 +49,10 @@ export function VirtualList<T>(props: Props<T>) {
   const { rows, rowKey, estimate, padTop, padBottom } = props
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
+  /** Set by a real pointer / wheel / key gesture. Scroll events alone are not
+   * one: measuring a row grows scrollHeight and would unpin, leaving the tail
+   * under the composer. */
+  const gesture = useRef(false)
   const [measureVersion, force] = useReducer((x: number) => x + 1, 0)
   const [view, setView] = useState({ top: 0, height: 800 })
   const elements = useRef(new Map<Element, string>())
@@ -93,15 +103,32 @@ export function VirtualList<T>(props: Props<T>) {
   )
   useEffect(() => () => ro.disconnect(), [ro])
 
-  // Viewport tracking.
+  // Viewport tracking. Only a user gesture may leave the bottom. Row
+  // measurement grows the scroll height without one, and that used to unpin
+  // while the tail was still under the composer.
   useEffect(() => {
     const el = scroller.current!
     let raf = 0
+    let restoring = false
+    const arm = () => {
+      gesture.current = true
+    }
+    const setPinned = (next: boolean) => {
+      if (next === pinned.current) return
+      pinned.current = next
+      props.onPinnedChange?.(next)
+    }
     const onScroll = () => {
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < PIN_SLOP
-      if (atBottom !== pinned.current) {
-        pinned.current = atBottom
-        props.onPinnedChange?.(atBottom)
+      if (gesture.current) {
+        gesture.current = false
+        setPinned(atBottom)
+      } else if (atBottom) {
+        setPinned(true)
+      } else if (pinned.current && !restoring) {
+        restoring = true
+        pinToEnd(el)
+        restoring = false
       }
       if (!raf)
         raf = requestAnimationFrame(() => {
@@ -109,26 +136,37 @@ export function VirtualList<T>(props: Props<T>) {
           setView({ top: el.scrollTop, height: el.clientHeight })
         })
     }
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable]')) return
+      if (e.key === 'PageUp' || e.key === 'PageDown' || e.key === 'Home' || e.key === 'End' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') arm()
+    }
     const resize = new ResizeObserver(() => {
       setView({ top: el.scrollTop, height: el.clientHeight })
-      if (pinned.current) el.scrollTop = el.scrollHeight
+      if (pinned.current) pinToEnd(el)
     })
     resize.observe(el)
+    el.addEventListener('wheel', arm, { passive: true, capture: true })
+    el.addEventListener('pointerdown', arm, { capture: true })
+    el.addEventListener('touchstart', arm, { passive: true, capture: true })
+    window.addEventListener('keydown', onKey)
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
+      el.removeEventListener('wheel', arm, { capture: true })
+      el.removeEventListener('pointerdown', arm, { capture: true })
+      el.removeEventListener('touchstart', arm, { capture: true })
+      window.removeEventListener('keydown', onKey)
       el.removeEventListener('scroll', onScroll)
       resize.disconnect()
       cancelAnimationFrame(raf)
     }
   }, [])
 
-  // Keep pinned to the bottom after every render while pinned.
+  // Keep pinned to the bottom after every render while pinned, including the
+  // bottom inset under the composer (padBottom is part of scrollHeight).
   useLayoutEffect(() => {
     const el = scroller.current
-    if (el && pinned.current) {
-      const target = el.scrollHeight - el.clientHeight
-      if (Math.abs(el.scrollTop - target) > 1) el.scrollTop = target
-    }
+    if (el && pinned.current) pinToEnd(el)
   })
 
   if (props.handle) {
@@ -148,7 +186,7 @@ export function VirtualList<T>(props: Props<T>) {
         if (!el) return
         pinned.current = true
         props.onPinnedChange?.(true)
-        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        pinToEnd(el)
       },
       isAtBottom: () => pinned.current,
     }
@@ -172,9 +210,11 @@ export function VirtualList<T>(props: Props<T>) {
 
   return (
     <div ref={scroller} class={'vscroll ' + (props.class ?? '')}>
-      <div class="vcontent" style={{ height: total }}>
+      <div class="vcontent" style={{ height: tops[n] }}>
         {mounted}
       </div>
+      {/* In-flow, so the composer clearance is part of the scroll range. */}
+      {padBottom > 0 && <div class="vpad" style={{ height: padBottom }} />}
     </div>
   )
 }
