@@ -97,6 +97,23 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     /// "x,y,w,h" (screen coordinates) and sets the window frame.
     private static var debugMenuBarPanel: NSPanel?
 
+    static func firstSubview<T: NSView>(of type: T.Type, in view: NSView) -> T? {
+        if let match = view as? T { return match }
+        for subview in view.subviews {
+            if let match = firstSubview(of: type, in: subview) { return match }
+        }
+        return nil
+    }
+
+    /// The `#menubar` host inside the real MenuBarExtra window (not the stand-in).
+    static func realMenuBarHost() -> WebShellHostView? {
+        for window in NSApp.windows where window !== debugMenuBarPanel {
+            guard let root = window.contentView?.superview ?? window.contentView else { continue }
+            if let host = firstSubview(of: WebShellHostView.self, in: root), host.role == .menuBar { return host }
+        }
+        return nil
+    }
+
     private func installDebugHooks() {
         let center = DistributedNotificationCenter.default()
         center.addObserver(forName: Notification.Name("ai.aureways.debug.eval"), object: nil, queue: .main) { [weak self] note in
@@ -111,6 +128,10 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
                 if js.hasPrefix("@menubar ") {
                     js.removeFirst("@menubar ".count)
                     target = (Self.debugMenuBarPanel?.contentView as? WebShellHostView)?.webView
+                }
+                if js.hasPrefix("@realmenubar ") {
+                    js.removeFirst("@realmenubar ".count)
+                    target = Self.realMenuBarHost()?.webView
                 }
                 target?.evaluateJavaScript(js) { result, error in
                     let text = error.map { "error: \($0)" } ?? String(describing: result ?? "nil")
@@ -158,35 +179,37 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
             }
         }
         // Toggles the menu bar extra panel (clicks our status item button).
-        center.addObserver(forName: Notification.Name("ai.aureways.debug.statusItem"), object: nil, queue: .main) { _ in
+        // Opens the real MenuBarExtra panel with an in-process click on the
+        // status item: "cg" posts a CGEvent click to this process only, "ax"
+        // presses the button through its own accessibility action,
+        // "app" routes NSEvents through NSApp.sendEvent. Logs what it finds.
+        center.addObserver(forName: Notification.Name("ai.aureways.debug.statusItem"), object: nil, queue: .main) { note in
+            let mode = note.object as? String ?? "cg"
             MainActor.assumeIsolated {
                 var log: [String] = []
-                var clicked = false
-                for window in NSApp.windows {
-                    let name = String(describing: type(of: window))
-                    log.append("\(name) visible=\(window.isVisible) frame=\(window.frame)")
-                    guard name.contains("StatusBar"), !clicked else { continue }
-                    func findButton(_ view: NSView?) -> NSButton? {
-                        guard let view else { return nil }
-                        if let button = view as? NSButton { return button }
-                        return view.subviews.lazy.compactMap(findButton).first
+                guard let window = NSApp.windows.first(where: { String(describing: type(of: $0)).contains("StatusBar") && $0.isVisible }),
+                      let button = window.contentView.flatMap({ Self.firstSubview(of: NSButton.self, in: $0) }) else {
+                    try? "no status item".write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
+                    return
+                }
+                let local = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+                log.append("status window \(window.frame) mode=\(mode)")
+                if mode == "ax" {
+                    log.append("accessibilityPerformPress=\(button.accessibilityPerformPress())")
+                } else if mode == "app" {
+                    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                        if let event = NSEvent.mouseEvent(with: type, location: local, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                            NSApp.sendEvent(event)
+                        }
                     }
-                    if let button = findButton(window.contentView) {
-                        log.append("  button \(type(of: button)) action=\(String(describing: button.action)) target=\(String(describing: button.target.map { type(of: $0) }))")
-                        // SwiftUI's MenuBarExtra button has no target/action; it
-                        // reacts to mouse events, so deliver an in-process
-                        // down/up pair to its window (no Accessibility needed).
-                        // The up event is queued first so the button's tracking loop ends.
-                        let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
-                        func event(_ type: NSEvent.EventType) -> NSEvent? {
-                            NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
-                        }
-                        if let down = event(.leftMouseDown), let up = event(.leftMouseUp) {
-                            NSApp.postEvent(up, atStart: false)
-                            button.mouseDown(with: down)
-                        }
-                        clicked = true
+                } else {
+                    let screenPoint = window.convertPoint(toScreen: local)
+                    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+                    let cgPoint = CGPoint(x: screenPoint.x, y: primaryHeight - screenPoint.y)
+                    for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+                        CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: cgPoint, mouseButton: .left)?
+                            .postToPid(ProcessInfo.processInfo.processIdentifier)
                     }
                 }
                 try? log.joined(separator: "\n").write(toFile: "/tmp/aureways_eval.out", atomically: true, encoding: .utf8)
@@ -262,31 +285,49 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     // MARK: Menu bar extra
 
     /// Actions from the menu bar page that leave the panel. Returns true when handled.
+    /// Commands the `#menubar` page posts (MenuBar.tsx). Kept as one list so a
+    /// test can check the page and this handler agree: an unknown name used to
+    /// fall through silently (the page posts `quitApp`, the handler only knew
+    /// `quit`, so 退出 did nothing).
+    enum MenuBarCommand: String, CaseIterable {
+        case newSession, selectSession, openApp, openSettings, quitApp
+
+        init?(message type: String) {
+            self.init(rawValue: type == "quit" ? "quitApp" : type)
+        }
+    }
+
     private func handleMenuBar(_ type: String, _ body: [String: Any]) -> Bool {
         let dismiss = { [weak self] in self?.hostView?.window?.orderOut(nil) }
-        switch type {
-        case "newSession":
+        guard let command = MenuBarCommand(message: type) else {
+            switch type {
+            case "dragRegions", "uiPrefs", "term.input", "term.resize", "term.close":
+                return true
+            default:
+                return false
+            }
+        }
+        switch command {
+        case .newSession:
             dismiss()
             AppActivation.revealMainWindow()
             model.startNewSession()
             WebShellBridge.current?.sendCommand("focusComposer")
-        case "selectSession":
+        case .selectSession:
             dismiss()
             AppActivation.revealMainWindow()
             if let session = session(body) { model.select(session) }
-        case "openApp":
+        case .openApp:
             dismiss()
             AppActivation.revealMainWindow()
-        case "openSettings":
+        case .openSettings:
             dismiss()
             AppActivation.revealMainWindow()
             WebShellBridge.current?.sendCommand("openSettings")
-        case "quit":
-            AppActivation.terminate()
-        case "dragRegions", "uiPrefs", "term.input", "term.resize", "term.close":
-            break
-        default:
-            return false
+        case .quitApp:
+            dismiss()
+            // Out of the WebKit message callback before terminating.
+            DispatchQueue.main.async { MainActor.assumeIsolated { AppActivation.terminate() } }
         }
         return true
     }
