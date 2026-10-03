@@ -24,7 +24,7 @@ struct SettingsView: View {
 struct GeneralSettingsPage: View {
     @Environment(AppModel.self) private var model
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
-    @AppStorage(WebTranscriptFlag.key) private var useWebTranscript = false
+    @AppStorage(WebShellFlag.legacyKey) private var useLegacyNativeUI = false
 
     var body: some View {
         @Bindable var model = model
@@ -36,9 +36,9 @@ struct GeneralSettingsPage: View {
                     Text("深色".localized).tag("dark")
                 }
                 Toggle("在菜单栏显示图标".localized, isOn: $showMenuBarExtra)
-                Toggle(isOn: $useWebTranscript) {
-                    Text("用 Web 渲染消息正文（实验）".localized)
-                    Text("用 WKWebView 渲染 Agent 回复的 Markdown，流式更顺、表格可横向滚动。".localized)
+                Toggle(isOn: $useLegacyNativeUI) {
+                    Text("使用旧版原生界面（需重启）".localized)
+                    Text("默认主窗口是单个 WKWebView。旧版 SwiftUI 分栏界面仅供对比，可能触发布局循环崩溃。".localized)
                 }
             }
 

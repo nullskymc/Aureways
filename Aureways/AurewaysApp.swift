@@ -53,34 +53,79 @@ struct AurewaysApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    /// Read once: switching the window root at runtime is not supported.
+    private let legacyUI = WebShellFlag.useLegacy
 
     init() {
         // Agent 进程退出后向其 stdin 写请求会触发 SIGPIPE，默认行为是杀掉整个 app。
         signal(SIGPIPE, SIG_IGN)
     }
 
-    var body: some Scene {
-        Window("Aureways", id: AppActivation.mainWindowID) {
+    /// Default: one WKWebView fills the window (docs/web-shell.md). The legacy
+    /// SwiftUI split view is kept only behind `useLegacyNativeUI`.
+    @ViewBuilder
+    private var mainWindowContent: some View {
+        if legacyUI {
             RootView()
                 .environment(model)
                 .environment(\.locale, model.displayLocale)
                 .preferredColorScheme(model.colorScheme)
                 .id(model.appLanguage)
                 .frame(minWidth: 980, minHeight: 640)
+        } else {
+            WebShellRoot(model: model)
+                .frame(minWidth: 760, minHeight: 520)
         }
-        .windowStyle(.automatic)
-        .windowToolbarStyle(.unified)
+    }
+
+    var body: some Scene {
+        Window("Aureways", id: AppActivation.mainWindowID) {
+            mainWindowContent
+        }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("新对话".localized) {
                     model.startNewSession()
+                    WebShellBridge.current?.sendCommand("focusComposer")
                 }
                 .keyboardShortcut("n", modifiers: [.command])
                 Button("打开 Markdown…".localized) {
                     model.pickAndOpenMarkdownDocuments()
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+                .disabled(!legacyUI)
+            }
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("查找…".localized) {
+                    WebShellBridge.current?.sendCommand("find")
+                }
+                .keyboardShortcut("f", modifiers: [.command])
+                .disabled(legacyUI)
+            }
+            CommandGroup(before: .sidebar) {
+                Button("切换侧边栏".localized) {
+                    WebShellBridge.current?.sendCommand("toggleSidebar")
+                }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+                .disabled(legacyUI)
+            }
+            CommandMenu("会话".localized) {
+                Button("停止".localized) {
+                    model.cancel()
+                }
+                .keyboardShortcut(".", modifiers: [.command])
+                .disabled(model.selectedSession?.isStreaming != true)
+                Divider()
+                ForEach(0..<9, id: \.self) { index in
+                    Button("会话 %d".localized(index + 1)) {
+                        model.selectSessionByIndex(index)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command])
+                    .disabled(legacyUI)
+                }
             }
             CommandGroup(replacing: .appTermination) {
                 Button("关闭窗口".localized) {

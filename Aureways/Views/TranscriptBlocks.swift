@@ -205,20 +205,14 @@ private struct AgentMessage: View {
     let markdown: String
     var isStreaming = false
 
-    @AppStorage(WebTranscriptFlag.key) private var useWebTranscript = false
-
     @State private var isMessageHovered = false
     @State private var isButtonHovered = false
     @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if useWebTranscript && WebTranscriptFlag.isAvailable {
-                WebMarkdownBody(messageID: id.uuidString, source: markdown, isStreaming: isStreaming)
-            } else {
-                MarkdownBody(source: markdown, isStreaming: isStreaming)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            MarkdownBody(source: markdown, isStreaming: isStreaming)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if !isStreaming && !markdown.isEmpty {
                 HStack {
