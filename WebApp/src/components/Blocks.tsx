@@ -3,6 +3,7 @@ import { post } from '../bridge'
 import { duration, t } from '../i18n'
 import { MarkdownView } from '../markdown/render'
 import { app, now } from '../store'
+import { openFile } from '../inspector/state'
 import type { Attachment, DiffFile, Item, ToolFields } from '../types'
 import { Icon, Spinner } from './Icon'
 import { memo, shallowEqual } from './memo'
@@ -120,7 +121,7 @@ export function AttachmentChip({ a, onRemove }: { a: Attachment | { id: string; 
   }
   const pasted = a.kind === 'pastedText'
   return (
-    <div class="att-chip" title={(a as Attachment).path ?? a.name} onDblClick={() => (a as Attachment).path && post('openPath', { path: (a as Attachment).path })}>
+    <div class="att-chip" title={(a as Attachment).path ?? a.name} onClick={() => (a as Attachment).path && openFile((a as Attachment).path!)}>
       <Icon name={pasted ? 'text' : a.kind === 'image' ? 'image' : 'file'} size={13} />
       <span class="att-name">{pasted && (a as Attachment).chars ? t('pastedText', (a as Attachment).chars!) : a.name}</span>
       {onRemove && (
@@ -383,31 +384,51 @@ function trimHunkLines(lines: string[], last: boolean): string[] {
   return lines
 }
 
-function DiffView({ file }: { file: DiffFile }) {
+export function DiffView({ file, collapsible = false }: { file: DiffFile; collapsible?: boolean }) {
+  const [open, setOpen] = useState(true)
   return (
     <div class="diff">
       <div class="diff-head">
-        <span class="diff-path" title={file.path} onClick={() => post('openPath', { path: file.path })}>
+        {collapsible && (
+          <button class="icon-btn tiny" onClick={() => setOpen(!open)}>
+            <Icon name={open ? 'chevronDown' : 'chevronRight'} size={11} />
+          </button>
+        )}
+        <span class="diff-path" title={file.path} onClick={() => openFile(file.path)}>
           {displayPath(file.path)}
         </span>
+        {file.isNew && <span class="diff-tag">{t('newFile')}</span>}
         <span class="diffstat">
           <span class="add">+{file.added}</span> <span class="del">−{file.removed}</span>
         </span>
       </div>
-      <div class="diff-body">
-        {file.hunks.map((h, i) => (
-          <div key={i} class="hunk">
-            <div class="hunk-head">{h.header}</div>
-            {trimHunkLines(h.lines, i === file.hunks.length - 1).map((l, j) => (
-              <div key={j} class={'dl ' + (l[0] === '+' ? 'ins' : l[0] === '-' ? 'del' : 'ctx')}>
-                <span class="dl-sign">{l[0] === ' ' ? '' : l[0]}</span>
-                {l.slice(1) || ' '}
+      {open && (
+        <div class="diff-body">
+          {file.hunks.map((h, i) => {
+            let o = h.oldStart
+            let n = h.newStart
+            return (
+              <div key={i} class="hunk">
+                <div class="hunk-head">{h.header}</div>
+                {trimHunkLines(h.lines, i === file.hunks.length - 1).map((l, j) => {
+                  const sign = l[0]
+                  const on = sign === '+' ? '' : o++
+                  const nn = sign === '-' ? '' : n++
+                  return (
+                    <div key={j} class={'dl ' + (sign === '+' ? 'ins' : sign === '-' ? 'del' : 'ctx')}>
+                      <span class="dl-no">{on}</span>
+                      <span class="dl-no">{nn}</span>
+                      <span class="dl-sign">{sign === ' ' ? '' : sign}</span>
+                      <span class="dl-text">{l.slice(1) || ' '}</span>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        ))}
-        {file.truncated && <div class="hunk-head">…</div>}
-      </div>
+            )
+          })}
+          {file.truncated && <div class="hunk-head">…</div>}
+        </div>
+      )}
     </div>
   )
 }

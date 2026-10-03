@@ -34,6 +34,9 @@ document.addEventListener('contextmenu', (e) => {
   e.preventDefault()
 })
 
-render(<App />, document.getElementById('app')!)
+const isMenuBar = location.hash === '#menubar'
+if (isMenuBar) document.documentElement.classList.add('in-menubar')
+const Root = isMenuBar ? (await import('./components/MenuBar')).MenuBar : App
+render(<Root />, document.getElementById('app')!)
 post('ready')
 if (!inApp) import('./demo').then((m) => m.loadDemo())

@@ -1,8 +1,9 @@
-import { useSignal } from '@preact/signals'
+import { signal, useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
-import { uiCommand } from '../store'
+import { app, uiCommand } from '../store'
+import { rpc, type SearchHit } from '../rpc'
 import type { AppState, Picker, Session } from '../types'
 import { AttachmentChip } from './Blocks'
 import { HarnessIcon, Icon } from './Icon'
@@ -11,11 +12,36 @@ const INLINE_LIMIT = 2000 // matches ComposerOverflow.inlineUTF16Limit
 
 const drafts = new Map<string, string>()
 
+/** Text inserted by other panes (file tree "mention"), consumed by the live composer. */
+const insertQueue = signal<{ text: string; seq: number } | null>(null)
+let insertSeq = 0
+
+/** `@path` mention of a workspace file; the path is also attached for the agent. */
+export function mentionFile(path: string, root: string) {
+  const r = root.replace(/\/+$/, '')
+  const rel = path.startsWith(r + '/') ? path.slice(r.length + 1) : path
+  insertQueue.value = { text: '@' + rel + ' ', seq: ++insertSeq }
+  post('attachPaths', { paths: [path] })
+}
+
+interface Mention { start: number; query: string }
+
+function mentionAt(value: string, caret: number): Mention | null {
+  const before = value.slice(0, caret)
+  const m = /(^|\s)@([^\s@]*)$/.exec(before)
+  if (!m) return null
+  return { start: caret - m[2].length - 1, query: m[2] }
+}
+
 export function Composer({ state, session }: { state: AppState; session: Session | null }) {
   const draftKey = session?.id ?? 'new'
   const text = useSignal(drafts.get(draftKey) ?? '')
   const area = useRef<HTMLTextAreaElement>(null)
   const slashIndex = useSignal(0)
+  const mention = useSignal<Mention | null>(null)
+  const hits = useSignal<SearchHit[]>([])
+  const hitIndex = useSignal(0)
+  const dropping = useSignal(false)
   const composer = state.composer
   const streaming = !!session?.streaming
   const connecting = session?.phase === 'connecting'
@@ -28,7 +54,69 @@ export function Composer({ state, session }: { state: AppState; session: Session
   useEffect(() => {
     const c = uiCommand.value
     if (c?.name === 'focusComposer') area.current?.focus()
+    if (c?.name === 'dropHover') dropping.value = true
+    if (c?.name === 'dropEnd') dropping.value = false
   }, [uiCommand.value])
+
+  // Insertions from the file tree / file view.
+  useEffect(() => {
+    const ins = insertQueue.value
+    const el = area.current
+    if (!ins || !el) return
+    insertQueue.value = null
+    el.focus()
+    const at = el.selectionStart ?? text.value.length
+    const pre = text.value.slice(0, at)
+    const sep = pre && !/\s$/.test(pre) ? ' ' : ''
+    text.value = pre + sep + ins.text + text.value.slice(el.selectionEnd ?? at)
+    drafts.set(draftKey, text.value)
+    const caret = at + sep.length + ins.text.length
+    requestAnimationFrame(() => el.setSelectionRange(caret, caret))
+  }, [insertQueue.value])
+
+  // @-file completion against the workspace index (Swift WorkspaceFileIndex).
+  useEffect(() => {
+    const m = mention.value
+    if (!m) {
+      hits.value = []
+      return
+    }
+    let live = true
+    const timer = setTimeout(async () => {
+      const res = await rpc<SearchHit[]>('fs.search', { root: app.peek()?.inspectorRoot, query: m.query, limit: 12 }).catch(() => [])
+      if (live) {
+        hits.value = res
+        hitIndex.value = 0
+      }
+    }, 60)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [mention.value?.query, mention.value?.start])
+
+  const updateMention = () => {
+    const el = area.current
+    if (!el) return
+    mention.value = el.selectionStart === el.selectionEnd ? mentionAt(el.value, el.selectionStart) : null
+  }
+
+  const pickHit = (hit: SearchHit) => {
+    const m = mention.value
+    const el = area.current
+    if (!m || !el) return
+    const end = m.start + 1 + m.query.length
+    const insert = '@' + hit.rel + ' '
+    text.value = text.value.slice(0, m.start) + insert + text.value.slice(end)
+    drafts.set(draftKey, text.value)
+    mention.value = null
+    post('attachPaths', { paths: [hit.path] })
+    const caret = m.start + insert.length
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
+  }
 
   useLayoutEffect(() => {
     const el = area.current
@@ -59,6 +147,17 @@ export function Composer({ state, session }: { state: AppState; session: Session
 
   return (
     <div class="composer-wrap">
+      {mention.value && hits.value.length > 0 && (
+        <div class="slash-menu mention-menu">
+          {hits.value.map((h, i) => (
+            <button key={h.path} class={'slash-item' + (i === hitIndex.value % hits.value.length ? ' active' : '')} onMouseDown={(e) => { e.preventDefault(); pickHit(h) }}>
+              <Icon name="file" size={13} class="slash-icon" />
+              <span class="slash-name">{h.rel.split('/').pop()}</span>
+              <span class="slash-desc">{h.rel.split('/').slice(0, -1).join('/')}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {slash.length > 0 && (
         <div class="slash-menu">
           {slash.map((c, i) => (
@@ -69,7 +168,8 @@ export function Composer({ state, session }: { state: AppState; session: Session
           ))}
         </div>
       )}
-      <div class={'composer' + (streaming ? ' busy' : '')}>
+      <div class={'composer' + (streaming ? ' busy' : '') + (dropping.value ? ' dropping' : '')}>
+        {dropping.value && <div class="drop-hint">{t('dropToAttach')}</div>}
         {composer.attachments.length > 0 && (
           <div class="composer-attachments">
             {composer.attachments.map((a) => (
@@ -86,10 +186,21 @@ export function Composer({ state, session }: { state: AppState; session: Session
             text.value = (e.target as HTMLTextAreaElement).value
             drafts.set(draftKey, text.value)
             slashIndex.value = 0
+            updateMention()
           }}
+          onClick={updateMention}
+          onKeyUp={(e) => (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && updateMention()}
+          onBlur={() => setTimeout(() => (mention.value = null), 120)}
           onPaste={(e) => {
             const data = e.clipboardData
             if (!data) return
+            // Images / Finder files: let AppKit read the pasteboard natively.
+            const types = Array.from(data.types)
+            if (types.includes('Files') || Array.from(data.items).some((i) => i.kind === 'file')) {
+              e.preventDefault()
+              post('pasteNative')
+              return
+            }
             const pasted = data.getData('text/plain')
             if (pasted && pasted.length > INLINE_LIMIT) {
               e.preventDefault()
@@ -97,6 +208,21 @@ export function Composer({ state, session }: { state: AppState; session: Session
             }
           }}
           onKeyDown={(e) => {
+            const list = mention.value ? hits.value : []
+            if (list.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+              e.preventDefault()
+              hitIndex.value += e.key === 'ArrowDown' ? 1 : list.length - 1
+              return
+            }
+            if (list.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.isComposing))) {
+              e.preventDefault()
+              pickHit(list[hitIndex.value % list.length])
+              return
+            }
+            if (list.length && e.key === 'Escape') {
+              mention.value = null
+              return
+            }
             if (slash.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
               e.preventDefault()
               slashIndex.value += e.key === 'ArrowDown' ? 1 : slash.length - 1

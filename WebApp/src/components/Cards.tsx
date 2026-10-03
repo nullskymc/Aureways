@@ -5,7 +5,7 @@ import { t } from '../i18n'
 import { MarkdownView } from '../markdown/render'
 import type { AppState } from '../types'
 import { ToolStep } from './Blocks'
-import { Icon } from './Icon'
+import { HarnessIcon, Icon } from './Icon'
 
 export function PermissionCard({ p }: { p: NonNullable<AppState['permission']> }) {
   const primary = p.options.findIndex((o) => o.allow)
@@ -116,6 +116,44 @@ export function QuestionCard({ q }: { q: NonNullable<AppState['question']> }) {
           {t('skip')}
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Requests from sessions you aren't looking at: compact, answerable in place. */
+export function BackgroundRequests({ state }: { state: AppState }) {
+  const others = state.sessions.filter((s) => s.id !== state.selectedSessionId && (s.permission || s.pendingKind))
+  if (!others.length) return null
+  return (
+    <div class="bg-requests">
+      {others.slice(0, 3).map((s) => {
+        const allow = s.permission?.options.find((o) => o.allow)
+        const deny = s.permission?.options.find((o) => !o.allow)
+        return (
+          <div key={s.id} class="bg-request">
+            <HarnessIcon id={s.agentId} size={13} />
+            <div class="bg-request-text">
+              <span class="bg-request-session">{s.title}</span>
+              <span class="bg-request-what">
+                {s.permission ? s.permission.title : s.pendingKind === 'plan' ? t('planReady') : t('questionWaiting')}
+              </span>
+            </div>
+            {s.permission && allow && (
+              <button class="btn small primary" onClick={() => post('permission', { sessionId: s.id, optionId: allow.id })}>
+                {allow.name}
+              </button>
+            )}
+            {s.permission && (
+              <button class="btn small subtle" onClick={() => post('permission', { sessionId: s.id, optionId: deny?.id ?? null })}>
+                {deny?.name ?? t('reject')}
+              </button>
+            )}
+            <button class="btn small" onClick={() => post('selectSession', { id: s.id })}>
+              {t('view')}
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

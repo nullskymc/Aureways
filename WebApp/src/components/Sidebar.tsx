@@ -1,11 +1,11 @@
 import { useSignal } from '@preact/signals'
 import { nativeMenu, post } from '../bridge'
 import { relativeTime, t } from '../i18n'
-import { app } from '../store'
+import { route } from '../store'
+import { prefs } from '../prefs'
 import type { AppState, Session } from '../types'
 import { HarnessIcon, Icon, Spinner } from './Icon'
 
-const collapsedGroups = new Set<string>()
 
 export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void }) {
   const query = useSignal('')
@@ -51,16 +51,15 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
       </div>
       <div class="sidebar-list">
         {groups.map((g) => {
-          const collapsed = collapsedGroups.has(g.key) && !q
+          const collapsed = prefs.collapsedGroups.value.includes(g.key) && !q
           return (
             <section key={g.key} class="ws-group">
               <div class="ws-head">
                 <button
                   class="ws-title"
                   onClick={() => {
-                    if (collapsed) collapsedGroups.delete(g.key)
-                    else collapsedGroups.add(g.key)
-                    app.value = { ...app.value! }
+                    const cur = prefs.collapsedGroups.value
+                    prefs.collapsedGroups.value = collapsed ? cur.filter((k) => k !== g.key) : [...cur, g.key]
                   }}
                 >
                   <Icon name={collapsed ? 'chevronRight' : 'folder'} size={14} class="ws-icon" />
@@ -102,7 +101,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
         {!state.sessions.length && <div class="sidebar-empty">{t('noSessions')}</div>}
       </div>
       <div class="sidebar-foot">
-        <button class="nav-row" onClick={() => post('openSettings')}>
+        <button class="nav-row" onClick={() => (route.value = { name: 'settings' })}>
           <Icon name="gear" size={15} />
           <span>{t('settings')}</span>
         </button>

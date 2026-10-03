@@ -3,6 +3,7 @@
 import type { AppState, Item } from './types'
 
 export function loadDemo() {
+  if (location.hash.includes('settings')) void import('./store').then((m) => (m.route.value = { name: 'settings', section: location.hash.split('settings-')[1] }))
   const now = Date.now()
   const state: AppState = {
     locale: 'en',
@@ -37,6 +38,30 @@ export function loadDemo() {
       effort: { configId: 'effort', current: 'high', options: [{ id: 'high', name: 'High', group: null, description: null }] },
     },
     usage: { used: 42000, size: 200000 },
+    inspectorRoot: '/Users/demo/Aureways',
+    uiPrefs: { inspectorOpen: location.hash.includes('insp') },
+    settings: {
+      appearance: 'system', language: 'en', systemLanguage: 'system', showMenuBar: true, markdownDefault: false,
+      autoApprove: false, defaultAgentId: 'codex', version: '0.2.4',
+      agents: [
+        { id: 'grok-build', title: 'Grok Build', subtitle: '', builtIn: true, launchLine: 'grok agent stdio', notes: '', enabled: true, available: true, quotaRefreshing: false },
+        { id: 'codex', title: 'Codex', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/codex-acp', notes: '', enabled: true, available: true, quotaRefreshing: false },
+        { id: 'claude', title: 'Claude Code', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/claude-code-acp', notes: '', enabled: true, available: true, quotaRefreshing: false },
+        { id: 'cursor', title: 'Cursor', subtitle: '', builtIn: true, launchLine: 'cursor-agent acp', notes: '', enabled: false, available: false, quotaRefreshing: false },
+      ],
+      workspaces: [{ path: '/Users/demo/Aureways', name: 'Aureways' }, { path: '/Users/demo/site', name: 'site' }],
+      defaultWorkspace: '/Users/demo/Aureways',
+      mcpServers: [{ id: 'm1', name: 'filesystem', transport: 'stdio', summary: 'npx -y @modelcontextprotocol/server-filesystem ~', enabled: true }],
+      reportedMcp: [],
+      mcpCaps: { http: true, sse: false },
+    },
+    quota: {
+      codex: {
+        harnessId: 'codex', providerTitle: 'OpenAI', planType: 'Plus', updatedAt: now - 120e3, severity: 'warning', summary: '5h 38%',
+        primaryWindow: { id: 'p', title: '5 hours', usedPercent: 62, resetsAt: now + 2.4 * 3600e3 },
+        secondaryWindow: { id: 's', title: 'Weekly', usedPercent: 21, resetsAt: now + 4 * 86400e3 },
+      },
+    },
   }
   if (location.hash.includes('perm')) {
     state.permission = {

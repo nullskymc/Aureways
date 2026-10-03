@@ -14,6 +14,9 @@ export interface Session {
   attention: boolean
   createdAt: number
   error?: string
+  /** Pending request for a session that isn't selected. */
+  permission?: Permission
+  pendingKind?: 'plan' | 'question'
 }
 
 export interface Agent { id: string; title: string; subtitle: string; available: boolean }
@@ -22,7 +25,7 @@ export interface Workspace { path: string; name: string }
 export interface Choice { id: string; name: string; group: string | null; description: string | null }
 export interface Picker { configId: string | null; current: string | null; options: Choice[] }
 
-export interface PendingAttachment { id: string; name: string; kind: 'image' | 'file' | 'pastedText'; src?: string }
+export interface PendingAttachment { id: string; name: string; kind: 'image' | 'file' | 'pastedText'; src?: string; path?: string; chars?: number }
 
 export interface ComposerState {
   sessionId?: string
@@ -59,6 +62,54 @@ export interface AppState {
   planApproval?: { content: string; filePath: string | null }
   question?: Question
   usage?: { used: number; size: number }
+  uiPrefs?: Record<string, unknown>
+  inspectorRoot: string
+  settings: Settings
+  quota: Record<string, QuotaSnapshot>
+}
+
+export interface SettingsAgent {
+  id: string; title: string; subtitle: string; builtIn: boolean; launchLine: string; notes: string
+  enabled: boolean; available: boolean; quotaRefreshing: boolean
+}
+
+export interface Settings {
+  appearance: string
+  language: string
+  systemLanguage: string
+  showMenuBar: boolean
+  markdownDefault: boolean
+  autoApprove: boolean
+  defaultAgentId: string
+  version: string
+  agents: SettingsAgent[]
+  workspaces: Workspace[]
+  defaultWorkspace: string
+  mcpServers: { id: string; name: string; transport: string; summary: string; enabled: boolean }[]
+  reportedMcp: { name: string; summary: string }[]
+  mcpCaps?: { http: boolean; sse: boolean }
+}
+
+export interface QuotaWindow {
+  id: string; title: string; usedPercent: number; resetsAt?: number; resetDescription?: string; windowMinutes?: number
+}
+
+export interface QuotaSnapshot {
+  harnessId: string
+  providerTitle: string
+  planType?: string
+  accountEmail?: string
+  primaryWindow?: QuotaWindow
+  secondaryWindow?: QuotaWindow
+  extraWindows?: QuotaWindow[]
+  usageBreakdown?: { id: string; title: string; usedPercent: number }[]
+  creditsRemaining?: number
+  creditsUnit?: string
+  resetCreditsAvailable?: number
+  updatedAt: number
+  error?: string
+  severity: 'healthy' | 'warning' | 'critical' | 'unknown'
+  summary: string
 }
 
 export interface Run { s: number; e: number | null }
@@ -110,5 +161,9 @@ export type Incoming =
   | { type: 'state'; state: AppState }
   | { type: 'transcript'; sessionId: string; items: Item[] }
   | { type: 'patch'; sessionId: string; ops: PatchOp[] }
-  | { type: 'command'; name: string }
+  | { type: 'command'; name: string; paths?: string[] }
   | { type: 'menuResult'; token: number; id: string | null }
+  | { type: 'rpcResult'; id: number; result?: unknown; error?: string }
+  | { type: 'termData'; id: string; data: string }
+  | { type: 'termExit'; id: string; code: number | null }
+  | { type: 'fileChanged'; path: string }

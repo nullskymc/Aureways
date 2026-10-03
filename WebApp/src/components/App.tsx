@@ -2,7 +2,14 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
-import { app, setTicking, uiCommand } from '../store'
+import { app, route, setTicking, uiCommand } from '../store'
+import { prefs } from '../prefs'
+import { openTerminal, showInspector } from '../inspector/state'
+import { lazy } from './Lazy'
+
+const Inspector = lazy(() => import('../inspector/Inspector').then((m) => m.Inspector))
+const Settings = lazy(() => import('../settings/Settings').then((m) => m.Settings))
+import { BackgroundRequests } from './Cards'
 import type { AppState, Session } from '../types'
 import { PermissionCard, PlanApprovalCard, QuestionCard } from './Cards'
 import { Composer } from './Composer'
@@ -14,14 +21,39 @@ const DRAG_SELECTOR = 'button, input, textarea, a, select, [data-no-drag]'
 
 export function App() {
   const state = app.value
-  const sidebarOpen = useSignal(true)
-  const sidebarWidth = useSignal(272)
+  const sidebarOpen = prefs.sidebarOpen
+  const sidebarWidth = prefs.sidebarWidth
   const dockHeight = useSignal(140)
   const dock = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const c = uiCommand.value
-    if (c?.name === 'toggleSidebar') sidebarOpen.value = !sidebarOpen.value
+    switch (c?.name) {
+      case 'toggleSidebar':
+        sidebarOpen.value = !sidebarOpen.value
+        break
+      case 'toggleInspector':
+        prefs.inspectorOpen.value = !prefs.inspectorOpen.value
+        break
+      case 'showFiles':
+        showInspector('files')
+        break
+      case 'showChanges':
+        showInspector('changes')
+        break
+      case 'newTerminal':
+        void openTerminal()
+        break
+      case 'openMarkdown':
+        void import('../inspector/open').then((m) => m.pickMarkdown())
+        break
+      case 'openSettings':
+        route.value = { name: 'settings' }
+        break
+      case 'newChat':
+        route.value = { name: 'main' }
+        break
+    }
   }, [uiCommand.value])
 
   useEffect(() => {
@@ -47,9 +79,17 @@ export function App() {
 
   if (!state) return <div class="boot" />
   const session = state.sessions.find((s) => s.id === state.selectedSessionId) ?? null
+  const inspectorOpen = prefs.inspectorOpen.value
+  if (route.value.name === 'settings') {
+    return (
+      <div class="app settings-mode" style={{ '--head-h': `${headH}px` }}>
+        <Settings state={state} section={route.value.section} />
+      </div>
+    )
+  }
 
   return (
-    <div class={'app' + (sidebarOpen.value ? '' : ' no-sidebar')} style={{ '--sidebar-w': `${sidebarWidth.value}px`, '--head-h': `${headH}px` }}>
+    <div class={'app' + (sidebarOpen.value ? '' : ' no-sidebar') + (inspectorOpen ? ' with-inspector' : '')} style={{ '--sidebar-w': `${sidebarWidth.value}px`, '--head-h': `${headH}px`, '--insp-w': inspectorOpen ? `${prefs.inspectorWidth.value}px` : '0px' }}>
       {sidebarOpen.value && (
         <>
           <Sidebar state={state} onToggle={() => (sidebarOpen.value = false)} />
@@ -84,12 +124,14 @@ export function App() {
               </button>
             </div>
           )}
+          <BackgroundRequests state={state} />
           {state.permission && <PermissionCard p={state.permission} />}
           {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
           {state.question && <QuestionCard q={state.question} />}
           <Composer state={state} session={session} />
         </div>
       </main>
+      {inspectorOpen && <Inspector />}
     </div>
   )
 }
@@ -135,6 +177,16 @@ function MainHeader({ state, session, sidebarOpen, onToggle }: { state: AppState
           </span>
         </span>
       )}
+      {!prefs.inspectorOpen.value && (
+        <span class="head-tools right">
+          <button class="icon-btn" title={t('terminal')} onClick={() => void openTerminal()}>
+            <Icon name="terminal" size={15} />
+          </button>
+          <button class="icon-btn" title={t('toggleInspector') + ' (⌥⌘I)'} onClick={() => (prefs.inspectorOpen.value = true)}>
+            <Icon name="panelRight" size={15} />
+          </button>
+        </span>
+      )}
     </header>
   )
 }
@@ -177,7 +229,7 @@ function SidebarResizer({ width }: { width: { value: number } }) {
         e.preventDefault()
         const startX = e.clientX
         const start = width.value
-        const move = (ev: MouseEvent) => (width.value = Math.max(220, Math.min(420, start + ev.clientX - startX)))
+        const move = (ev: MouseEvent) => (width.value = Math.round(Math.max(220, Math.min(420, start + ev.clientX - startX))))
         const up = () => {
           window.removeEventListener('mousemove', move)
           window.removeEventListener('mouseup', up)
@@ -207,9 +259,14 @@ function reportDragRegions(height: number) {
       if (r.width === 0 || r.top >= height || r.bottom <= 0) return
       rects.push({ x: Math.floor(r.left) - 2, y: Math.floor(r.top) - 2, w: Math.ceil(r.width) + 4, h: Math.ceil(r.height) + 4 })
     })
-    // The sidebar resizer must stay grabbable all the way up.
-    const resizer = document.querySelector('.sidebar-resizer')?.getBoundingClientRect()
-    if (resizer) rects.push({ x: resizer.left, y: 0, w: resizer.width, h: height })
+    // Resizers must stay grabbable all the way up.
+    document.querySelectorAll('.sidebar-resizer, .insp-resizer').forEach((el) => {
+      const r = el.getBoundingClientRect()
+      rects.push({ x: r.left, y: 0, w: r.width, h: height })
+    })
+    // The inspector tab strip is interactive across its whole height.
+    const tabs = document.querySelector('.insp-tabs')?.getBoundingClientRect()
+    if (tabs && tabs.top < height) rects.push({ x: tabs.left, y: tabs.top, w: tabs.width, h: tabs.height })
     const json = JSON.stringify(rects)
     if (json !== lastRegions) {
       lastRegions = json

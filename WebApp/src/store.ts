@@ -4,6 +4,9 @@ import type { AppState, Item } from './types'
 
 export const app = signal<AppState | null>(null)
 
+/** Top-level route: the main chat or the settings page (⌘,). */
+export const route = signal<{ name: 'main' } | { name: 'settings'; section?: string }>({ name: 'main' })
+
 // Debug/inspection hook (used by the Debug-build eval notification).
 ;(window as unknown as { __awState: () => unknown }).__awState = () => ({ app: app.peek(), items: transcript.items.length })
 
@@ -20,7 +23,7 @@ function reindex() {
   transcript.items.forEach((it, i) => transcript.index.set(it.id, i))
 }
 
-export type UICommand = { name: string; seq: number }
+export type UICommand = { name: string; seq: number; paths?: string[] }
 export const uiCommand = signal<UICommand | null>(null)
 let commandSeq = 0
 
@@ -81,7 +84,7 @@ onMessage((m) => {
       break
     }
     case 'command':
-      uiCommand.value = { name: m.name, seq: ++commandSeq }
+      uiCommand.value = { name: m.name, seq: ++commandSeq, paths: m.paths }
       break
   }
 })
