@@ -34,30 +34,14 @@ enum GrokExt {
 
     static func parseUserQuestion(_ params: JSONValue) -> UserQuestionPrompt {
         let sessionId = params.string(from: "sessionId", "session_id") ?? ""
-        let questions = params["questions"]?.arrayValue?.compactMap(UserQuestion.init) ?? []
+        let questions = params["questions"]?.arrayValue?.compactMap(UserQuestion.init(grokJSON:)) ?? []
         return UserQuestionPrompt(sessionId: sessionId, questions: questions)
     }
-}
-
-struct PlanApprovalPrompt: Sendable, Equatable {
-    var sessionId: String
-    var content: String
-    var filePath: String?
-
-    var isEmpty: Bool {
-        content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
-
-enum PlanApprovalDecision: Sendable, Equatable {
-    case approved(feedback: String)
-    case requestChanges
-    case quit
 
     /// `ExitPlanModeExtResponse` is a 2-field struct in grok. Extra keys are
     /// ignored by default serde; keep `approved` + `comments` as the pair.
-    var json: JSONValue {
-        switch self {
+    static func planApprovalResponse(for decision: PlanApprovalDecision) -> JSONValue {
+        switch decision {
         case .approved(let feedback):
             return .object([
                 "approved": .bool(true),
@@ -82,60 +66,15 @@ enum PlanApprovalDecision: Sendable, Equatable {
             ])
         }
     }
-}
 
-struct UserQuestionOption: Identifiable, Sendable, Equatable {
-    var id: String { label }
-    var label: String
-    var description: String?
-    var preview: String?
-
-    init?(json: JSONValue) {
-        guard let label = json.string(from: "label", "name", "id"), !label.isEmpty else { return nil }
-        self.label = label
-        let description = json.string(from: "description", "detail")
-        self.description = description?.isEmpty == false ? description : nil
-        let preview = json.string(from: "preview")
-        self.preview = preview?.isEmpty == false ? preview : nil
-    }
-}
-
-struct UserQuestion: Identifiable, Sendable, Equatable {
-    let id: UUID
-    var text: String
-    var options: [UserQuestionOption]
-    var multiSelect: Bool
-
-    init?(json: JSONValue) {
-        guard let text = json.string(from: "question", "text", "prompt"), !text.isEmpty else { return nil }
-        self.id = UUID()
-        self.text = text
-        self.options = json["options"]?.arrayValue?.compactMap(UserQuestionOption.init) ?? []
-        self.multiSelect = json["multiSelect"]?.boolValue
-            ?? json["multi_select"]?.boolValue
-            ?? false
-    }
-}
-
-struct UserQuestionPrompt: Sendable, Equatable {
-    var sessionId: String
-    var questions: [UserQuestion]
-}
-
-enum UserQuestionDecision: Sendable, Equatable {
-    /// Selected labels keyed by question id.
-    case accepted([UUID: [String]])
-    case skipInterview
-    case chatAboutThis
-
-    func json(for prompt: UserQuestionPrompt) -> JSONValue {
-        switch self {
+    static func userQuestionResponse(decision: UserQuestionDecision, prompt: UserQuestionPrompt) -> JSONValue {
+        switch decision {
         case .skipInterview:
             return .object(["outcome": .string("skip_interview")])
         case .chatAboutThis:
             return .object(["outcome": .string("chat_about_this")])
         case .accepted(let selections):
-            // `answers` is a map (question text → selected labels), not an array.
+            // `answers` is a map (question text -> selected labels), not an array.
             // Grok rejected the sequence with: expected a map.
             var answers: [String: JSONValue] = [:]
             for question in prompt.questions {
@@ -148,6 +87,55 @@ enum UserQuestionDecision: Sendable, Equatable {
                 "partial_answers": .bool(false),
             ])
         }
+    }
+}
+
+extension PlanApprovalDecision {
+    var json: JSONValue {
+        GrokExt.planApprovalResponse(for: self)
+    }
+}
+
+extension UserQuestionDecision {
+    func json(for prompt: UserQuestionPrompt) -> JSONValue {
+        GrokExt.userQuestionResponse(decision: self, prompt: prompt)
+    }
+}
+
+extension UserQuestionOption {
+    init?(grokJSON json: JSONValue) {
+        guard let label = json.string(from: "label", "name", "id"), !label.isEmpty else { return nil }
+        let description = json.string(from: "description", "detail")
+        let preview = json.string(from: "preview")
+        self.init(
+            label: label,
+            description: description?.isEmpty == false ? description : nil,
+            preview: preview?.isEmpty == false ? preview : nil
+        )
+    }
+
+    init?(json: JSONValue) {
+        self.init(grokJSON: json)
+    }
+}
+
+extension UserQuestion {
+    init?(grokJSON json: JSONValue) {
+        guard let text = json.string(from: "question", "text", "prompt"), !text.isEmpty else { return nil }
+        let options = json["options"]?.arrayValue?.compactMap(UserQuestionOption.init(grokJSON:)) ?? []
+        let multiSelect = json["multiSelect"]?.boolValue
+            ?? json["multi_select"]?.boolValue
+            ?? false
+        self.init(
+            id: UUID(),
+            text: text,
+            options: options,
+            multiSelect: multiSelect
+        )
+    }
+
+    init?(json: JSONValue) {
+        self.init(grokJSON: json)
     }
 }
 

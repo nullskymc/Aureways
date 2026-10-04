@@ -639,7 +639,7 @@ struct ToolCallView: Sendable, Equatable {
             ?? json["code"]?.int64Value {
             return Int(code)
         }
-        // Grok often only sends kind: completed / failed
+        // Envelope status fallback when numeric code is omitted (completed/success -> 0, failed/error -> 1)
         if let kind = json["kind"]?.stringValue?.lowercased() {
             if kind == "completed" || kind == "success" { return 0 }
             if kind == "failed" || kind == "error" { return 1 }

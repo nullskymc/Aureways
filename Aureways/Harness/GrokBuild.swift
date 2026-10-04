@@ -133,4 +133,35 @@ final class GrokBuildHarness: Harness {
         "ExitPlanMode": "think",
         "AskUserQuestion": "other",
     ]
+
+    // MARK: - Session Update Detection
+
+    override class func isSessionUpdate(_ method: String) -> Bool {
+        super.isSessionUpdate(method)
+            || method == "x.ai/session/update"
+            || method == "_x.ai/session/update"
+            || method == "_x.ai/session_notification"
+    }
+
+    // MARK: - Extension Requests
+
+    override func handleExtRequest(
+        method: String,
+        params: JSONValue,
+        session: ChatSession
+    ) async throws -> JSONValue? {
+        guard GrokExt.handles(method) else { return nil }
+        switch GrokExt.stripUnderscorePrefix(method) {
+        case "x.ai/exit_plan_mode":
+            let prompt = GrokExt.parsePlanApproval(params)
+            let decision = await session.waitForPlanApproval(prompt)
+            return GrokExt.planApprovalResponse(for: decision)
+        case "x.ai/ask_user_question":
+            let prompt = GrokExt.parseUserQuestion(params)
+            let decision = await session.waitForUserQuestion(prompt)
+            return GrokExt.userQuestionResponse(decision: decision, prompt: prompt)
+        default:
+            return nil
+        }
+    }
 }

@@ -22,9 +22,11 @@ struct ACPHandlers: Sendable {
     /// Handshake methods only. Zero skips the timer. Prompt turns are not stalled.
     var requestStall: Duration = .seconds(8)
     var onRequestStall: (@Sendable (_ method: String, _ json: String) async -> Void)? = nil
-    /// Grok (and future) `x.ai/*` / `_x.ai/*` requests. Return nil from the
-    /// caller's throw to keep Method not found. Notifications still go through
-    /// `onUpdate`, not this hook.
+    /// Per-harness check for whether an incoming notification represents a session update.
+    /// Defaults to `method == "session/update"`.
+    var isSessionUpdate: (@Sendable (String) -> Bool)? = nil
+    /// Agent-initiated extension requests outside standard ACP.
+    /// Handled by the active harness. Returns response JSON or throws ACPError.
     var onExtRequest: (@Sendable (String, JSONValue) async throws -> JSONValue)? = nil
 }
 
@@ -332,21 +334,12 @@ actor ACPConnection {
     }
 
     private func handleNotification(_ method: String, params: JSONValue?) async {
-        let isSessionUpdate = method == "session/update"
-            || method == "x.ai/session/update"
-            || method == "_x.ai/session/update"
-            || method == "_x.ai/session_notification"
+        let isSessionUpdate = handlers.isSessionUpdate?(method) ?? (method == "session/update")
         guard isSessionUpdate, let params else {
-            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
-                await handlers.onLog(method)
-            }
             return
         }
         let normalized = handlers.normalizeNotification?(method, params) ?? params
         guard let notification = SessionNotification(json: normalized) else {
-            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
-                await handlers.onLog(method)
-            }
             return
         }
         await handlers.onUpdate(notification)
@@ -359,7 +352,7 @@ actor ACPConnection {
         // the error below goes back to the agent over the wire and nothing
         // reaches the UI, so "the agent cannot use the terminal" and "the
         // client never got asked" look identical.
-        let limit = method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") ? 8000 : 240
+        let limit = 4000
         await handlers.onLog("← \(method) \(Self.compact(params ?? .null, limit: limit))")
         do {
             let result = try await perform(method: method, rawParams: params ?? .object([:]))
@@ -443,11 +436,9 @@ actor ACPConnection {
             }
             return await terminals.release(id: id)
         default:
-            if method.hasPrefix("x.ai/") || method.hasPrefix("_x.ai/") {
-                let canonical = method.hasPrefix("_") ? String(method.dropFirst()) : method
-                if let onExtRequest = handlers.onExtRequest {
-                    return try await onExtRequest(canonical, params)
-                }
+            let canonical = method.hasPrefix("_") ? String(method.dropFirst()) : method
+            if let onExtRequest = handlers.onExtRequest {
+                return try await onExtRequest(canonical, params)
             }
             throw ACPError.agent(-32601, "Method not found: \(method)")
         }

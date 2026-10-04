@@ -809,3 +809,71 @@ final class ChatSession: Identifiable {
         }
     }
 }
+
+// MARK: - Interactive Prompts
+
+struct PlanApprovalPrompt: Sendable, Equatable {
+    var sessionId: String
+    var content: String
+    var filePath: String?
+
+    var isEmpty: Bool {
+        content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init(sessionId: String, content: String, filePath: String? = nil) {
+        self.sessionId = sessionId
+        self.content = content
+        self.filePath = filePath
+    }
+}
+
+enum PlanApprovalDecision: Sendable, Equatable {
+    case approved(feedback: String)
+    case requestChanges
+    case quit
+}
+
+struct UserQuestionOption: Identifiable, Sendable, Equatable {
+    var id: String { label }
+    var label: String
+    var description: String?
+    var preview: String?
+
+    init(label: String, description: String? = nil, preview: String? = nil) {
+        self.label = label
+        self.description = description
+        self.preview = preview
+    }
+}
+
+struct UserQuestion: Identifiable, Sendable, Equatable {
+    let id: UUID
+    var text: String
+    var options: [UserQuestionOption]
+    var multiSelect: Bool
+
+    init(id: UUID = UUID(), text: String, options: [UserQuestionOption] = [], multiSelect: Bool = false) {
+        self.id = id
+        self.text = text
+        self.options = options
+        self.multiSelect = multiSelect
+    }
+}
+
+struct UserQuestionPrompt: Sendable, Equatable {
+    var sessionId: String
+    var questions: [UserQuestion]
+
+    init(sessionId: String, questions: [UserQuestion] = []) {
+        self.sessionId = sessionId
+        self.questions = questions
+    }
+}
+
+enum UserQuestionDecision: Sendable, Equatable {
+    /// Selected labels keyed by question id.
+    case accepted([UUID: [String]])
+    case skipInterview
+    case chatAboutThis
+}

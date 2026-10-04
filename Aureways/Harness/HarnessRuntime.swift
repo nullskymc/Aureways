@@ -92,6 +92,9 @@ class HarnessRuntime {
         handlers.normalizeNotification = { [harness] method, params in
             harness.normalizeNotification(method: method, params: params)
         }
+        handlers.isSessionUpdate = { [harness] method in
+            type(of: harness).isSessionUpdate(method)
+        }
         let launched = try ACPConnection.launch(
             ACPLaunch(
                 command: harness.launchCommand(),

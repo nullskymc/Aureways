@@ -499,7 +499,7 @@ private final class AgentBridge: @unchecked Sendable {
     }
 
     func handleExtRequest(_ method: String, params: JSONValue) async throws -> JSONValue {
-        guard agentId == GrokBuildHarness.id, GrokExt.handles(method) else {
+        guard let runtime = await MainActor.run(body: { self.model?.runtimes[self.agentId] }) else {
             throw ACPError.agent(-32601, "Method not found: \(method)")
         }
         let sessionId = params["sessionId"]?.stringValue ?? params["session_id"]?.stringValue ?? ""
@@ -518,18 +518,10 @@ private final class AgentBridge: @unchecked Sendable {
             self.model?.flushSessionUpdates()
             self.model?.appendLog(agentId: self.agentId, line: "← \(method) waiting for UI")
         }
-        switch GrokExt.stripUnderscorePrefix(method) {
-        case "x.ai/exit_plan_mode":
-            let prompt = GrokExt.parsePlanApproval(params)
-            let decision = await session.waitForPlanApproval(prompt)
-            return decision.json
-        case "x.ai/ask_user_question":
-            let prompt = GrokExt.parseUserQuestion(params)
-            let decision = await session.waitForUserQuestion(prompt)
-            return decision.json(for: prompt)
-        default:
-            throw ACPError.agent(-32601, "Method not found: \(method)")
+        if let result = try await runtime.harness.handleExtRequest(method: method, params: params, session: session) {
+            return result
         }
+        throw ACPError.agent(-32601, "Method not found: \(method)")
     }
 }
 

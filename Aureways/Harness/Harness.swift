@@ -72,7 +72,7 @@ class Harness: @unchecked Sendable {
     /// Walk ACP envelopes that carry a tool call and run `normalizeToolCall`.
     /// Connection calls this for `session/update` and `session/request_permission`.
     func normalizeNotification(method: String, params: JSONValue) -> JSONValue {
-        if Self.isSessionUpdate(method) {
+        if type(of: self).isSessionUpdate(method) {
             return params.mapObject { object in
                 guard let update = object["update"],
                       let kind = update["sessionUpdate"]?.stringValue,
@@ -90,11 +90,19 @@ class Harness: @unchecked Sendable {
         return params
     }
 
-    private static func isSessionUpdate(_ method: String) -> Bool {
+    class func isSessionUpdate(_ method: String) -> Bool {
         method == "session/update"
-            || method == "x.ai/session/update"
-            || method == "_x.ai/session/update"
-            || method == "_x.ai/session_notification"
+    }
+
+    /// Handle an agent-initiated extension request (method not defined by ACP core spec).
+    /// Subclasses override this to handle agent-specific RPC requests (e.g. Grok's `x.ai/*`).
+    /// Returns `nil` if the method is not supported by this harness.
+    func handleExtRequest(
+        method: String,
+        params: JSONValue,
+        session: ChatSession
+    ) async throws -> JSONValue? {
+        nil
     }
 
     /// Rewrite advertised `initialize` capabilities. Same reason as
