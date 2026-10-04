@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B101000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E1 /* HarnessQuota+Antigravity.swift */; };
+		B201000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E1 /* HarnessQuota+Antigravity.swift */; };
+		B101000000000000000000E2 /* HarnessQuota+Grok.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E2 /* HarnessQuota+Grok.swift */; };
+		B201000000000000000000E2 /* HarnessQuota+Grok.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E2 /* HarnessQuota+Grok.swift */; };
+		B101000000000000000000E3 /* HarnessQuota+Codex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E3 /* HarnessQuota+Codex.swift */; };
+		B201000000000000000000E3 /* HarnessQuota+Codex.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E3 /* HarnessQuota+Codex.swift */; };
+		B101000000000000000000E4 /* WebShellBridge+State.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E4 /* WebShellBridge+State.swift */; };
+		B101000000000000000000E5 /* WebShellBridge+Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E5 /* WebShellBridge+Transcript.swift */; };
+		B101000000000000000000E6 /* WebShellBridge+Handlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000E6 /* WebShellBridge+Handlers.swift */; };
 		B10100000000000000000001 /* AurewaysApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000001 /* AurewaysApp.swift */; };
 		B10100000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* AppModel.swift */; };
 		B10100000000000000000003 /* JSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000003 /* JSONRPC.swift */; };
@@ -111,6 +120,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F101000000000000000000E1 /* HarnessQuota+Antigravity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HarnessQuota+Antigravity.swift"; sourceTree = "<group>"; };
+		F101000000000000000000E2 /* HarnessQuota+Grok.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HarnessQuota+Grok.swift"; sourceTree = "<group>"; };
+		F101000000000000000000E3 /* HarnessQuota+Codex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HarnessQuota+Codex.swift"; sourceTree = "<group>"; };
+		F101000000000000000000E4 /* WebShellBridge+State.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebShellBridge+State.swift"; sourceTree = "<group>"; };
+		F101000000000000000000E5 /* WebShellBridge+Transcript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebShellBridge+Transcript.swift"; sourceTree = "<group>"; };
+		F101000000000000000000E6 /* WebShellBridge+Handlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebShellBridge+Handlers.swift"; sourceTree = "<group>"; };
 		F00000000000000000000001 /* Aureways.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aureways.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F00000000000000000000002 /* AurewaysTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AurewaysTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10100000000000000000001 /* AurewaysApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AurewaysApp.swift; sourceTree = "<group>"; };
@@ -254,6 +269,9 @@
 			children = (
 				F101000000000000000000D1 /* WebShellView.swift */,
 				F101000000000000000000D2 /* WebShellBridge.swift */,
+				F101000000000000000000E4 /* WebShellBridge+State.swift */,
+				F101000000000000000000E5 /* WebShellBridge+Transcript.swift */,
+				F101000000000000000000E6 /* WebShellBridge+Handlers.swift */,
 				F101000000000000000000D4 /* WebShellServices.swift */,
 				F101000000000000000000D6 /* WebShellSettings.swift */,
 				F101000000000000000000C2 /* WebAssetScheme.swift */,
@@ -330,6 +348,9 @@
 				F10100000000000000000083 /* Qoder.swift */,
 				F10100000000000000000029 /* CustomHarness.swift */,
 				F10100000000000000000050 /* HarnessQuota.swift */,
+				F101000000000000000000E1 /* HarnessQuota+Antigravity.swift */,
+				F101000000000000000000E2 /* HarnessQuota+Grok.swift */,
+				F101000000000000000000E3 /* HarnessQuota+Codex.swift */,
 				F10100000000000000000054 /* ToolCallNormalization.swift */,
 			);
 			path = Harness;
@@ -492,6 +513,12 @@
 				B10100000000000000000083 /* Qoder.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B101000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */,
+				B101000000000000000000E2 /* HarnessQuota+Grok.swift in Sources */,
+				B101000000000000000000E3 /* HarnessQuota+Codex.swift in Sources */,
+				B101000000000000000000E4 /* WebShellBridge+State.swift in Sources */,
+				B101000000000000000000E5 /* WebShellBridge+Transcript.swift in Sources */,
+				B101000000000000000000E6 /* WebShellBridge+Handlers.swift in Sources */,
 				B101000000000000000000D8 /* QuotaSources.swift in Sources */,
 				B101000000000000000000D9 /* QuotaStore.swift in Sources */,
 				B10100000000000000000054 /* ToolCallNormalization.swift in Sources */,
@@ -535,6 +562,9 @@
 				B20100000000000000000083 /* Qoder.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
+				B201000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */,
+				B201000000000000000000E2 /* HarnessQuota+Grok.swift in Sources */,
+				B201000000000000000000E3 /* HarnessQuota+Codex.swift in Sources */,
 				B201000000000000000000D8 /* QuotaSources.swift in Sources */,
 				B201000000000000000000D9 /* QuotaStore.swift in Sources */,
 				B2010000000000000000009B /* QuotaStoreTests.swift in Sources */,

@@ -19,7 +19,7 @@ final class WebComposerDraft {
 /// ~45 Hz. A flush sends the app snapshot only when its JSON changed, and the
 /// selected transcript as incremental ops (suffix appends for streaming text).
 @MainActor
-final class WebShellBridge: NSObject, WKScriptMessageHandler {
+final class WebShellBridge: NSObject {
     static let handlerName = "aureways"
     static weak var current: WebShellBridge?
 
@@ -39,13 +39,13 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     var onAppearance: ((String) -> Void)?
     var onGlassRects: (([GlassLayerView.Panel]) -> Void)?
 
-    private(set) var isReady = false
+    var isReady = false
     private var flushPending = false
     private var lastFlushTime: CFTimeInterval = 0
     private static let minFlushInterval: CFTimeInterval = 1.0 / 45.0
     private var lastStateJSON = ""
     private var lastAppearance: String?
-    private var chrome = Chrome(trafficLights: .zero, fullscreen: false, titlebarHeight: 46)
+    var chrome = Chrome(trafficLights: .zero, fullscreen: false, titlebarHeight: 46)
 
     private var transcriptSessionID: UUID?
     private var sentOrder: [UUID] = []
@@ -72,7 +72,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
     var markdownDefaultCache = false
     let notifier = AttentionNotifier()
     static let uiPrefsKey = "webShellUIPrefs"
-    private var uiPrefs: [String: Any] = UserDefaults.standard.dictionary(forKey: WebShellBridge.uiPrefsKey) ?? [:]
+    var uiPrefs: [String: Any] = UserDefaults.standard.dictionary(forKey: WebShellBridge.uiPrefsKey) ?? [:]
 
     init(model: AppModel, role: Role = .main) {
         self.model = model
@@ -299,7 +299,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         }
     }
 
-    private func handleMenuBar(_ type: String, _ body: [String: Any]) -> Bool {
+    func handleMenuBar(_ type: String, _ body: [String: Any]) -> Bool {
         let dismiss = { [weak self] in self?.hostView?.window?.orderOut(nil) }
         guard let command = MenuBarCommand(message: type) else {
             switch type {
@@ -343,7 +343,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         resetSentState()
     }
 
-    private func resetSentState() {
+    func resetSentState() {
         lastStateJSON = ""
         transcriptSessionID = nil
         sentOrder = []
@@ -359,7 +359,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
 
     /// Commands sent before the page is ready (e.g. Finder "Open With" at
     /// launch) are queued and replayed on `ready`.
-    private var queuedCommands: [[String: Any]] = []
+    var queuedCommands: [[String: Any]] = []
 
     func sendCommand(_ name: String, _ extra: [String: Any] = [:]) {
         var payload = extra
@@ -396,7 +396,7 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         }
     }
 
-    private func flush() {
+    func flush() {
         flushPending = false
         lastFlushTime = CACurrentMediaTime()
         var outgoing: [[String: Any]] = []
@@ -505,607 +505,5 @@ final class WebShellBridge: NSObject, WKScriptMessageHandler {
         guard count > 0, after.utf16.count > count, after.hasPrefix(before) else { return nil }
         let start = after.utf16.index(after.startIndex, offsetBy: count)
         return String(after[start...])
-    }
-
-    // MARK: State snapshot
-
-    private func encodeState() -> [String: Any] {
-        let selected = model.selectedSession
-        let sessions = model.sessions.filter { !$0.isClosed }
-        var state: [String: Any] = [
-            "locale": L10n.locale.language.languageCode?.identifier == "zh" ? "zh" : "en",
-            "appearance": model.appearance,
-            "selectedSessionId": selected?.id.uuidString ?? NSNull(),
-            "selectedAgentId": model.selectedAgentId,
-            "workspacePath": WorkspaceRecord.normalized(model.workspacePath),
-            "workspaceName": model.currentWorkspaceName,
-            "branch": model.workspaceBranch ?? NSNull(),
-            "homePath": WorkspaceRecord.homePath,
-            "error": model.errorMessage ?? NSNull(),
-            "chrome": [
-                "trafficLights": [
-                    "x": chrome.trafficLights.minX, "y": chrome.trafficLights.minY,
-                    "w": chrome.trafficLights.width, "h": chrome.trafficLights.height,
-                ],
-                "fullscreen": chrome.fullscreen,
-                "titlebarHeight": chrome.titlebarHeight,
-                "glass": role != .menuBar,
-                "composerOverlay": role == .main,
-            ],
-        ]
-        state["workspaces"] = model.workspaces.map { ["path": WorkspaceRecord.normalized($0.path), "name": $0.name] }
-        state["agents"] = model.selectableAgents.map { agent -> [String: Any] in
-            [
-                "id": agent.id,
-                "title": agent.title,
-                "subtitle": agent.subtitle,
-                "available": model.availability[agent.id] == true,
-            ]
-        }
-        state["sessions"] = sessions.map { session -> [String: Any] in
-            var row: [String: Any] = [
-                "id": session.id.uuidString,
-                "title": session.title,
-                "agentId": session.agent.id,
-                "agentTitle": session.agent.title,
-                "cwd": session.cwd,
-                "ws": WorkspaceRecord.normalized(session.cwd),
-                "phase": Self.phaseName(session.phase),
-                "streaming": session.isStreaming,
-                "attention": session.pendingPermission != nil || session.pendingPlanApproval != nil
-                    || session.pendingUserQuestion != nil,
-                "createdAt": session.createdAt.timeIntervalSince1970 * 1000,
-            ]
-            if case .failed(let message) = session.phase { row["error"] = message }
-            // Cross-session cards: the web shows these for sessions that aren't selected.
-            if session.id != selected?.id {
-                if let prompt = session.pendingPermission {
-                    row["permission"] = Self.encode(prompt)
-                } else if session.pendingPlanApproval != nil {
-                    row["pendingKind"] = "plan"
-                } else if session.pendingUserQuestion != nil {
-                    row["pendingKind"] = "question"
-                }
-            }
-            return row
-        }
-        if role == .main { notifier.update(sessions: sessions, selectedID: selected?.id) }
-        state["uiPrefs"] = uiPrefs
-        state["settings"] = encodeSettings()
-        state["quota"] = encodeQuota()
-        state["inspectorRoot"] = model.inspectorRoot
-        state["composer"] = encodeComposer(selected)
-        if let selected {
-            if let prompt = selected.pendingPermission {
-                state["permission"] = Self.encode(prompt)
-            }
-            if let plan = selected.pendingPlanApproval {
-                state["planApproval"] = ["content": plan.content, "filePath": Self.orNull(plan.filePath)] as [String: Any]
-            }
-            if let question = selected.pendingUserQuestion {
-                state["question"] = [
-                    "questions": question.questions.map { q -> [String: Any] in
-                        [
-                            "id": q.id.uuidString,
-                            "text": q.text,
-                            "multi": q.multiSelect,
-                            "options": q.options.map { option -> [String: Any] in ["label": option.label, "description": Self.orNull(option.description)] },
-                        ]
-                    },
-                ]
-            }
-            if let usage = selected.usage {
-                state["usage"] = ["used": usage.used, "size": usage.size]
-            }
-        }
-        return state
-    }
-
-    private func encodeComposer(_ session: ChatSession?) -> [String: Any] {
-        var composer: [String: Any] = [
-            "attachments": pendingAttachments.map { attachment -> [String: Any] in
-                var row: [String: Any] = [
-                    "id": attachment.id.uuidString,
-                    "name": attachment.name,
-                    "kind": Self.attachmentKind(attachment.kind),
-                ]
-                if let path = attachment.url?.path { row["path"] = path }
-                if attachment.characterCount > 0 { row["chars"] = attachment.characterCount }
-                if attachment.kind == .image, let data = attachment.imageData, data.count < 4_000_000 {
-                    row["src"] = "data:\(attachment.mimeType);base64,\(data.base64EncodedString())"
-                }
-                return row
-            },
-        ]
-        guard let session else { return composer }
-        composer["sessionId"] = session.id.uuidString
-        composer["commands"] = session.availableCommands.map { ["name": $0.name, "description": $0.description ?? ""] }
-        guard session.phase.isReady else { return composer }
-        if let option = session.modelOption, !option.options.isEmpty {
-            composer["model"] = Self.encodePicker(configId: option.id, current: option.selectedString, choices: option.options)
-        }
-        if let option = session.thoughtLevelOption, !option.options.isEmpty {
-            composer["effort"] = Self.encodePicker(configId: option.id, current: option.selectedString, choices: option.options)
-        }
-        if !session.modeChoices.isEmpty {
-            composer["mode"] = Self.encodePicker(configId: nil, current: session.currentModeId, choices: session.modeChoices)
-        }
-        return composer
-    }
-
-    private static func encodePicker(configId: String?, current: String?, choices: [SessionMode]) -> [String: Any] {
-        [
-            "configId": configId ?? NSNull(),
-            "current": current ?? NSNull(),
-            "options": choices.map { choice -> [String: Any] in
-                ["id": choice.id, "name": choice.name, "group": orNull(choice.providerLabel),
-                 "description": orNull(choice.description)]
-            },
-        ]
-    }
-
-    private static func orNull(_ value: String?) -> Any {
-        value ?? NSNull()
-    }
-
-    private static func attachmentKind(_ kind: ComposerAttachment.Kind) -> String {
-        switch kind {
-        case .image: return "image"
-        case .file: return "file"
-        case .pastedText: return "pastedText"
-        }
-    }
-
-    private static func phaseName(_ phase: SessionPhase) -> String {
-        switch phase {
-        case .idle: return "idle"
-        case .connecting: return "connecting"
-        case .ready: return "ready"
-        case .failed: return "failed"
-        }
-    }
-
-    // MARK: Transcript encoding
-
-    static func encode(_ item: TranscriptItem, runs: [UUID: ActivityRun]) -> [String: Any] {
-        var row: [String: Any]
-        switch item {
-        case .user(let id, let text, let attachments):
-            row = [
-                "id": id.uuidString, "kind": "user", "text": text,
-                "attachments": attachments.map(encode(attachment:)),
-            ]
-        case .agent(let id, let text):
-            row = ["id": id.uuidString, "kind": "agent", "text": text]
-        case .thought(let id, let text):
-            row = ["id": id.uuidString, "kind": "thought", "text": text]
-        case .tool(let id, let call):
-            row = encode(tool: call)
-            row["id"] = id.uuidString
-            row["kind"] = "tool"
-        case .plan(let id, let entries):
-            row = [
-                "id": id.uuidString, "kind": "plan",
-                "entries": entries.map { ["content": $0.content, "status": $0.status] },
-            ]
-        case .status(let id, let text):
-            row = ["id": id.uuidString, "kind": "status", "text": text]
-        }
-        if let run = runs[item.id] {
-            row["run"] = [
-                "s": run.startedAt.timeIntervalSince1970 * 1000,
-                "e": run.endedAt.map { $0.timeIntervalSince1970 * 1000 as Any } ?? NSNull(),
-            ]
-        }
-        return row
-    }
-
-    static func encode(attachment: TranscriptAttachment) -> [String: Any] {
-        var row: [String: Any] = [
-            "id": attachment.id.uuidString,
-            "kind": attachment.isPastedText ? "pastedText" : attachment.kind,
-            "name": attachment.name,
-        ]
-        if let path = attachment.path { row["path"] = path }
-        if attachment.characterCount > 0 { row["chars"] = attachment.characterCount }
-        if attachment.kind == "image", let base64 = attachment.imageBase64, !base64.isEmpty, base64.utf8.count < 6_000_000 {
-            if base64.hasPrefix("data:") {
-                row["src"] = base64
-            } else {
-                row["src"] = "data:\(attachment.mimeType ?? "image/png");base64,\(base64)"
-            }
-        }
-        return row
-    }
-
-    private static let prettyEncoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
-        return encoder
-    }()
-
-    private static let outputLimit = 24_000
-    private static let diffLineLimit = 600
-
-    static func encode(tool call: ToolCallView) -> [String: Any] {
-        var row: [String: Any] = [
-            "callId": call.toolCallId,
-            "title": call.compactTitle,
-            "fullTitle": call.displayTitle,
-            "toolKind": call.kind,
-            "status": call.status.lowercased(),
-            "layout": call.cardLayout.rawValue,
-            "progress": call.showsProgress,
-        ]
-        if let path = call.filePath { row["path"] = path }
-        switch call.cardLayout {
-        case .command:
-            if let command = call.terminalCommand { row["command"] = command }
-            if let cwd = call.terminalCwd { row["cwd"] = cwd }
-            if let output = call.terminalOutput, !output.isEmpty { row["output"] = tail(output) }
-            if let code = call.terminalExitCode { row["exitCode"] = code }
-        case .search:
-            if let pattern = call.searchPattern { row["pattern"] = pattern }
-            if !call.contentText.isEmpty { row["output"] = head(call.contentText) }
-        case .fetch:
-            if let url = call.fetchURL { row["url"] = url }
-            if !call.contentText.isEmpty { row["output"] = head(call.contentText) }
-        default:
-            if !call.contentText.isEmpty { row["output"] = head(call.contentText) }
-        }
-        let diffs = call.diffs
-        if !diffs.isEmpty {
-            var budget = diffLineLimit
-            row["diffs"] = diffs.map { diff -> [String: Any] in
-                let result = TextDiff.compare(old: diff.oldText, new: diff.newText)
-                var hunks: [[String: Any]] = []
-                for hunk in result.hunks where budget > 0 {
-                    let lines = hunk.lines.prefix(budget)
-                    budget -= lines.count
-                    hunks.append([
-                        "header": hunk.header,
-                        "oldStart": hunk.oldStart,
-                        "newStart": hunk.newStart,
-                        "lines": lines.map { $0.prefix + $0.text },
-                    ])
-                }
-                return [
-                    "path": diff.path,
-                    "added": result.added,
-                    "removed": result.removed,
-                    "truncated": result.truncated || budget <= 0,
-                    "isNew": diff.oldText == nil || diff.oldText?.isEmpty == true,
-                    "hunks": hunks,
-                ]
-            }
-        }
-        if row["output"] == nil, diffs.isEmpty, let raw = call.rawInput,
-           let data = try? Self.prettyEncoder.encode(raw), data.count < 8_000,
-           let text = String(data: data, encoding: .utf8), text != "{}", text != "null" {
-            row["input"] = text
-        }
-        return row
-    }
-
-    static func encode(_ prompt: PermissionPrompt) -> [String: Any] {
-        var row: [String: Any] = [
-            "title": prompt.title,
-            "options": prompt.options.map { option -> [String: Any] in
-                ["id": option.optionId, "name": option.name, "kind": option.kind, "allow": option.isAllow]
-            },
-        ]
-        if let tool = prompt.toolCall { row["tool"] = encode(tool: tool) }
-        return row
-    }
-
-    private static func head(_ text: String) -> String {
-        guard text.utf16.count > outputLimit else { return text }
-        let end = text.utf16.index(text.startIndex, offsetBy: outputLimit)
-        return String(text[..<end]) + "\n…"
-    }
-
-    private static func tail(_ text: String) -> String {
-        let count = text.utf16.count
-        guard count > outputLimit else { return text }
-        let start = text.utf16.index(text.startIndex, offsetBy: count - outputLimit)
-        return "…\n" + String(text[start...])
-    }
-
-    // MARK: JS -> Swift
-
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return }
-        handle(type, body)
-    }
-
-    private func session(_ body: [String: Any], key: String = "id") -> ChatSession? {
-        guard let raw = body[key] as? String, let id = UUID(uuidString: raw) else { return nil }
-        return model.sessions.first { $0.id == id }
-    }
-
-    private func handle(_ type: String, _ body: [String: Any]) {
-        if role == .menuBar, handleMenuBar(type, body) { return }
-        if role == .composer {
-            switch type {
-            case "composerLayout":
-                onComposerLayout?(body)
-                return
-            case "composerEscape":
-                WebShellBridge.current?.sendCommand("escape")
-                return
-            case "uiPrefs", "dragRegions", "glass":
-                return
-            default:
-                break
-            }
-        }
-        switch type {
-        case "ready":
-            isReady = true
-            resetSentState()
-            flush()
-            let queued = queuedCommands
-            queuedCommands = []
-            queued.forEach(post)
-            onReady?()
-        case "log":
-            NSLog("[web] %@", String(describing: body["message"] ?? ""))
-        case "send":
-            let text = body["text"] as? String ?? ""
-            let attachments = pendingAttachments
-            model.sendFromComposer(text: text, attachments: attachments)
-            pendingAttachments = []
-        case "cancel":
-            model.cancel()
-        case "newSession":
-            if let path = body["workspace"] as? String, !path.isEmpty {
-                model.startNewSession(inWorkspace: path)
-            } else {
-                model.startNewSession()
-            }
-            sendCommand("focusComposer")
-        case "selectSession":
-            if let session = session(body) { model.select(session) }
-        case "closeSession":
-            if let session = session(body) { model.close(session) }
-        case "retry":
-            if let session = session(body) ?? model.selectedSession { model.retry(session) }
-        case "selectAgent":
-            if let id = body["id"] as? String, model.agents.contains(where: { $0.id == id }) {
-                model.selectedAgentId = id
-            }
-        case "setConfig":
-            if let session = model.selectedSession, let configId = body["configId"] as? String,
-               let value = body["value"] as? String {
-                model.setSessionConfig(session, configId: configId, value: .string(value))
-            }
-        case "setMode":
-            if let session = model.selectedSession, let modeId = body["modeId"] as? String {
-                model.setSessionMode(session, modeId: modeId)
-            }
-        case "permission":
-            guard let session = session(body, key: "sessionId") ?? model.selectedSession,
-                  session.pendingPermission != nil else { return }
-            if let optionId = body["optionId"] as? String {
-                session.resumePermission(.selected(optionId))
-            } else {
-                session.resumePermission(.cancelled)
-            }
-        case "planApproval":
-            guard let session = model.selectedSession, session.pendingPlanApproval != nil else { return }
-            switch body["decision"] as? String {
-            case "approve": session.resumePlanApproval(.approved(feedback: body["feedback"] as? String ?? ""))
-            case "changes": session.resumePlanApproval(.requestChanges)
-            default: session.resumePlanApproval(.quit)
-            }
-        case "question":
-            guard let session = model.selectedSession, let prompt = session.pendingUserQuestion else { return }
-            if body["skip"] as? Bool == true {
-                session.resumeUserQuestion(.skipInterview)
-                return
-            }
-            let answers = body["answers"] as? [String: [String]] ?? [:]
-            var mapped: [UUID: [String]] = [:]
-            for question in prompt.questions {
-                mapped[question.id] = answers[question.id.uuidString] ?? []
-            }
-            session.resumeUserQuestion(.accepted(mapped))
-        case "rpc":
-            handleRPC(body)
-        case "term.input":
-            if let id = body["id"] as? String, let data = body["data"] as? String { terminals.input(id: id, data: data) }
-        case "term.resize":
-            if let id = body["id"] as? String {
-                terminals.resize(id: id, cols: (body["cols"] as? NSNumber)?.intValue ?? 0, rows: (body["rows"] as? NSNumber)?.intValue ?? 0)
-            }
-        case "term.close":
-            if let id = body["id"] as? String { terminals.close(id: id) }
-        case "uiPrefs":
-            if let prefs = body["prefs"] as? [String: Any] {
-                for (key, value) in prefs { uiPrefs[key] = value is NSNull ? nil : value }
-                UserDefaults.standard.set(uiPrefs, forKey: Self.uiPrefsKey)
-            }
-        case "pasteNative":
-            let attachments = ComposerAttachment.fromPasteboard(.general)
-            if attachments.isEmpty {
-                sendCommand("pasteFallback")
-            } else {
-                pendingAttachments.append(contentsOf: attachments)
-            }
-        case "pasteImage":
-            if let base64 = body["data"] as? String, let data = Data(base64Encoded: base64), let image = NSImage(data: data) {
-                pendingAttachments.append(ComposerAttachment(
-                    kind: .image, name: body["name"] as? String ?? "图片".localized, url: nil,
-                    mimeType: body["mime"] as? String ?? "image/png", imageData: data, thumbnail: image
-                ))
-            }
-        case "attachPaths":
-            let urls = (body["paths"] as? [String] ?? []).map { URL(fileURLWithPath: $0) }
-            pendingAttachments.append(contentsOf: ComposerAttachment.fromFileURLs(urls))
-        case "openPastedText":
-            if let raw = body["id"] as? String, let attachment = pendingAttachments.first(where: { $0.id.uuidString == raw }),
-               let path = attachment.url?.path {
-                openFiles([path])
-            }
-        case "attach":
-            presentOpenPanel()
-        case "removeAttachment":
-            if let raw = body["id"] as? String, let attachment = pendingAttachments.first(where: { $0.id.uuidString == raw }) {
-                if attachment.kind == .pastedText { model.discardPastedTextDraft(attachment) }
-                pendingAttachments.removeAll { $0.id == attachment.id }
-            }
-        case "pasteText":
-            if let text = body["text"] as? String, let attachment = model.capturePastedText(text) {
-                pendingAttachments.append(attachment)
-            }
-        case "openLink":
-            if let href = body["href"] as? String { WebAssetSchemeHandler.openExternally(href) }
-        case "openPath":
-            if let path = body["path"] as? String, !path.isEmpty {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-            }
-        case "copy":
-            if let text = body["text"] as? String {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
-            }
-        case "selectWorkspace":
-            if let path = body["path"] as? String { model.selectWorkspace(path) }
-        case "addWorkspace":
-            model.addWorkspace()
-        case "revealWorkspace":
-            model.openWorkspaceInFinder(body["path"] as? String)
-        case "openSettings":
-            sendCommand("openSettings")
-        case "dismissError":
-            model.errorMessage = nil
-        case "dragRegions":
-            let rects = (body["rects"] as? [[String: Any]] ?? []).compactMap { rect -> CGRect? in
-                guard let x = (rect["x"] as? NSNumber)?.doubleValue, let y = (rect["y"] as? NSNumber)?.doubleValue,
-                      let w = (rect["w"] as? NSNumber)?.doubleValue, let h = (rect["h"] as? NSNumber)?.doubleValue
-                else { return nil }
-                return CGRect(x: x, y: y, width: w, height: h)
-            }
-            onDragRegions?(rects, (body["height"] as? NSNumber).map { CGFloat($0.doubleValue) })
-        case "composerInsert":
-            if let text = body["text"] as? String { composerPeer?.sendCommand("insertText", ["text": text]) }
-        case "glass":
-            let panels = (body["rects"] as? [[String: Any]] ?? []).compactMap { rect -> GlassLayerView.Panel? in
-                func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
-                guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
-                else { return nil }
-                var extra: [String: CGFloat] = [:]
-                for key in ["al", "ar", "mw"] { extra[key] = number(key) }
-                return GlassLayerView.Panel(kind: rect["k"] as? String ?? "", frame: CGRect(x: x, y: y, width: w, height: h), radius: number("r") ?? 12, extra: extra)
-            }
-            onGlassRects?(panels)
-        case "menu":
-            let token = (body["token"] as? NSNumber)?.intValue ?? 0
-            let items = body["items"] as? [[String: Any]] ?? []
-            let point = CGPoint(x: (body["x"] as? NSNumber)?.doubleValue ?? 0, y: (body["y"] as? NSNumber)?.doubleValue ?? 0)
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    let chosen = self.popUpMenu(items, at: point)
-                    self.post(["type": "menuResult", "token": token, "id": chosen ?? NSNull()])
-                }
-            }
-        case "sessionMenu":
-            guard let session = session(body) else { return }
-            let point = CGPoint(x: (body["x"] as? NSNumber)?.doubleValue ?? 0, y: (body["y"] as? NSNumber)?.doubleValue ?? 0)
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated { self?.showSessionMenu(session, at: point) }
-            }
-        default:
-            NSLog("[web] unknown message %@", type)
-        }
-    }
-
-    // MARK: Native UI helpers
-
-    private func presentOpenPanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-        panel.directoryURL = URL(fileURLWithPath: model.inspectorRoot)
-        panel.prompt = "添加".localized
-        let complete: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard response == .OK, let self else { return }
-            self.pendingAttachments.append(contentsOf: ComposerAttachment.fromFileURLs(panel.urls))
-        }
-        if let window = hostView?.window {
-            panel.beginSheetModal(for: window, completionHandler: complete)
-        } else {
-            complete(panel.runModal())
-        }
-    }
-
-    private final class MenuTarget: NSObject {
-        var chosen: String?
-        @objc func pick(_ sender: NSMenuItem) { chosen = sender.representedObject as? String }
-    }
-
-    /// Items: `{id, title, subtitle?, checked?, disabled?, icon? (SF Symbol)}`,
-    /// `{type: "separator"}`, `{type: "header", title}`.
-    private func popUpMenu(_ specs: [[String: Any]], at point: CGPoint) -> String? {
-        guard let hostView else { return nil }
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        let target = MenuTarget()
-        for spec in specs {
-            let title = spec["title"] as? String ?? ""
-            switch spec["type"] as? String {
-            case "separator":
-                menu.addItem(.separator())
-                continue
-            case "header":
-                menu.addItem(.sectionHeader(title: title))
-                continue
-            default:
-                break
-            }
-            let item = NSMenuItem(title: title, action: #selector(MenuTarget.pick(_:)), keyEquivalent: "")
-            item.target = target
-            item.representedObject = spec["id"] as? String
-            item.state = (spec["checked"] as? Bool == true) ? .on : .off
-            item.isEnabled = spec["disabled"] as? Bool != true
-            if let subtitle = spec["subtitle"] as? String, !subtitle.isEmpty { item.subtitle = subtitle }
-            if let icon = spec["icon"] as? String {
-                item.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
-            }
-            menu.addItem(item)
-        }
-        menu.popUp(positioning: nil, at: point, in: hostView)
-        return target.chosen
-    }
-
-    private func showSessionMenu(_ session: ChatSession, at point: CGPoint) {
-        var items: [[String: Any]] = [
-            ["id": "reveal", "title": "在 Finder 中显示".localized, "icon": "folder"],
-            ["id": "copyId", "title": "复制会话 ID".localized, "icon": "doc.on.doc",
-             "disabled": session.acpSessionId == nil],
-            ["type": "separator"],
-            ["id": "close", "title": "关闭会话".localized, "icon": "xmark.circle"],
-            ["id": "forget", "title": "从列表移除".localized, "icon": "eye.slash"],
-        ]
-        if model.canDelete(session) {
-            items.append(["id": "delete", "title": "删除会话".localized, "icon": "trash"])
-        }
-        switch popUpMenu(items, at: point) {
-        case "reveal":
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.cwd)])
-        case "copyId":
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(session.acpSessionId ?? "", forType: .string)
-        case "close":
-            model.close(session)
-        case "forget":
-            model.forget(session)
-        case "delete":
-            model.delete(session)
-        default:
-            break
-        }
     }
 }
