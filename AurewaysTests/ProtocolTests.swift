@@ -443,6 +443,67 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(session.thoughtLevelOption?.selectedString, "high")
     }
 
+    @MainActor
+    func testGrokMergesCachedModelsIntoAgentList() throws {
+        let partialModels = try XCTUnwrap(SessionModelState(json: JSONValue.decode(from: """
+        {
+          "currentModelId": "grok-4.6",
+          "availableModels": [
+            { "modelId": "grok-4.6", "name": "Grok 4.6" },
+            { "modelId": "grok-4.5", "name": "Grok 4.5" }
+          ]
+        }
+        """)))
+        // Shape of the real ~/.grok/models_cache.json (object keyed by id, `info` inside).
+        let cache = try XCTUnwrap(GrokBuildHarness.parseModelsCache(JSONValue.decode(from: """
+        {
+          "models": {
+            "grok-4.7-build-fast": { "info": { "id": "grok-4.7-build-fast", "name": "Grok 4.7 Build Fast", "hidden": false,
+              "reasoning_effort": "high", "reasoning_efforts": [{"id": "high", "label": "High"}, {"id": "low", "label": "Low"}] } },
+            "grok-4.7": { "info": { "id": "grok-4.7", "name": "Grok 4.7", "hidden": false,
+              "reasoning_effort": "high",
+              "reasoning_efforts": [{"id": "xhigh", "label": "Extra High"}, {"id": "high", "label": "High"},
+                                    {"id": "medium", "label": "Medium"}, {"id": "low", "label": "Low"}] } },
+            "grok-4.6": { "info": { "id": "grok-4.6", "name": "Grok 4.6", "description": "from cache" } },
+            "grok-secret": { "info": { "id": "grok-secret", "name": "Hidden", "hidden": true } }
+          }
+        }
+        """)))
+        XCTAssertFalse(cache.contains { $0.id == "grok-secret" }, "hidden models are skipped")
+
+        let normalizedModels = try XCTUnwrap(GrokBuildHarness.mergeModels(partialModels, cached: cache))
+        XCTAssertEqual(normalizedModels.availableModels.map(\.id),
+                       ["grok-4.7", "grok-4.7-build-fast", "grok-4.6", "grok-4.5"])
+        XCTAssertEqual(normalizedModels.currentModelId, "grok-4.6", "current model stays the agent's")
+        XCTAssertEqual(normalizedModels.availableModels.first { $0.id == "grok-4.6" }?.description, "from cache")
+
+        let harness = GrokBuildHarness()
+        let options = harness.normalizeSessionConfig(options: [], models: normalizedModels, modes: nil)
+        let profile = AgentProfile(id: "grok-build", title: "Grok", subtitle: "", command: "grok", arguments: [], builtIn: true, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        session.applySetup(
+            sessionId: "s1",
+            modes: nil,
+            configOptions: options,
+            models: normalizedModels,
+            advertisedConfigOptions: false
+        )
+        session.applyConfigOption(id: "model", value: .string("grok-4.7"))
+        XCTAssertEqual(session.modelOption?.selectedString, "grok-4.7")
+        XCTAssertEqual(session.thoughtLevelOption?.options.map(\.id), ["xhigh", "high", "medium", "low"])
+    }
+
+    func testGrokModelsWithoutCacheAreNotInvented() throws {
+        let agentModels = SessionModelState(
+            currentModelId: "grok-4.6",
+            availableModels: [SessionModelInfo(id: "grok-4.6", name: "Grok 4.6")]
+        )
+        XCTAssertEqual(GrokBuildHarness.mergeModels(agentModels, cached: nil), agentModels)
+        XCTAssertEqual(GrokBuildHarness.mergeModels(agentModels, cached: []), agentModels)
+        XCTAssertNil(GrokBuildHarness.mergeModels(nil, cached: [SessionModelInfo(id: "grok-4.7", name: "Grok 4.7")]),
+                     "no picker is invented when the agent reports no models")
+    }
+
     func testModelChangedNotificationUpdatesEffort() throws {
         let json = try JSONValue.decode(from: """
         {"sessionId":"s1","update":{"sessionUpdate":"model_changed","model_id":"grok-4.6","reasoning_effort":"low"}}

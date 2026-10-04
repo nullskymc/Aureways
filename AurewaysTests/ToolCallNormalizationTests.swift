@@ -134,6 +134,62 @@ final class ToolCallNormalizationTests: XCTestCase {
         XCTAssertEqual(call.kindLabel, "编辑文件")
     }
 
+    func testGrokNotificationDropsHiddenFromScrollbackUserChunk() throws {
+        let params = try JSONValue.decode(from: """
+        {
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "user_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": "<system-reminder>\\nBackground task completed\\n</system-reminder>"
+                },
+                "_meta": {
+                    "hideFromScrollback": true
+                }
+            }
+        }
+        """)
+        let out = GrokBuildHarness().normalizeNotification(method: "session/update", params: params)
+        XCTAssertEqual(out, .null)
+    }
+
+    func testGrokNotificationDropsPureSystemReminderUserChunk() throws {
+        let params = try JSONValue.decode(from: """
+        {
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "user_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": "<system-reminder>\\nBackground task \\"123\\" completed (exit code: 254).\\nDescription: test\\n</system-reminder>"
+                }
+            }
+        }
+        """)
+        let out = GrokBuildHarness().normalizeNotification(method: "session/update", params: params)
+        XCTAssertEqual(out, .null)
+    }
+
+    func testGrokNotificationStripsSystemReminderPreservingUserText() throws {
+        let params = try JSONValue.decode(from: """
+        {
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "user_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": "Please fix this bug\\n<system-reminder>\\nGit status: clean\\n</system-reminder>"
+                }
+            }
+        }
+        """)
+        let out = GrokBuildHarness().normalizeNotification(method: "session/update", params: params)
+        XCTAssertNotEqual(out, .null)
+        let text = out["update"]?["content"]?["text"]?.stringValue
+        XCTAssertEqual(text, "Please fix this bug")
+    }
+
     func testGrokStreamingReadUsesReadFilenameTitle() throws {
         let json = try JSONValue.decode(from: """
         {

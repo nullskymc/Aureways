@@ -236,6 +236,13 @@ struct SessionModelInfo: Sendable, Equatable, Identifiable {
     var description: String?
     var meta: JSONValue?
 
+    init(id: String, name: String, description: String? = nil, meta: JSONValue? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.meta = meta
+    }
+
     init?(json: JSONValue) {
         guard let id = json["modelId"]?.stringValue ?? json["id"]?.stringValue, !id.isEmpty else { return nil }
         self.id = id

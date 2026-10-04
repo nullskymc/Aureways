@@ -105,6 +105,11 @@ class Harness: @unchecked Sendable {
         nil
     }
 
+    /// Normalize ACP `models` when an agent supplies a partial or fallback list.
+    func normalizeModels(_ models: SessionModelState?) -> SessionModelState? {
+        models
+    }
+
     /// Rewrite advertised `initialize` capabilities. Same reason as
     /// `normalizeClientRequest`: some agents lie or omit fields, and the
     /// correction belongs on the harness, not in the protocol layer.

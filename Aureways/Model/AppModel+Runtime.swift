@@ -257,11 +257,20 @@ extension AppModel {
         configOptions: [SessionConfigOption],
         mcpServers: [McpServerConfig]
     ) {
+        var finalModels = harness.normalizeModels(models)
+        var finalOptions = harness.normalizeSessionConfig(options: configOptions, models: finalModels, modes: modes)
+        if let previousModel = session.modelOption?.selectedString,
+           finalModels?.availableModels.contains(where: { $0.id == previousModel }) == true {
+            finalModels?.select(previousModel)
+            if let idx = finalOptions.firstIndex(where: \.isModel) {
+                finalOptions[idx].value = .string(previousModel)
+            }
+        }
         session.applySetup(
             sessionId: sessionId,
             modes: modes,
-            configOptions: harness.normalizeSessionConfig(options: configOptions, models: models, modes: modes),
-            models: models,
+            configOptions: finalOptions,
+            models: finalModels,
             advertisedConfigOptions: !configOptions.isEmpty,
             mcpServers: mcpServers
         )
