@@ -102,7 +102,8 @@ export interface QuotaSnapshot {
   primaryWindow?: QuotaWindow
   secondaryWindow?: QuotaWindow
   extraWindows?: QuotaWindow[]
-  usageBreakdown?: { id: string; title: string; usedPercent: number }[]
+  /** `pooled` items are shares of one limit (they add up to the window), not each a 100% remainder. */
+  usageBreakdown?: { id: string; title: string; usedPercent: number; pooled?: boolean }[]
   creditsRemaining?: number
   creditsUnit?: string
   resetCreditsAvailable?: number

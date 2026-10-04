@@ -81,7 +81,38 @@ struct HarnessQuotaWindow: Identifiable, Sendable, Codable, Hashable {
 struct HarnessQuotaBreakdownItem: Identifiable, Sendable, Codable, Hashable {
     var id: String
     var title: String
+    /// For a normal product this is that product's own used percent.
+    /// When `pooled` is true it is this product's share of one shared pool
+    /// (Grok Chat and Grok Build add up to the window), not a separate limit.
     var usedPercent: Double
+    var pooled: Bool
+
+    init(id: String, title: String, usedPercent: Double, pooled: Bool = false) {
+        self.id = id
+        self.title = title
+        self.usedPercent = usedPercent
+        self.pooled = pooled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, usedPercent, pooled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        usedPercent = try container.decode(Double.self, forKey: .usedPercent)
+        pooled = try container.decodeIfPresent(Bool.self, forKey: .pooled) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(usedPercent, forKey: .usedPercent)
+        try container.encode(pooled, forKey: .pooled)
+    }
 }
 
 // MARK: - Quota Snapshot
@@ -885,80 +916,97 @@ actor HarnessQuotaFetcher {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             try Self.checkHTTP(response)
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let config = json["config"] as? [String: Any]
-            else {
-                throw QuotaFetchError.invalidResponse
-            }
-
-            var usedPercent = (config["creditUsagePercent"] as? NSNumber)?.doubleValue
-            if usedPercent == nil {
-                if let onDemandUsed = (config["onDemandUsed"] as? [String: Any])?["val"] as? NSNumber,
-                   let onDemandCap = (config["onDemandCap"] as? [String: Any])?["val"] as? NSNumber,
-                   onDemandCap.doubleValue > 0 {
-                    usedPercent = (onDemandUsed.doubleValue / onDemandCap.doubleValue) * 100.0
-                }
-            }
-            let totalUsed = usedPercent ?? 0.0
-
-            var resetsAt: Date? = nil
-            if let currentPeriod = config["currentPeriod"] as? [String: Any] {
-                resetsAt = Self.parseDate(currentPeriod["end"])
-            } else if let endStr = config["billingPeriodEnd"] as? String {
-                resetsAt = Self.parseDate(endStr)
-            }
-
-            let primaryWindow = HarnessQuotaWindow(
-                id: "grok-weekly-window",
-                title: "共享周限额 (Weekly)",
-                usedPercent: totalUsed,
-                resetsAt: resetsAt,
-                resetDescription: nil,
-                windowMinutes: 10080
-            )
-
-            var breakdown: [HarnessQuotaBreakdownItem] = []
-            if let productUsage = config["productUsage"] as? [[String: Any]] {
-                for item in productUsage {
-                    if let product = item["product"] as? String,
-                       let usage = (item["usagePercent"] as? NSNumber)?.doubleValue {
-                        let friendlyTitle: String
-                        switch product.lowercased() {
-                        case "grokbuild": friendlyTitle = "Grok Build"
-                        case "grokchat": friendlyTitle = "Grok Chat"
-                        case "grokimagine": friendlyTitle = "Grok Imagine"
-                        default: friendlyTitle = product
-                        }
-                        breakdown.append(
-                            HarnessQuotaBreakdownItem(
-                                id: "grok-\(product.lowercased())",
-                                title: friendlyTitle,
-                                usedPercent: usage
-                            )
-                        )
-                    }
-                }
-            }
-
             let planTitle = authMode?.lowercased() == "oidc" ? "SuperGrok" : (authMode ?? "xAI Grok")
-
-            return HarnessQuotaSnapshot(
-                harnessId: agent.id,
-                providerTitle: agent.title,
-                planType: planTitle,
-                accountEmail: email,
-                primaryWindow: primaryWindow,
-                secondaryWindow: nil,
-                extraWindows: [],
-                usageBreakdown: breakdown,
-                creditsRemaining: nil,
-                creditsUnit: nil,
-                resetCreditsAvailable: nil,
-                updatedAt: Date()
-            )
+            return try Self.parseGrokBilling(data, agent: agent, email: email, planTitle: planTitle)
         } catch {
             throw Self.transportError(error)
         }
+    }
+
+    /// Grok Chat and Grok Build share one credit pool when `isUnifiedBillingUser`
+    /// is set, or when the product percents add up to `creditUsagePercent`.
+    /// Those percents are shares of that pool. They are not each a 100% limit.
+    static func parseGrokBilling(
+        _ data: Data,
+        agent: AgentProfile,
+        email: String?,
+        planTitle: String,
+        now: Date = Date()
+    ) throws -> HarnessQuotaSnapshot {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let config = json["config"] as? [String: Any]
+        else {
+            throw QuotaFetchError.invalidResponse
+        }
+
+        var creditUsed = (config["creditUsagePercent"] as? NSNumber)?.doubleValue
+        if creditUsed == nil {
+            if let onDemandUsed = (config["onDemandUsed"] as? [String: Any])?["val"] as? NSNumber,
+               let onDemandCap = (config["onDemandCap"] as? [String: Any])?["val"] as? NSNumber,
+               onDemandCap.doubleValue > 0 {
+                creditUsed = (onDemandUsed.doubleValue / onDemandCap.doubleValue) * 100.0
+            }
+        }
+
+        var resetsAt: Date?
+        if let currentPeriod = config["currentPeriod"] as? [String: Any] {
+            resetsAt = parseDate(currentPeriod["end"])
+        } else if let endStr = config["billingPeriodEnd"] as? String {
+            resetsAt = parseDate(endStr)
+        }
+
+        var shares: [(id: String, title: String, percent: Double)] = []
+        if let productUsage = config["productUsage"] as? [[String: Any]] {
+            for item in productUsage {
+                guard let product = item["product"] as? String,
+                      let usage = (item["usagePercent"] as? NSNumber)?.doubleValue else { continue }
+                let title: String
+                switch product.lowercased() {
+                case "grokbuild": title = "Grok Build"
+                case "grokchat": title = "Grok Chat"
+                case "grokimagine": title = "Grok Imagine"
+                default: title = product
+                }
+                shares.append((id: "grok-\(product.lowercased())", title: title, percent: usage))
+            }
+        }
+
+        let shareSum = shares.reduce(0.0) { $0 + $1.percent }
+        let unifiedFlag = config["isUnifiedBillingUser"] as? Bool ?? false
+        let sumsToCredit = creditUsed.map { abs(shareSum - $0) <= 1.0 && !shares.isEmpty } ?? false
+        let pooled = unifiedFlag || sumsToCredit
+        let totalUsed = creditUsed ?? (pooled ? shareSum : 0.0)
+
+        guard creditUsed != nil || !shares.isEmpty else {
+            throw QuotaFetchError.invalidResponse
+        }
+
+        let primaryWindow = HarnessQuotaWindow(
+            id: "grok-weekly-window",
+            title: "共享周限额 (Weekly)",
+            usedPercent: totalUsed,
+            resetsAt: resetsAt,
+            resetDescription: nil,
+            windowMinutes: 10080
+        )
+        let breakdown = shares.map {
+            HarnessQuotaBreakdownItem(id: $0.id, title: $0.title, usedPercent: $0.percent, pooled: pooled)
+        }
+
+        return HarnessQuotaSnapshot(
+            harnessId: agent.id,
+            providerTitle: agent.title,
+            planType: planTitle,
+            accountEmail: email,
+            primaryWindow: primaryWindow,
+            secondaryWindow: nil,
+            extraWindows: [],
+            usageBreakdown: breakdown,
+            creditsRemaining: nil,
+            creditsUnit: nil,
+            resetCreditsAvailable: nil,
+            updatedAt: now
+        )
     }
 
     // MARK: - Native Codex Quota Probing

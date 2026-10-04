@@ -280,6 +280,34 @@ final class HarnessQuotaTests: XCTestCase {
         XCTAssertEqual(snapshot.shortSummary, "5%")
         XCTAssertEqual(snapshot.usageBreakdown.count, 3)
         XCTAssertEqual(snapshot.usageBreakdown[0].usedPercent, 86.0)
+        XCTAssertFalse(snapshot.usageBreakdown[0].pooled)
+    }
+
+    func testGrokChatAndBuildShareOnePool() throws {
+        let json = """
+        {"config":{"creditUsagePercent":30,"isUnifiedBillingUser":true,"productUsage":[{"product":"GrokBuild","usagePercent":28},{"product":"GrokChat","usagePercent":2}],"billingPeriodEnd":"2026-10-08T09:33:42Z"}}
+        """
+        let agent = AgentProfile(id: "grok-build", title: "Grok Build", subtitle: "", command: "grok", arguments: [], builtIn: true, notes: "")
+        let snapshot = try HarnessQuotaFetcher.parseGrokBilling(
+            Data(json.utf8), agent: agent, email: "user@example.com", planTitle: "SuperGrok"
+        )
+        XCTAssertEqual(snapshot.primaryWindow?.usedPercent, 30)
+        XCTAssertEqual(snapshot.shortSummary, "70%")
+        XCTAssertEqual(snapshot.usageBreakdown.map(\.title), ["Grok Build", "Grok Chat"])
+        XCTAssertEqual(snapshot.usageBreakdown.map(\.usedPercent), [28, 2])
+        XCTAssertTrue(snapshot.usageBreakdown.allSatisfy(\.pooled))
+    }
+
+    func testGrokPoolsWhenProductPercentsSumToTheCredit() throws {
+        let json = """
+        {"config":{"creditUsagePercent":30,"productUsage":[{"product":"GrokBuild","usagePercent":28},{"product":"GrokChat","usagePercent":2}]}}
+        """
+        let agent = AgentProfile(id: "grok-build", title: "Grok Build", subtitle: "", command: "grok", arguments: [], builtIn: true, notes: "")
+        let snapshot = try HarnessQuotaFetcher.parseGrokBilling(
+            Data(json.utf8), agent: agent, email: nil, planTitle: "xAI Grok"
+        )
+        XCTAssertEqual(snapshot.primaryWindow?.usedPercent, 30)
+        XCTAssertTrue(snapshot.usageBreakdown.allSatisfy(\.pooled))
     }
 
     func testCodexSnapshotParsing() {
