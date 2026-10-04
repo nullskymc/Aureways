@@ -1,5 +1,5 @@
-import { useComputed, useSignal } from '@preact/signals'
-import { useCallback, useEffect, useRef } from 'preact/hooks'
+import { useSignal } from '@preact/signals'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import { t } from '../i18n'
 import { transcript, uiCommand } from '../store'
 import type { Item } from '../types'
@@ -13,17 +13,22 @@ const render = (b: Block) => <BlockView block={b} />
 /** `jumpBottom`: where the ↓ button sits when the composer is a native
  *  overlay (above its card and any open popup); defaults to above the dock. */
 export function Transcript({ streaming, padBottom, padTop = 64, jumpBottom }: { streaming: boolean; padBottom: number; padTop?: number; jumpBottom?: number }) {
+  // version bumps after every transcript replace or patch. streaming is a
+  // prop, so a turn that ends without a new item still recomputes and drops the pin.
   const version = transcript.version.value
   const sessionId = transcript.sessionId.value
-  const blocks = useComputed(() => {
-    void transcript.version.value
-    return groupBlocks(transcript.items, false)
-  })
-  // Recompute the streaming tail flags without regrouping.
-  const rows = withStreaming(blocks.value, streaming)
+  const laid = useMemo(() => groupBlocks(transcript.items, streaming), [version, streaming])
+  const rows = laid.blocks
+  const plan = laid.pinned
   const handle = useRef<VirtualListHandle | null>(null)
+  const pinRef = useRef<HTMLDivElement>(null)
+  const pinH = useSignal(0)
   const pinned = useSignal(true)
-  void version
+  const planKey = plan ? plan.id + plan.entries.map((e) => e.status).join('') : ''
+  useLayoutEffect(() => {
+    pinH.value = pinRef.current?.offsetHeight ?? 0
+  }, [planKey])
+  const bottom = padBottom + pinH.value
 
   return (
     <div class="transcript">
@@ -35,35 +40,25 @@ export function Transcript({ streaming, padBottom, padTop = 64, jumpBottom }: { 
           estimate={estimateBlock}
           render={render}
           padTop={padTop}
-          padBottom={padBottom}
+          padBottom={bottom}
           handle={handle}
           onPinnedChange={(p) => (pinned.value = p)}
           class="transcript-scroll"
         />
       )}
+      {plan && (
+        <div class="plan-pin" ref={pinRef}>
+          <BlockView block={{ type: 'plan', key: plan.id, item: plan, live: true }} />
+        </div>
+      )}
       {!pinned.value && rows.length > 0 && (
-        <button class="jump-bottom" onClick={() => handle.current?.scrollToBottom()} title={t('jumpBottom')} style={{ bottom: jumpBottom ?? padBottom + 8 }}>
+        <button class="jump-bottom" onClick={() => handle.current?.scrollToBottom()} title={t('jumpBottom')} style={{ bottom: (jumpBottom ?? padBottom + 8) + pinH.value }}>
           <Icon name="arrowDown" size={14} />
         </button>
       )}
       <FindBar rows={rows} handle={handle} />
     </div>
   )
-}
-
-let lastBlocks: Block[] = []
-let lastRows: Block[] = []
-let lastStreaming = false
-function withStreaming(blocks: Block[], streaming: boolean): Block[] {
-  if (blocks === lastBlocks && streaming === lastStreaming) return lastRows
-  lastBlocks = blocks
-  lastStreaming = streaming
-  if (!streaming || !blocks.length) return (lastRows = blocks)
-  const rows = blocks.slice()
-  const last = rows[rows.length - 1]
-  if (last.type === 'agent') rows[rows.length - 1] = { ...last, streaming: true }
-  if (last.type === 'activity') rows[rows.length - 1] = { ...last, live: true }
-  return (lastRows = rows)
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +80,7 @@ function blockText(b: Block): string {
         return it.entries.map((e) => e.content).join('\n')
     }
   }
+  if (b.type === 'plan') return text(b.item)
   if (b.type === 'activity') return b.items.map(text).join('\n')
   return text(b.item)
 }

@@ -65,10 +65,14 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .bad { color: var(--red); }
 .warn { color: var(--amber); }
 
-::-webkit-scrollbar { width: 11px; height: 11px; }
-::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; opacity: 0.5; }
-::-webkit-scrollbar-thumb:hover { background-color: var(--text-2); }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+/* A styled ::-webkit-scrollbar is a classic scrollbar and stays on screen.
+   The transcript is excluded so it keeps the system overlay scrollbar,
+   which hides while idle and follows Show scroll bars. */
+:where(:not(.transcript, .transcript *))::-webkit-scrollbar { width: 11px; height: 11px; }
+:where(:not(.transcript, .transcript *))::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; opacity: 0.5; }
+:where(:not(.transcript, .transcript *))::-webkit-scrollbar-thumb:hover { background-color: var(--text-2); }
+:where(:not(.transcript, .transcript *))::-webkit-scrollbar-track,
+:where(:not(.transcript, .transcript *))::-webkit-scrollbar-corner { background: transparent; }
 
 .spinner {
   display: inline-block; flex: none; border-radius: 50%;
@@ -249,6 +253,17 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
   color: var(--text-2); font-size: 13px; white-space: pre-wrap; line-height: 1.55;
   max-height: 360px; overflow: auto; -webkit-user-select: text; user-select: text;
 }
+/* Open plan stays at the bottom of the stream, above the dock, until every
+   entry is completed and it is released into the turn body. */
+.plan-pin {
+  position: absolute; left: 0; right: 0; bottom: var(--dock-h); z-index: 2;
+  display: flex; justify-content: center; padding: 10px 28px 0;
+  pointer-events: none;
+  background: linear-gradient(color-mix(in oklch, var(--main-bg) 0%, transparent), var(--main-bg) 12px);
+}
+.plan-pin .plan-turn { pointer-events: auto; padding-bottom: 6px; background: var(--main-bg); }
+.plan-turn { padding-bottom: 8px; }
+.plan-turn .plan-list { margin-left: 22px; }
 .plan-list { list-style: none; margin: 0 0 6px 27px; padding: 0; font-size: 13px; color: var(--text-2); }
 .plan-list li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
 .plan-mark { width: 14px; height: 14px; flex: none; border-radius: 4px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; transform: translateY(2px); }
@@ -256,6 +271,9 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .plan-completed span:last-child { text-decoration: line-through; }
 .plan-completed .plan-mark { background: var(--text-2); border-color: transparent; color: var(--main-bg); }
 .plan-in_progress { color: var(--text); }
+.plan-turn:not(.live) .plan-in_progress .plan-mark::after {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+}
 
 .tool-detail {
   margin: 2px 0 8px 27px; border: 1px solid var(--border); border-radius: 9px; background: var(--code-bg);

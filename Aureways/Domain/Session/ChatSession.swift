@@ -13,7 +13,7 @@ struct FileOpRecord: Identifiable, Sendable, Equatable {
     }
 }
 
-/// 一次活动组（思考 + 工具 + 计划）的起止时间，用于摘要行的时长展示。
+/// 一次活动组（思考 + 工具）的起止时间，用于摘要行的时长展示。计划不进这组。
 struct ActivityRun: Sendable, Equatable {
     var startedAt: Date
     var endedAt: Date?
@@ -279,17 +279,20 @@ final class ChatSession: Identifiable {
             }
             visual = true
         case .plan(let entries):
+            // ACP `plan` is its own update, not a chunk of the agent text.
+            // Keep it beside the activity stream: do not start or close the run.
             currentUserMessageId = nil
-            if let index = items.lastIndex(where: { if case .plan = $0 { return true }; return false }) {
-                if case .plan(let id, _) = items[index] {
+            if let index = items.lastIndex(where: { if case .plan = $0 { return true }; return false }),
+               !items[(index + 1)...].contains(where: { if case .user = $0 { return true }; return false }) {
+                if case .plan(let id, let existing) = items[index], existing != entries {
                     items[index] = .plan(id, entries)
+                    indexCurrent = true
+                    visual = true
                 }
-            } else {
-                let id = UUID()
-                beginRun(id)
-                items.append(.plan(id, entries))
+            } else if !entries.isEmpty {
+                items.append(.plan(UUID(), entries))
+                visual = true
             }
-            visual = true
         case .availableCommands(let commands):
             availableCommands = commands
         case .sessionInfo(let title) where !title.isEmpty:

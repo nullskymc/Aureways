@@ -9,31 +9,85 @@ import { Icon, Spinner } from './Icon'
 import { memo, shallowEqual } from './memo'
 
 // ---------------------------------------------------------------------------
-// Grouping: consecutive thought / tool / plan items form one activity block.
+// Grouping: consecutive thought / tool items form one activity block.
+// A plan lives in one message: the turn where that checklist first appears.
+// While that turn is still streaming and the plan is open, it is pinned.
+// It is released above that turn's body when the entries finish or the turn
+// ends. A later message does not draw it again. Statuses are not rewritten.
 // ---------------------------------------------------------------------------
 
-type ActivityItem = Extract<Item, { kind: 'thought' | 'tool' | 'plan' }>
+type ActivityItem = Extract<Item, { kind: 'thought' | 'tool' }>
+type PlanItem = Extract<Item, { kind: 'plan' }>
 export type Block =
   | { type: 'user'; key: string; item: Extract<Item, { kind: 'user' }> }
   | { type: 'agent'; key: string; item: Extract<Item, { kind: 'agent' }>; streaming: boolean }
+  | { type: 'plan'; key: string; item: PlanItem; live?: boolean }
   | { type: 'activity'; key: string; items: ActivityItem[]; live: boolean }
   | { type: 'status'; key: string; item: Extract<Item, { kind: 'status' }> }
 
 const noise = (text: string) => /^(stop:|mode:)/i.test(text)
+const planDone = (plan: PlanItem) => plan.entries.length > 0 && plan.entries.every((e) => e.status === 'completed')
+const planLife = (plan: PlanItem) => plan.entries.map((e) => e.content).join('\0')
 
-export function groupBlocks(items: Item[], streaming: boolean): Block[] {
+export function groupBlocks(items: Item[], streaming: boolean): { blocks: Block[]; pinned: PlanItem | null } {
+  const turns: Item[][] = []
+  let turn: Item[] = []
+  for (const it of items) {
+    if (it.kind === 'user' && turn.length) {
+      turns.push(turn)
+      turn = []
+    }
+    turn.push(it)
+  }
+  if (turn.length) turns.push(turn)
+
   const blocks: Block[] = []
+  let pinned: PlanItem | null = null
+  const lived = new Set<string>()
+  turns.forEach((part, index) => {
+    const held = layoutTurn(blocks, part, streaming && index === turns.length - 1, lived)
+    if (held) pinned = held
+  })
+  if (streaming && blocks.length) {
+    const last = blocks[blocks.length - 1]
+    if (last.type === 'agent') last.streaming = true
+    if (last.type === 'activity') last.live = true
+  }
+  return { blocks, pinned }
+}
+
+/** Plans never split the activity group. A finished or released plan is placed
+ *  immediately before this message's body. A checklist already shown on an
+ *  earlier message is skipped. The last open plan is returned to be pinned. */
+function layoutTurn(blocks: Block[], items: Item[], pinOpen: boolean, lived: Set<string>): PlanItem | null {
+  const plans = items.filter((it): it is PlanItem => {
+    if (it.kind !== 'plan') return false
+    const life = planLife(it)
+    if (lived.has(life)) return false
+    lived.add(life)
+    return true
+  })
+  const open = plans.filter((p) => p.entries.length > 0 && !planDone(p))
+  const pinned = pinOpen && open.length ? open[open.length - 1] : null
+  const inline = plans.filter((p) => p !== pinned)
   let activity: ActivityItem[] | null = null
+  let placed = false
   const flush = () => {
     if (activity) blocks.push({ type: 'activity', key: activity[0].id, items: activity, live: false })
     activity = null
+  }
+  const placePlans = () => {
+    if (placed) return
+    placed = true
+    for (const plan of inline) blocks.push({ type: 'plan', key: plan.id, item: plan })
   }
   for (const it of items) {
     switch (it.kind) {
       case 'thought':
       case 'tool':
-      case 'plan':
         ;(activity ??= []).push(it)
+        break
+      case 'plan':
         break
       case 'status':
         if (noise(it.text)) break
@@ -46,17 +100,14 @@ export function groupBlocks(items: Item[], streaming: boolean): Block[] {
         break
       case 'agent':
         flush()
+        placePlans()
         blocks.push({ type: 'agent', key: it.id, item: it, streaming: false })
         break
     }
   }
   flush()
-  if (streaming && blocks.length) {
-    const last = blocks[blocks.length - 1]
-    if (last.type === 'agent') last.streaming = true
-    if (last.type === 'activity') last.live = true
-  }
-  return blocks
+  placePlans()
+  return pinned
 }
 
 export function estimateBlock(b: Block): number {
@@ -67,6 +118,8 @@ export function estimateBlock(b: Block): number {
       const lines = b.item.text.split('\n').length + b.item.text.length / 95
       return 24 + lines * 21
     }
+    case 'plan':
+      return 36 + b.item.entries.length * 24
     case 'activity':
       return b.live ? 40 + b.items.length * 30 : 40
     case 'status':
@@ -84,6 +137,8 @@ export function BlockView({ block }: { block: Block }) {
       return <UserBubble item={block.item} />
     case 'agent':
       return <AgentMessage item={block.item} streaming={block.streaming} />
+    case 'plan':
+      return <PlanTurn item={block.item} live={block.live === true} />
     case 'activity':
       return <ActivityGroup items={block.items} live={block.live} groupKey={block.key} />
     case 'status':
@@ -187,8 +242,16 @@ function StatusRow({ text }: { text: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Activity (thinking / tools / plan)
+// Plan (outside the activity stream) and activity (thinking / tools)
 // ---------------------------------------------------------------------------
+
+function PlanTurn({ item, live }: { item: Extract<Item, { kind: 'plan' }>; live: boolean }) {
+  return (
+    <div class={'turn plan-turn' + (live ? ' live' : '')}>
+      <PlanStep entries={item.entries} live={live} />
+    </div>
+  )
+}
 
 const groupOpen = new Map<string, boolean>()
 const stepOpen = new Map<string, boolean>()
@@ -244,7 +307,6 @@ function ActivityGroup({ items, live, groupKey }: { items: ActivityItem[]; live:
 
 const Step = memo(function Step({ item, last }: { item: ActivityItem; last: boolean }) {
   if (item.kind === 'thought') return <ThoughtStep item={item} live={last} />
-  if (item.kind === 'plan') return <PlanStep entries={item.entries} />
   return <ToolStep tool={item} />
 }, shallowEqual)
 
@@ -269,7 +331,7 @@ function ThoughtStep({ item, live }: { item: Extract<Item, { kind: 'thought' }>;
   )
 }
 
-function PlanStep({ entries }: { entries: { content: string; status: string }[] }) {
+function PlanStep({ entries, live }: { entries: { content: string; status: string }[]; live: boolean }) {
   return (
     <div class="step plan">
       <div class="step-head static">
@@ -282,7 +344,7 @@ function PlanStep({ entries }: { entries: { content: string; status: string }[] 
       <ul class="plan-list">
         {entries.map((e, i) => (
           <li key={i} class={'plan-' + e.status}>
-            <span class="plan-mark">{e.status === 'completed' ? <Icon name="check" size={11} /> : e.status === 'in_progress' ? <Spinner size={9} /> : null}</span>
+            <span class="plan-mark">{e.status === 'completed' ? <Icon name="check" size={11} /> : live && e.status === 'in_progress' ? <Spinner size={9} /> : null}</span>
             <span>{e.content}</span>
           </li>
         ))}

@@ -11,6 +11,17 @@ final class SessionTranscriptTests: XCTestCase {
         arguments: [], builtIn: false, notes: ""
     )
 
+    private static func kindName(_ item: TranscriptItem) -> String {
+        switch item {
+        case .user: return "user"
+        case .agent: return "agent"
+        case .thought: return "thought"
+        case .tool: return "tool"
+        case .plan: return "plan"
+        case .status: return "status"
+        }
+    }
+
     func testAgentSnapshotChunksDoNotDuplicateParagraphs() {
         let session = ChatSession(
             agent: AgentProfile(
@@ -70,6 +81,61 @@ final class SessionTranscriptTests: XCTestCase {
             return XCTFail("expected an agent message")
         }
         XCTAssertEqual(markdown, "有影响，但和前面那批前端 PERF 不是一类问题。")
+    }
+
+    func testPlanUpdatesStayOutsideTheAgentStream() {
+        let session = ChatSession(
+            agent: Self.perfProfile,
+            cwd: "/tmp"
+        )
+        func entry(_ content: String, _ status: String) -> PlanEntry {
+            PlanEntry(json: .object([
+                "content": .string(content),
+                "status": .string(status),
+                "priority": .string("medium"),
+            ]))!
+        }
+        session.appendUser("do it")
+        session.apply(SessionNotification(sessionId: "s", update: .plan([
+            entry("Read the file", "in_progress"),
+            entry("Patch it", "pending"),
+        ])))
+        session.apply(SessionNotification(
+            sessionId: "s",
+            update: .toolCall(ToolCallView(json: .object([
+                "toolCallId": .string("call-1"),
+                "title": .string("read"),
+                "kind": .string("read"),
+                "status": .string("pending"),
+            ])))
+        ))
+        session.apply(SessionNotification(sessionId: "s", update: .agentMessageChunk(.text("Done."))))
+        session.apply(SessionNotification(sessionId: "s", update: .plan([
+            entry("Read the file", "completed"),
+            entry("Patch it", "completed"),
+        ])))
+
+        XCTAssertEqual(session.items.map(Self.kindName), ["user", "plan", "tool", "agent"])
+        if case .agent(_, let text) = session.items[3] {
+            XCTAssertEqual(text, "Done.")
+        } else {
+            XCTFail("agent text was merged with the plan")
+        }
+        if case .plan(let id, let entries) = session.items[1] {
+            XCTAssertEqual(entries.map(\.status), ["completed", "completed"])
+            session.appendUser("again")
+            session.apply(SessionNotification(sessionId: "s", update: .plan([
+                entry("Second plan", "pending"),
+            ])))
+            let plans = session.items.compactMap { item -> UUID? in
+                if case .plan(let planID, _) = item { return planID }
+                return nil
+            }
+            XCTAssertEqual(plans.count, 2)
+            XCTAssertEqual(plans[0], id)
+        } else {
+            XCTFail("expected the plan to stay its own item")
+        }
     }
 
     func testDuplicateToolIDsKeepStableRawItemIdentity() {

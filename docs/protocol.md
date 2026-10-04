@@ -79,7 +79,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | `agent_thought_chunk` | Thinking 折叠 |
 | `user_message_chunk` | 与本地已插入的用户气泡合并，避免重复 |
 | `tool_call` / `tool_call_update` | 工具行，按 `toolCallId` 合并 |
-| `plan` | 步骤列表 |
+| `plan` | 只属于第一次出现的那条消息。生成中且未完成时固定在流的最下方；全部完成，或该条消息结束后仍未完成，放到该条正文上方。之后的消息不再重复绘制 |
 | `available_commands_update` | Composer 上方 `/command` |
 | `current_mode_update` | 灰色 status |
 | `session_info_update` | 改会话标题 |

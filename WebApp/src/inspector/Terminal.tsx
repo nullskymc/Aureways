@@ -17,18 +17,44 @@ const loadXterm = () => {
   return xtermLib
 }
 
+/** Follow the page color-scheme, not the system, when appearance is pinned. */
+function pageIsDark(): boolean {
+  const scheme = document.documentElement.style.colorScheme
+  if (scheme === 'dark') return true
+  if (scheme === 'light') return false
+  return matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+/**
+ * Used color of a custom property. `getPropertyValue` returns the raw
+ * `light-dark()` token, which xterm rejects and replaces with white text.
+ * The viewport is transparent, so that white sits on the light terminal fill.
+ */
+function usedCssColor(name: string, fallback: string): string {
+  const probe = document.createElement('span')
+  probe.style.color = `var(${name})`
+  document.documentElement.appendChild(probe)
+  const color = getComputedStyle(probe).color
+  probe.remove()
+  return color && color !== 'rgba(0, 0, 0, 0)' ? color : fallback
+}
+
 function themeFromCSS(): Record<string, string> {
-  const cs = getComputedStyle(document.documentElement)
-  const v = (name: string) => cs.getPropertyValue(name).trim()
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches || document.documentElement.style.colorScheme === 'dark'
+  const dark = pageIsDark()
+  const background = usedCssColor('--term-bg', dark ? '#1b1b1d' : '#fbfbfa')
+  const foreground = usedCssColor('--term-fg', dark ? '#e4e4e6' : '#1f1f22')
   return {
-    background: v('--term-bg') || (dark ? '#1b1b1d' : '#fbfbfa'),
-    foreground: v('--term-fg') || (dark ? '#e4e4e6' : '#1f1f22'),
-    cursor: dark ? '#e4e4e6' : '#1f1f22',
+    background,
+    foreground,
+    cursor: foreground,
+    cursorAccent: background,
     selectionBackground: dark ? '#3a4a6a' : '#cfe0ff',
     ...(dark
       ? { black: '#1b1b1d', red: '#ff7b72', green: '#7ee787', yellow: '#e3b341', blue: '#79c0ff', magenta: '#d2a8ff', cyan: '#56d4dd', white: '#c9d1d9', brightBlack: '#6e7681' }
-      : { black: '#24292f', red: '#cf222e', green: '#116329', yellow: '#9a6700', blue: '#0969da', magenta: '#8250df', cyan: '#1b7c83', white: '#6e7781', brightBlack: '#57606a' }),
+      : {
+          black: '#24292f', red: '#cf222e', green: '#116329', yellow: '#9a6700', blue: '#0969da', magenta: '#8250df', cyan: '#1b7c83', white: '#6e7781',
+          brightBlack: '#57606a', brightRed: '#a40e26', brightGreen: '#1a7f37', brightYellow: '#7d4e00', brightBlue: '#0550ae', brightMagenta: '#6639ba', brightCyan: '#0e6670', brightWhite: '#24292f',
+        }),
   }
 }
 
@@ -43,6 +69,7 @@ export function TerminalView({ id, visible, exited }: { id: string; visible: boo
     let unsub = () => {}
     let ro: ResizeObserver | null = null
     let mq: MediaQueryList | null = null
+    let schemeObserver: MutationObserver | null = null
     const onScheme = () => term.current && (term.current.x.options.theme = themeFromCSS())
     void loadXterm().then(([{ Terminal }, { FitAddon }]) => {
       if (disposed || !host.current) return
@@ -78,6 +105,8 @@ export function TerminalView({ id, visible, exited }: { id: string; visible: boo
       post('term.resize', { id, cols: x.cols, rows: x.rows })
       mq = matchMedia('(prefers-color-scheme: dark)')
       mq.addEventListener('change', onScheme)
+      schemeObserver = new MutationObserver(onScheme)
+      schemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
       x.focus()
     })
     return () => {
@@ -85,6 +114,7 @@ export function TerminalView({ id, visible, exited }: { id: string; visible: boo
       unsub()
       ro?.disconnect()
       mq?.removeEventListener('change', onScheme)
+      schemeObserver?.disconnect()
       term.current?.x.dispose()
     }
   }, [id])
