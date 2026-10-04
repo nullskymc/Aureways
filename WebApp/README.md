@@ -3,11 +3,11 @@
 主窗口里的界面：侧栏、对话、输入框、检查器、设置。菜单栏额外窗口用同一份构建，哈希 `#menubar`。Swift 只提供窗口壳。桥和玻璃见 [docs/web-shell.md](../docs/web-shell.md)。
 
 ```sh
-make web        # 在仓库根：npm ci && npm run build，写入 Aureways/WebAppBundle/
+make web        # 在仓库根：按需 npm ci，再 npm run build，写入 Aureways/WebAppBundle/
 npm run dev     # Vite。没有 Swift 时用 demo.ts 的假数据
 ```
 
-产物目录 `Aureways/WebAppBundle/` 已提交，Xcode 编 App 不需要 Node。改了 `src/` 却没跑 `make web`，装进包里的仍是旧页面。
+`Aureways/WebAppBundle/` 不提交。`make build` / `open` / `test` / `release` 会先编它。在 Xcode 里运行之前要先 `make web`；改了 `src/` 却没重编，装进包里的仍是旧页面。
 
 ## 栈
 

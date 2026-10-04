@@ -20,5 +20,6 @@ Aureways.app
 # Workspace paste drafts and local Aureways state
 .aureways/
 
-# Web app build deps (output is committed in Aureways/WebAppBundle)
+# Web app. The Vite bundle is produced by `make web` before the native build.
 WebApp/node_modules/
+Aureways/WebAppBundle/

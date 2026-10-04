@@ -102,8 +102,7 @@ Aureways 完全实现 [Agent Client Protocol (ACP)](https://agentclientprotocol.
 > ```
 
 ### 从源码编译构建
-- **开发要求**：macOS 26+，Xcode 26+（推荐 Xcode 27+）。
-- **零 Node 依赖**：前端产物 `Aureways/WebAppBundle/` 已随仓库预编译提交，拉取代码后无需配置 Node.js 环境即可直接构建原生 App。
+- **开发要求**：macOS 26+，Xcode 26+（推荐 Xcode 27+），以及 Node.js（用来编译窗口里的页面）。
 
 在仓库根目录下运行：
 ```bash
@@ -116,11 +115,13 @@ make test
 # 构建 Release 正式版本
 make release
 
-# （可选）修改 WebApp/src 后重新编译打包 Web 资源
+# 只重编网页（make build / open / test / release 会先做这一步）
 make web
 ```
 
-若使用 Xcode 运行：直接双击打开 `Aureways.xcodeproj`，Scheme 选择 **Aureways**，Destination 选择 **My Mac**，按下 `⌘R` 即可。
+`make` 会先把 `WebApp/` 编进 `Aureways/WebAppBundle/`，再编原生 App。这个目录是构建产物，不进版本库。依赖只在 `package-lock.json` 变化时安装。
+
+若使用 Xcode 运行：先在仓库根执行一次 `make web`，再打开 `Aureways.xcodeproj`，Scheme 选择 **Aureways**，Destination 选择 **My Mac**，按下 `⌘R`。改过 `WebApp/src` 之后要重新 `make web`，Xcode 自己不会编网页。
 
 ---
 

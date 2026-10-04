@@ -103,8 +103,7 @@ Download the latest `.dmg` installer from [Releases](https://github.com/nullskym
 > ```
 
 ### Building from Source
-- **Requirements**: macOS 26+, Xcode 26+ (Xcode 27+ recommended).
-- **Zero Node Prerequisite**: The web assets bundle in `Aureways/WebAppBundle/` is committed to the repository. You can build the native macOS application immediately without installing Node.js or npm.
+- **Requirements**: macOS 26+, Xcode 26+ (Xcode 27+ recommended), and Node.js to compile the window UI.
 
 Run from the repository root:
 ```bash
@@ -117,11 +116,13 @@ make test
 # Compile release build
 make release
 
-# (Optional) Rebuild web bundle after editing WebApp/src
+# Rebuild only the web UI (build / open / test / release do this first)
 make web
 ```
 
-Or open `Aureways.xcodeproj` directly in Xcode, select scheme **Aureways** and destination **My Mac**, and press `⌘R`.
+`make` compiles `WebApp/` into `Aureways/WebAppBundle/` before the native app. That directory is build output and is not committed. Dependencies install only when `package-lock.json` changes.
+
+To run from Xcode, run `make web` once at the repo root first, then open `Aureways.xcodeproj`, select scheme **Aureways** and destination **My Mac**, and press `⌘R`. After editing `WebApp/src`, run `make web` again. Xcode does not build the web app.
 
 ---
 

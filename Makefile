@@ -40,6 +40,28 @@ endif
 
 .PHONY: build release test open clean web
 
+# WebAppBundle is a folder reference in the Xcode project. It is build output,
+# not source: compile it before xcodebuild copies it into the app.
+WEB_BUNDLE := Aureways/WebAppBundle
+WEB_STAMP := $(WEB_BUNDLE)/.stamp
+WEB_MODULES_STAMP := WebApp/node_modules/.install-stamp
+WEB_INPUTS := $(shell find WebApp/src WebApp/scripts -type f) \
+	WebApp/index.html \
+	WebApp/package.json \
+	WebApp/package-lock.json \
+	WebApp/vite.config.ts \
+	WebApp/tsconfig.json
+
+$(WEB_MODULES_STAMP): WebApp/package.json WebApp/package-lock.json
+	cd WebApp && npm ci
+	@touch $@
+
+$(WEB_STAMP): $(WEB_MODULES_STAMP) $(WEB_INPUTS)
+	cd WebApp && npm run build
+	@touch $@
+
+web: $(WEB_STAMP)
+
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
 # command-line builds do not stall on approval (macro validation likewise, in
 # case a dependency adds a macro package).
@@ -52,13 +74,13 @@ APP := $(DERIVED)/Build/Products/Debug/Aureways.app
 INSTALL_APP := /Applications/Aureways.app
 LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-build:
+build: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
-release:
+release: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Release -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
-test:
+test: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in
@@ -79,11 +101,4 @@ open: build
 	fi
 
 clean:
-	rm -rf $(DERIVED)
-
-# Rebuild the web shell UI (WebApp/ -> Aureways/WebAppBundle). The whole main
-# window is one WKWebView running this app (docs/web-shell.md). The bundle is
-# committed, so normal app builds do not need Node; run this only after editing
-# WebApp/src.
-web:
-	cd WebApp && npm ci && npm run build
+	rm -rf $(DERIVED) $(WEB_BUNDLE)

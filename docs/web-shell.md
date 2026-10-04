@@ -91,9 +91,9 @@ JS 发 `{type:"rpc", id, method, params}`，Swift 回 `rpcResult`。
 ## 构建页面
 
 ```bash
-make web    # cd WebApp && npm ci && npm run build
+make web    # 锁文件变化时 npm ci，然后 npm run build
 ```
 
-`npm run build` 是 `tsc --noEmit && vite build`。产物在 `Aureways/WebAppBundle/`，作为文件夹引用打进 `Aureways.app/Contents/Resources/WebAppBundle`。产物提交进仓库，Xcode 构建不需要 Node。
+`npm run build` 是 `tsc --noEmit && vite build`。产物在 `Aureways/WebAppBundle/`，作为文件夹引用打进 `Aureways.app/Contents/Resources/WebAppBundle`。这个目录不入库。`make build`、`make open`、`make test`、`make release` 会先编它。
 
 浏览器里看演示：在 `WebApp/` 执行 `npm run dev`。演示数据不会连上真的 Agent。

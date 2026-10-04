@@ -8,7 +8,7 @@
 …/Aureways-webproto/        ← 在这里 make
 ├── Makefile
 ├── Aureways.xcodeproj
-├── WebApp/                 ← 页面源码。改完要 make web
+├── WebApp/                 ← 页面源码。make 会先编它
 └── Aureways/               ← Swift 源码，这里没有 Makefile
 ```
 
@@ -47,7 +47,7 @@ make build         # 只编译 Debug
 make release       # Release
 make test          # AurewaysTests
 make clean         # 删除 .derived
-make web           # WebApp → Aureways/WebAppBundle
+make web           # 只编 WebApp → Aureways/WebAppBundle
 ```
 
 产物：
@@ -59,9 +59,11 @@ make web           # WebApp → Aureways/WebAppBundle
 
 `make open` 若发现 `/Applications/Aureways.app` 已存在，会先换成这次编出来的包再打开。同一个 bundle id 只能有一个 Dock 图标；Applications 里的旧包会盖住 `.derived` 里的新图标。仍不刷新时执行 `killall Dock`。
 
-改过 Swift 要重新 `make open` 或在 Xcode 里 Run。改过 `WebApp/src` 要先 `make web`，再编 App。已打开的窗口不会热更新。
+`make build`、`make open`、`make test`、`make release` 会先编网页，再编客户端。`Aureways/WebAppBundle/` 不入库。改过 Swift 或 `WebApp/src` 后重新 `make open`。已打开的窗口不会热更新。
 
-`make web` 在 `WebApp/` 里执行 `npm ci && npm run build`（类型检查、Vite、体积报告）。锁文件在 `WebApp/package-lock.json`，不在仓库根。
+在 Xcode 里 `⌘R` 之前要先 `make web`。Xcode 不会跑 Makefile，目录空着就没有页面。
+
+`make web` 在锁文件变化时执行 `npm ci`，页面源码变化时执行 `npm run build`（类型检查、Vite、体积报告）。锁文件在 `WebApp/package-lock.json`，不在仓库根。
 
 `make open` 会 `lsregister` 刚编出来的包，Finder「打开方式」里才会出现 Aureways。双击 `.md` 仍走系统默认应用。要改成 Aureways，用设置里的「设为默认 Markdown 打开方式」，或：
 
@@ -87,7 +89,7 @@ xcodebuild -downloadComponent MetalToolchain
 cd WebApp
 npm ci
 npm run dev     # 浏览器里的演示，没有原生桥
-npm run build   # 只构建，不复制进 Xcode 工程；make web 会做完整的一步
+npm run build   # 写入 Aureways/WebAppBundle/；make web 还会按锁文件安装依赖
 ```
 
 演示地址可以加 `?turns=8` 看长对话，`#settings` 看设置，`#menubar` 看菜单栏页。玻璃和输入框浮层要在编出来的 App 里看。

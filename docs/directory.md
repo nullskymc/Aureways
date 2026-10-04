@@ -25,7 +25,7 @@ Aureways/                              # 仓库根
 │   ├── Info.plist
 │   ├── AppIcon.icon/
 │   ├── Assets.xcassets/
-│   ├── WebAppBundle/                  # make web 的产物，已提交
+│   ├── WebAppBundle/                  # make web 的产物，不入库
 │   ├── Model/                         # AppModel 及按职责拆分的扩展
 │   │   ├── AppModel.swift
 │   │   ├── AppModel+Workspace.swift
@@ -101,7 +101,7 @@ Swift 包只有 [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0�
 | UserDefaults | 工作区、自定义 Agent、外观、菜单栏开关、额度源覆盖、MCP |
 | `~/Library/Application Support/ai.aureways.client/aureways.sqlite` | 会话链接与工作区目录 |
 
-`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build`、`*.trace`、`.claude/`。`WebApp/node_modules` 不入库。
+`.gitignore` 忽略 `.derived`、`DerivedData`、`xcuserdata`、`.build`、`*.trace`、`.claude/`。`WebApp/node_modules` 和 `Aureways/WebAppBundle/` 不入库。
 
 ## 源码职责
 
