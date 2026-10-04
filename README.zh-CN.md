@@ -170,11 +170,11 @@ make web
 只有推送形如 `v*` 的 Git Tag 时才会触发 GitHub Actions 持续集成与打包发布：
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
-自动化流水线将自动运行 `make test` 全量验证，执行 Release 构建并封装生成 `Aureways-v0.3.0.dmg`，同步发布至 GitHub Releases。
+自动化流水线将自动运行 `make test` 全量验证，执行 Release 构建并封装生成 `Aureways-v0.3.1.dmg`，同步发布至 GitHub Releases。
 
 ---
 

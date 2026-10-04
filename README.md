@@ -171,11 +171,11 @@ Detailed architectural and developer guides are available in `docs/`:
 Releases are triggered by pushing a Git tag matching `v*`:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
-The GitHub Actions workflow executes `make test`, builds the Release package, bundles `Aureways-v0.3.0.dmg`, and publishes a GitHub Release.
+The GitHub Actions workflow executes `make test`, builds the Release package, bundles `Aureways-v0.3.1.dmg`, and publishes a GitHub Release.
 
 ---
 

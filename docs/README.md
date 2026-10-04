@@ -26,4 +26,4 @@ Aureways 是 ACP 的 macOS 客户端。SwiftUI 只提供窗口和菜单栏。窗
 
 阅读顺序：目录 → 架构 → Web shell → 前端 / 后端 → 协议 → 开发。改界面先看 [frontend.md](frontend.md) 和 [web-shell.md](web-shell.md)。改协议兼容先看 [protocol.md](protocol.md)。图标出稿看品牌规范。
 
-版本：0.3.0（build 18）。最低系统 macOS 26。Bundle ID `ai.aureways.client`。
+版本：0.3.1（build 19）。最低系统 macOS 26。Bundle ID `ai.aureways.client`。

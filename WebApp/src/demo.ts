@@ -42,7 +42,7 @@ export function loadDemo() {
     uiPrefs: { inspectorOpen: location.hash.includes('insp') },
     settings: {
       appearance: 'system', language: 'en', systemLanguage: 'system', showMenuBar: true, markdownDefault: false,
-      autoApprove: false, defaultAgentId: 'codex', version: '0.3.0',
+      autoApprove: false, defaultAgentId: 'codex', version: '0.3.1',
       agents: [
         { id: 'grok-build', title: 'Grok Build', subtitle: '', builtIn: true, launchLine: 'grok agent stdio', notes: '', enabled: true, available: true, quotaRefreshing: false },
         { id: 'codex', title: 'Codex', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/codex-acp', notes: '', enabled: true, available: true, quotaRefreshing: false },
