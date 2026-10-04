@@ -24,12 +24,12 @@ export function QuotaCard({ agent, snapshot, compact = false }: { agent: Setting
   return (
     <div class={'quota-card' + (compact ? ' compact' : '')}>
       <div class="quota-head">
-        <HarnessIcon id={agent.id} size={14} />
+        <HarnessIcon id={agent.id} size={compact ? 13 : 14} />
         <span class="quota-title">{agent.title}</span>
         {snapshot?.planType && <span class="badge">{snapshot.planType}</span>}
         <div class="flex1" />
         <button class="icon-btn tiny" title={t('refresh')} onClick={() => rpc('quota.refresh', { id: agent.id })}>
-          {agent.quotaRefreshing ? <Spinner size={10} /> : <Icon name="refresh" size={11} />}
+          {agent.quotaRefreshing ? <Spinner size={compact ? 9 : 10} /> : <Icon name="refresh" size={compact ? 10 : 11} />}
         </button>
       </div>
       {!snapshot ? (

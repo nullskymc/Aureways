@@ -31,7 +31,7 @@ export function MenuBar() {
         <span class="mb-title">Aureways</span>
         <div class="flex1" />
         <button class="btn small" onClick={() => post('newSession')}>
-          <Icon name="compose" size={12} /> {t('newChat')}
+          <Icon name="compose" size={11} /> {t('newChat')}
         </button>
       </div>
       {agents.length > 0 && (
@@ -40,7 +40,7 @@ export function MenuBar() {
           <div class="mb-agents">
             {agents.map((a) => (
               <button key={a.id} class={'mb-agent' + (a.id === current?.id ? ' on' : '')} title={a.title} onClick={() => (tab.value = a.id)}>
-                <HarnessIcon id={a.id} size={13} />
+                <HarnessIcon id={a.id} size={12} />
                 {state.quota[a.id] && state.quota[a.id].severity !== 'unknown' && <span class={'mb-sev ' + state.quota[a.id].severity} />}
               </button>
             ))}
