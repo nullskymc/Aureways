@@ -32,7 +32,8 @@
 | `terminal/kill` / `release` | 有 | |
 | `_x.ai/exit_plan_mode` / `x.ai/exit_plan_mode` | 有（Grok） | 阻塞：Composer 上方计划预览卡。`--no-leader` 下没有 TUI 审批面，必须由 Aureways 回包，否则 agent 会报 client disconnected、计划模式退不出 |
 | `_x.ai/ask_user_question` / `x.ai/ask_user_question` | 有（Grok） | 阻塞：选择题卡。yolo / auto-approve **不**自动点 |
-| 其它 `x.ai/*` | 忽略 / 32601 | notification 只记日志；未知 request 仍 Method not found |
+| 其它扩展 request | 32601 | 先交给当前 Harness 的 `handleExtRequest`，返回 `nil` 即 Method not found |
+| 其它 notification | 丢弃 | 只有 Harness 的 `isSessionUpdate` 认的方法进入 `session/update` 路径 |
 
 ## 各 Agent 的协议偏差（客户端兼容层）
 
@@ -41,6 +42,8 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 （`HarnessRuntime.handshake` 写入 runtime 之前）；工具卡片形状挂在
 `Harness.normalizeToolCall`（`session/update` 的 `tool_call` / `tool_call_update`，以及
 `session/request_permission` 里的 `toolCall`，由 `normalizeNotification` 走进去）。
+另外三个钩子：`isSessionUpdate`（哪些通知方法算 `session/update`）、`normalizeModels`
+（`session/new` / `load` 返回的模型列表）、`handleExtRequest`（规范之外、带 id 的 agent 请求）。
 默认都是空实现。这样每条偏差都归属到需要它的那个 agent，`ACP/` 目录保持按规范直读。
 新增偏差请加在对应 Harness 里，不要写进 `ACPConnection` 或页面组件。
 
@@ -49,7 +52,10 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | Grok Build | `terminal/create` 把整条 shell 行塞进 `command`，不发 `args`（规范里 `command` 是程序名） | `GrokBuild.swift` 的 `normalizeClientRequest`：`args` 为空时改写成 `$SHELL -lc "<原 command>"`。对这个 agent 一律走 shell，builtin / 管道 / 重定向的行为才一致 |
 | Grok Build | `initialize` 声明 `promptCapabilities.image: false`，但 `session/prompt` 实际接受 `{type:"image"}` | `normalizeCapabilities` 把 `image` 改成 `true`。不改的话 Composer 会给图片贴「不支持」角标并禁发，剪贴板图片（没有文件路径可降级）会被丢掉 |
 | Grok Build | `rawInput` 是带 `variant` 的 `ToolInput`（`target_file` / `file_path` / `target_directory`）；`list_dir` 的 `kind` 是 `other` | `normalizeToolCall`：拍平 tag、补 `path` / `locations`，ListDir → `kind: read` |
-| Grok Build | 计划结束和选择题是带 `id` 的 `_x.ai/*` **request**，不是 notification | `ACPConnection` 把 `x.ai/` / `_x.ai/` request 交给 `onExtRequest`；`GrokExt` 解析 `planContent` / `questions`，UI 点完再回包。其它 harness 仍 32601 |
+| Grok Build | 计划结束和选择题是带 `id` 的 `_x.ai/*` **request**，不是 notification | `ACPConnection` 把未知 request 交给 `onExtRequest`，`AgentBridge` 转给 `GrokBuildHarness.handleExtRequest`；`GrokExt` 解析 `planContent` / `questions`，UI 点完再回包。其它 harness 返回 `nil` → 32601 |
+| Grok Build | `session/update` 还会以 `x.ai/session/update`、`_x.ai/session/update`、`_x.ai/session_notification` 发 | `isSessionUpdate` 覆盖，把这三个别名算进来 |
+| Grok Build | `session/new` 的 `availableModels` 可能只有 CLI 内置的旧目录，服务端已上线的新模型不在里面 | `normalizeModels`：把 `~/.grok/models_cache.json`（CLI 自己维护）里的模型并进来。同 id 以 agent 字段为准，缓存只补空缺；跳过 `hidden`；按版本号新→旧排序；`currentModelId` 不改。没有缓存就原样返回，agent 没报模型就不造选择器。**不写死任何模型 id** |
+| Grok Build | 内部合成提示以 `user_message_chunk` 发出：`_meta.hideFromScrollback: true`，或文本包在 `<system-reminder>` 里 | `normalizeNotification`：隐藏的块整条丢弃；`<system-reminder>` 段剥掉，剥完为空则丢弃。否则会画成假的用户气泡 |
 | Claude Code | `rawInput` 用 `file_path` 而不是 `path` | `normalizeToolCall`：别名为 `path`，缺 `locations` 时从 path/offset 补 |
 | Codex | 文件编辑标题固定 `Editing files`，只有 `content[].diff`、没有 `locations`；命令完成用 `formatted_output`/`exit_code`；MCP 包一层 `{server,tool,arguments}` | `normalizeToolCall`：从 diff 补 locations 和标题，输出字段别名，解开 MCP 信封 |
 | OpenCode | camelCase（`filePath`/`workdir`）；pending 标题是工具名 `read`/`write`/`bash`；write 完成后 title 变成相对路径 | `normalizeToolCall`：别名 `path`/`cwd`，从工具名推断 `kind`，路径标题改成 `Edit foo.ts`，必要时从 `content` 合成 diff |
@@ -113,7 +119,8 @@ session/cancel（可选，打断当前 turn）
 - sqlite 会话缓存 insert/replace/delete
 - 带 `list`/`load`/`delete` 的 mock：prompt 后 `session/list`、`session/load` 回放、`session/delete`
 - `session/new` 的 `configOptions` / `modes` 解码（含分组模型选项的供应商名）；`config_option_update`
+- Grok `normalizeModels`：缓存合并、排序、跳过 hidden、无缓存 / 无模型时不造数据（缓存由测试注入，不读本机 `~/.grok`）
 
-`AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff）。规范形状的 execute 卡片仍在 `ProtocolTests`。
+`AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff），以及 Grok 隐藏 / `<system-reminder>` 用户块的过滤。规范形状的 execute 卡片仍在 `ProtocolTests`。
 
 未覆盖真实 Codex / Grok / Claude 二进制。

@@ -65,7 +65,7 @@
 
 Agent 侧终端的 stdin 是 `/dev/null`。`fs/*` 限制在已添加的工作区之下。应用未开 App Sandbox。
 
-Grok 的 `_x.ai/exit_plan_mode` 和 `_x.ai/ask_user_question` 是带 id 的请求。`ACPConnection` 交给 `onExtRequest`，页面点完再回包。自动批准不会自动回答选择题。其它未知扩展请求仍返回 32601。
+规范之外、带 id 的 agent 请求（Grok 的 `_x.ai/exit_plan_mode`、`_x.ai/ask_user_question`）由 `ACPConnection` 交给 `onExtRequest`，`AgentBridge` 再转给当前 Agent 的 `Harness.handleExtRequest`。页面点完再回包。自动批准不会自动回答选择题。Harness 不认的方法返回 `nil`，客户端回 32601。
 
 ## 用户终端
 
@@ -104,3 +104,5 @@ Grok 的 `_x.ai/exit_plan_mode` 和 `_x.ai/ask_user_question` 是带 id 的请�
 其余内置 Agent 没有额度源。可用 `defaults write ai.aureways.client quotaSourceMap …` 覆盖；空列表表示关掉这一家。
 
 页面上，只有错误、没有用量数字的快照不画严重程度点。支持额度但未登录的 Agent 会说明未登录。
+
+`usageBreakdown` 的每项可带 `pooled`。Grok Chat 和 Grok Build 共用一个额度池：`isUnifiedBillingUser` 为真，或各产品百分比之和与 `creditUsagePercent` 相差不超过 1 时，这些项标为 `pooled`，页面把它们画成同一根条上的分段（各自占了多少），右侧是剩余；不画成各自独立的 100% 条。旧缓存里没有 `pooled` 字段时，页面按同样的「加起来等于总量」规则推断。
