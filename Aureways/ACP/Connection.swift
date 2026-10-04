@@ -149,6 +149,22 @@ actor ACPConnection {
         return try JSONDecoder.acp.decode(LoadSessionResponse.self, from: data)
     }
 
+    func resumeSession(
+        sessionId: String,
+        cwd: String,
+        additionalDirectories: [String] = [],
+        mcpServers: [JSONValue] = [],
+        meta: [String: JSONValue]? = nil
+    ) async throws -> ResumeSessionResponse {
+        var requestBody = ResumeSessionRequest(sessionId: sessionId, cwd: cwd)
+        requestBody.additionalDirectories = additionalDirectories
+        requestBody.mcpServers = mcpServers
+        requestBody.meta = meta
+        let result = try await request("session/resume", params: encodeJSON(requestBody))
+        let data = try result.encode()
+        return try JSONDecoder.acp.decode(ResumeSessionResponse.self, from: data)
+    }
+
     func listSessions(cwd: String? = nil) async throws -> [SessionListItem] {
         var cursor: String?
         var sessions: [SessionListItem] = []
@@ -506,6 +522,7 @@ actor ACPConnection {
         "authenticate",
         "session/new",
         "session/load",
+        "session/resume",
         "session/list",
     ]
 }

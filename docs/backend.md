@@ -78,6 +78,7 @@ Agent 侧终端的 stdin 是 `/dev/null`。`fs/*` 限制在已添加的工作区
 | `initialize` | 连接后第一条 |
 | `session/new` | 新对话。带工作区、已启用的 MCP、Harness 的 `_meta` |
 | `session/load` | 打开已有会话并回放 |
+| `session/resume` | 恢复已有会话（当 Agent 声明支持 resume 时） |
 | `session/list` | 刷新侧栏里已有条目的标题 |
 | `session/delete` | 从 harness 删除 |
 | `session/prompt` | 用户发送。块由 `OutgoingMessage.contentBlocks` 组装 |
@@ -86,7 +87,7 @@ Agent 侧终端的 stdin 是 `/dev/null`。`fs/*` 限制在已添加的工作区
 | `session/set_mode` | 没有 `configOptions` 时的旧退路 |
 | `authenticate` | `initialize` 返回了 `authMethods` 时，用第一个 |
 
-未实现：`session/resume`，以及 WebSocket / HTTP 传输。
+未实现：WebSocket / HTTP 传输。
 
 ## 额度
 

@@ -34,7 +34,10 @@ Aureways/                              # 仓库根
 │   │   └── AppModel+Inspector.swift
 │   ├── WebShell/                      # 原生窗口宿主与 Web 桥接
 │   │   ├── WebShellView.swift         # 窗口宿主、玻璃层、输入框浮层
-│   │   ├── WebShellBridge.swift       # AppModel ↔ 页面
+│   │   ├── WebShellBridge.swift       # AppModel ↔ 页面核心与生命周期
+│   │   ├── WebShellBridge+State.swift # 状态快照编码
+│   │   ├── WebShellBridge+Transcript.swift # 转录条目与工具调用编码
+│   │   ├── WebShellBridge+Handlers.swift   # JS 消息分发与原生操作
 │   │   ├── WebShellServices.swift     # fs / git / 终端 / 选择器的 rpc
 │   │   ├── WebShellSettings.swift     # 设置与 Agent 目录的 rpc
 │   │   ├── WebAssetScheme.swift       # aureways-web://app/ 提供页面资源

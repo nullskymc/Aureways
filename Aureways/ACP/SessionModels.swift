@@ -491,6 +491,9 @@ struct LoadSessionResponse: Decodable, Sendable {
     }
 }
 
+typealias ResumeSessionRequest = LoadSessionRequest
+typealias ResumeSessionResponse = LoadSessionResponse
+
 struct ListSessionsRequest: Encodable, Sendable {
     var cwd: String?
     var cursor: String?

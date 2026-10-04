@@ -1350,6 +1350,81 @@ final class ProtocolTests: XCTestCase {
         await connection.shutdown()
     }
 
+    func testResumeSessionCapabilitiesDecoding() throws {
+        let json1 = try JSONValue.decode(from: """
+        {"resumeSession": true}
+        """)
+        let caps1 = try JSONDecoder.acp.decode(AgentCapabilities.self, from: json1.encode())
+        XCTAssertFalse(caps1.canLoad)
+        XCTAssertTrue(caps1.canResume)
+        XCTAssertTrue(caps1.canRestore)
+        XCTAssertTrue(caps1.canPersistHistory)
+
+        let json2 = try JSONValue.decode(from: """
+        {"sessionCapabilities": {"resume": {}}}
+        """)
+        let caps2 = try JSONDecoder.acp.decode(AgentCapabilities.self, from: json2.encode())
+        XCTAssertFalse(caps2.canLoad)
+        XCTAssertTrue(caps2.canResume)
+        XCTAssertTrue(caps2.canRestore)
+
+        let json3 = try JSONValue.decode(from: """
+        {"session": {"resume": true}}
+        """)
+        let caps3 = try JSONDecoder.acp.decode(AgentCapabilities.self, from: json3.encode())
+        XCTAssertTrue(caps3.canResume)
+        XCTAssertTrue(caps3.canRestore)
+    }
+
+    func testResumeSessionExecution() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("mock_resume_agent.py")
+        let script = historyAgentSource.replacingOccurrences(
+            of: "\"loadSession\": True,",
+            with: "\"loadSession\": False, \"resumeSession\": True,"
+        )
+        try script.write(to: file, atomically: true, encoding: .utf8)
+        let replay = TextBox()
+        let connection = try ACPConnection.launch(
+            ACPLaunch(
+                command: "/usr/bin/python3",
+                arguments: [file.path],
+                cwd: directory.path,
+                environment: HostEnvironment.augmented()
+            ),
+            handlers: ACPHandlers(
+                onUpdate: { note in
+                    if case .agentMessageChunk(let content) = note.update {
+                        await replay.append(content.text ?? "")
+                    }
+                    if case .userMessageChunk(let content) = note.update {
+                        await replay.append("user:\(content.text ?? "")")
+                    }
+                },
+                onPermission: { _ in .cancelled },
+                onLog: { _ in }
+            )
+        )
+        let handshake = try await connection.initialize()
+        XCTAssertEqual(handshake.agentCapabilities?.canLoad, false)
+        XCTAssertEqual(handshake.agentCapabilities?.canResume, true)
+        XCTAssertEqual(handshake.agentCapabilities?.canRestore, true)
+
+        let created = try await connection.newSession(cwd: directory.path, meta: nil)
+        let block = ContentBlock.text("hello resume")
+        _ = try await connection.prompt(sessionId: created.sessionId, prompt: [block])
+
+        await replay.clear()
+        let resumed = try await connection.resumeSession(sessionId: created.sessionId, cwd: directory.path, meta: nil)
+        XCTAssertEqual(resumed.sessionId, created.sessionId)
+        let loaded = await replay.joined()
+        XCTAssertTrue(loaded.contains("user:hello resume"), loaded)
+        XCTAssertTrue(loaded.contains("hello from mock"), loaded)
+
+        await connection.shutdown()
+    }
+
     func testLoadRejectedWithoutCapability() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -2166,7 +2241,7 @@ while True:
                 "updatedAt": "2026-01-01T00:00:00Z"
             })
         send({"jsonrpc": "2.0", "id": mid, "result": {"sessions": listed}})
-    elif method == "session/load":
+    elif method == "session/load" or method == "session/resume":
         sid = params.get("sessionId")
         record = sessions.get(sid)
         if record is None:
@@ -2178,7 +2253,7 @@ while True:
                 "sessionId": sid,
                 "update": {"sessionUpdate": update, "content": {"type": "text", "text": text}}
             }})
-        send({"jsonrpc": "2.0", "id": mid, "result": {}})
+        send({"jsonrpc": "2.0", "id": mid, "result": {"sessionId": sid}})
     elif method == "session/delete":
         sid = params.get("sessionId")
         sessions.pop(sid, None)

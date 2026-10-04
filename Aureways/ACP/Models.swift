@@ -92,11 +92,13 @@ struct SessionCapabilities: Decodable, Sendable, Equatable {
     var list = false
     var delete = false
     var additionalDirectories = false
+    var resume = false
 
-    init(list: Bool = false, delete: Bool = false, additionalDirectories: Bool = false) {
+    init(list: Bool = false, delete: Bool = false, additionalDirectories: Bool = false, resume: Bool = false) {
         self.list = list
         self.delete = delete
         self.additionalDirectories = additionalDirectories
+        self.resume = resume
     }
 
     init(from decoder: Decoder) throws {
@@ -104,9 +106,10 @@ struct SessionCapabilities: Decodable, Sendable, Equatable {
         list = Self.isEnabled(container, "list")
         delete = Self.isEnabled(container, "delete")
         additionalDirectories = Self.isEnabled(container, "additionalDirectories")
+        resume = Self.isEnabled(container, "resume")
     }
 
-    private static func isEnabled(_ container: KeyedDecodingContainer<DynamicCodingKey>, _ key: String) -> Bool {
+    static func isEnabled(_ container: KeyedDecodingContainer<DynamicCodingKey>, _ key: String) -> Bool {
         let codingKey = DynamicCodingKey(key)
         if (try? container.decodeNil(forKey: codingKey)) == true { return false }
         if let flag = try? container.decode(Bool.self, forKey: codingKey) { return flag }
@@ -133,23 +136,28 @@ struct McpCapabilities: Decodable, Sendable, Equatable {
 
 struct AgentCapabilities: Decodable, Sendable, Equatable {
     var loadSession = false
+    var resumeSession = false
     var promptCapabilities: PromptCapabilities?
     var mcpCapabilities: McpCapabilities?
     var sessionCapabilities = SessionCapabilities()
 
     var canLoad: Bool { loadSession }
+    var canResume: Bool { resumeSession || sessionCapabilities.resume }
+    var canRestore: Bool { canLoad || canResume }
     var canList: Bool { sessionCapabilities.list }
     var canDelete: Bool { sessionCapabilities.delete }
     var canAdditionalDirectories: Bool { sessionCapabilities.additionalDirectories }
-    var canPersistHistory: Bool { canLoad || canList }
+    var canPersistHistory: Bool { canRestore || canList }
 
     init(
         loadSession: Bool = false,
+        resumeSession: Bool = false,
         promptCapabilities: PromptCapabilities? = nil,
         mcpCapabilities: McpCapabilities? = nil,
         sessionCapabilities: SessionCapabilities = SessionCapabilities()
     ) {
         self.loadSession = loadSession
+        self.resumeSession = resumeSession
         self.promptCapabilities = promptCapabilities
         self.mcpCapabilities = mcpCapabilities
         self.sessionCapabilities = sessionCapabilities
@@ -158,6 +166,11 @@ struct AgentCapabilities: Decodable, Sendable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
         loadSession = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("loadSession")) ?? false
+        var resumeFlag = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("resumeSession")) ?? false
+        if let sessionObj = try? container.nestedContainer(keyedBy: DynamicCodingKey.self, forKey: DynamicCodingKey("session")) {
+            resumeFlag = resumeFlag || SessionCapabilities.isEnabled(sessionObj, "resume")
+        }
+        resumeSession = resumeFlag
         promptCapabilities = try container.decodeIfPresent(PromptCapabilities.self, forKey: DynamicCodingKey("promptCapabilities"))
         mcpCapabilities = try container.decodeIfPresent(McpCapabilities.self, forKey: DynamicCodingKey("mcpCapabilities"))
         sessionCapabilities = try container.decodeIfPresent(SessionCapabilities.self, forKey: DynamicCodingKey("sessionCapabilities")) ?? SessionCapabilities()

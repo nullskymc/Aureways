@@ -13,6 +13,8 @@ class HarnessRuntime {
 
     var agent: AgentProfile { harness.profile }
     var canLoad: Bool { capabilities.canLoad }
+    var canResume: Bool { capabilities.canResume }
+    var canRestore: Bool { capabilities.canRestore }
     var canList: Bool { capabilities.canList }
     var canDelete: Bool { capabilities.canDelete }
     var canPersistHistory: Bool { capabilities.canPersistHistory }

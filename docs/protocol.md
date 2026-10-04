@@ -16,7 +16,7 @@
 | `session/delete` | 有 | Agent 声明 `sessionCapabilities.delete` 时 |
 | `session/set_config_option` | 有 | 按 Agent 在 `session/new`/`load` 声明的 `configOptions` 透传 |
 | `session/set_mode` | 有 | 仅当没有 `configOptions` 时作为旧版 mode 退路 |
-| `session/resume` | 无 | |
+| `session/resume` | 有 | Agent 声明 `resumeSession` 或 `sessionCapabilities.resume` 时恢复会话 |
 
 ## Agent → Client
 
@@ -120,6 +120,7 @@ session/cancel（可选，打断当前 turn）
 - 带 `list`/`load`/`delete` 的 mock：prompt 后 `session/list`、`session/load` 回放、`session/delete`
 - `session/new` 的 `configOptions` / `modes` 解码（含分组模型选项的供应商名）；`config_option_update`
 - Grok `normalizeModels`：缓存合并、排序、跳过 hidden、无缓存 / 无模型时不造数据（缓存由测试注入，不读本机 `~/.grok`）
+- `session/resume`：能力握手解码（支持 `resumeSession`、`sessionCapabilities.resume`、`session.resume`）与端到端恢复会话执行测试
 
 `AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff），以及 Grok 隐藏 / `<system-reminder>` 用户块的过滤。规范形状的 execute 卡片仍在 `ProtocolTests`。
 

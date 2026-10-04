@@ -42,21 +42,31 @@ extension AppModel {
         do {
             let runtime = try await ensureRuntime(session.agent)
             session.agentInfo = runtime.agentInfo
-            guard runtime.canLoad else {
+            guard runtime.canRestore else {
                 throw ACPError.launch("This agent does not support restoring sessions")
             }
             guard let connection = runtime.connection else {
                 throw ACPError.launch("Agent process is not running")
             }
             await prepareWorkspaces(connection, session: session)
-            let loaded = try await runtime.withAuthentication {
-                try await connection.loadSession(
-                    sessionId: acpId,
-                    cwd: session.cwd,
-                    additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                    mcpServers: mcpPayload(for: runtime.capabilities),
-                    meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-                )
+            let loaded: LoadSessionResponse = try await runtime.withAuthentication {
+                if runtime.canLoad {
+                    return try await connection.loadSession(
+                        sessionId: acpId,
+                        cwd: session.cwd,
+                        additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                        mcpServers: mcpPayload(for: runtime.capabilities),
+                        meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                    )
+                } else {
+                    return try await connection.resumeSession(
+                        sessionId: acpId,
+                        cwd: session.cwd,
+                        additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                        mcpServers: mcpPayload(for: runtime.capabilities),
+                        meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                    )
+                }
             }
             guard !session.isClosed else { return }
             applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
@@ -84,18 +94,28 @@ extension AppModel {
                 throw ACPError.launch("Agent process is not running")
             }
             if let acpId {
-                guard runtime.canLoad else {
+                guard runtime.canRestore else {
                     throw ACPError.launch("This agent does not support restoring sessions")
                 }
                 await prepareWorkspaces(connection, session: session)
-                let loaded = try await runtime.withAuthentication {
-                    try await connection.loadSession(
-                        sessionId: acpId,
-                        cwd: session.cwd,
-                        additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
-                        mcpServers: mcpPayload(for: runtime.capabilities),
-                        meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
-                    )
+                let loaded: LoadSessionResponse = try await runtime.withAuthentication {
+                    if runtime.canLoad {
+                        return try await connection.loadSession(
+                            sessionId: acpId,
+                            cwd: session.cwd,
+                            additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                            mcpServers: mcpPayload(for: runtime.capabilities),
+                            meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                        )
+                    } else {
+                        return try await connection.resumeSession(
+                            sessionId: acpId,
+                            cwd: session.cwd,
+                            additionalDirectories: additionalDirectories(for: runtime, cwd: session.cwd),
+                            mcpServers: mcpPayload(for: runtime.capabilities),
+                            meta: runtime.harness.sessionMeta(autoApprove: autoApprove)
+                        )
+                    }
                 }
                 applyDecodedSetup(session, harness: runtime.harness, from: loaded, fallbackSessionId: acpId)
                 flushSessionUpdates()
