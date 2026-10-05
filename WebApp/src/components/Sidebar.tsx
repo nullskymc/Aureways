@@ -5,9 +5,14 @@ import { route } from '../store'
 import { prefs } from '../prefs'
 import type { AppState, Session } from '../types'
 import { HarnessIcon, Icon, Spinner } from './Icon'
+import { lazy } from './Lazy'
 
+const SettingsNav = lazy(() => import('../settings/Settings').then((m) => m.SettingsNav))
 
 export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void }) {
+  const r = route.value
+  const isSettings = r.name === 'settings'
+  const settingsSection = r.name === 'settings' ? r.section : undefined
   const query = useSignal('')
   const q = query.value.trim().toLowerCase()
   const filtered = q
@@ -23,17 +28,21 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
 
   const lights = state.chrome.trafficLights
   const headPad = state.chrome.fullscreen ? 12 : Math.max(76, lights.x + lights.w + 14)
-  const showNewChatSelected = state.selectedSessionId === null
+  const showNewChatSelected = !isSettings && state.selectedSessionId === null
 
   return (
-    <aside class="sidebar" data-glass="sidebar">
+    <aside class={'sidebar' + (isSettings ? ' settings-nav' : '')} data-glass="sidebar">
       <div class="sidebar-head" style={{ paddingLeft: headPad }}>
         <div class="flex1" />
         <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle} data-no-drag>
           <Icon name="sidebar" size={15} />
         </button>
       </div>
-      <div class="sidebar-actions">
+      {isSettings ? (
+        <SettingsNav state={state} current={settingsSection ?? 'general'} />
+      ) : (
+        <>
+          <div class="sidebar-actions">
         <button class={'nav-row' + (showNewChatSelected ? ' selected' : '')} onClick={() => post('newSession')}>
           <Icon name="compose" size={15} />
           <span>{t('newChat')}</span>
@@ -109,6 +118,8 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
           <Icon name="folderPlus" size={15} />
         </button>
       </div>
+        </>
+      )}
     </aside>
   )
 }

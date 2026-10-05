@@ -9,7 +9,7 @@ import { lazy } from './Lazy'
 import { installGlass } from '../glass'
 
 const Inspector = lazy(() => import('../inspector/Inspector').then((m) => m.Inspector))
-const Settings = lazy(() => import('../settings/Settings').then((m) => m.Settings))
+const SettingsContent = lazy(() => import('../settings/Settings').then((m) => m.SettingsContent))
 import { BackgroundRequests } from './Cards'
 import type { AppState, Session } from '../types'
 import { PermissionCard, PlanApprovalCard, QuestionCard } from './Cards'
@@ -57,13 +57,22 @@ export function App() {
     }
   }, [uiCommand.value])
 
+  const r = route.value
+  const isSettings = r.name === 'settings'
+  const settingsSection = r.name === 'settings' ? r.section : undefined
+
   useEffect(() => {
     const el = dock.current
     if (!el) return
-    const ro = new ResizeObserver(() => (dockHeight.value = Math.ceil(el.getBoundingClientRect().height)))
+    const measure = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height)
+      if (h >= 40) dockHeight.value = h
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [state?.selectedSessionId == null])
+  }, [state?.selectedSessionId == null, isSettings])
 
   const glass = !!state?.chrome.glass
   useEffect(() => {
@@ -92,58 +101,91 @@ export function App() {
   if (!state) return <div class="boot" />
   const session = state.sessions.find((s) => s.id === state.selectedSessionId) ?? null
   const inspectorOpen = prefs.inspectorOpen.value
-  if (route.value.name === 'settings') {
-    return (
-      <div class="app settings-mode" style={{ '--head-h': `${headH}px` }}>
-        <Settings state={state} section={route.value.section} />
-      </div>
-    )
-  }
 
   return (
-    <div class={'app' + (sidebarOpen.value ? '' : ' no-sidebar') + (inspectorOpen ? ' with-inspector' : '')} style={{ '--sidebar-w': `${sidebarWidth.value}px`, '--head-h': `${headH}px`, '--insp-w': inspectorOpen ? `${prefs.inspectorWidth.value}px` : '0px' }}>
+    <div
+      class={
+        'app' +
+        (isSettings ? ' settings-mode' : '') +
+        (sidebarOpen.value ? '' : ' no-sidebar') +
+        (inspectorOpen && !isSettings ? ' with-inspector' : '')
+      }
+      style={{
+        '--sidebar-w': `${sidebarWidth.value}px`,
+        '--head-h': `${headH}px`,
+        '--insp-w': inspectorOpen && !isSettings ? `${prefs.inspectorWidth.value}px` : '0px',
+      }}
+    >
       {sidebarOpen.value && (
         <>
           <Sidebar state={state} onToggle={() => (sidebarOpen.value = false)} />
           <SidebarResizer width={sidebarWidth} />
         </>
       )}
-      <main class="main" style={{ '--dock-h': `${dockHeight.value}px` }}>
-        <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
-        {session ? (
-          <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} jumpBottom={overlay ? dockHeight.value + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
+      <main class={'main' + (isSettings ? ' settings-main' : '')} style={{ '--dock-h': `${dockHeight.value}px` }}>
+        {isSettings ? (
+          <>
+            <header
+              class="main-head"
+              style={{
+                paddingLeft:
+                  sidebarOpen.value || state.chrome.fullscreen
+                    ? 16
+                    : Math.max(76, state.chrome.trafficLights.x + state.chrome.trafficLights.w + 14),
+              }}
+            >
+              {!sidebarOpen.value && (
+                <span class="head-tools" data-glass="control">
+                  <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (sidebarOpen.value = !sidebarOpen.value)}>
+                    <Icon name="sidebar" size={15} />
+                  </button>
+                </span>
+              )}
+              <div class="head-titles">
+                <span class="head-title">{t('settings_' + (settingsSection ?? 'general'))}</span>
+              </div>
+            </header>
+            <SettingsContent state={state} section={settingsSection} />
+          </>
         ) : (
-          <Landing state={state} />
+          <>
+            <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
+            {session ? (
+              <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} jumpBottom={overlay ? dockHeight.value + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
+            ) : (
+              <Landing state={state} />
+            )}
+            <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
+              {state.error && (
+                <div class="banner error">
+                  <Icon name="alert" size={14} />
+                  <span class="flex1">{state.error}</span>
+                  <button class="btn subtle small" onClick={() => post('dismissError')}>
+                    {t('dismiss')}
+                  </button>
+                </div>
+              )}
+              {session?.phase === 'failed' && (
+                <div class="banner error">
+                  <Icon name="alert" size={14} />
+                  <span class="flex1">
+                    <b>{t('failed')}</b> {session.error}
+                  </span>
+                  <button class="btn small" onClick={() => post('retry', { id: session.id })}>
+                    {t('retry')}
+                  </button>
+                </div>
+              )}
+              <BackgroundRequests state={state} />
+              {state.permission && <PermissionCard p={state.permission} />}
+              {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
+              {state.question && <QuestionCard q={state.question} />}
+              {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
+            </div>
+          </>
         )}
-        <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
-          {state.error && (
-            <div class="banner error">
-              <Icon name="alert" size={14} />
-              <span class="flex1">{state.error}</span>
-              <button class="btn subtle small" onClick={() => post('dismissError')}>
-                {t('dismiss')}
-              </button>
-            </div>
-          )}
-          {session?.phase === 'failed' && (
-            <div class="banner error">
-              <Icon name="alert" size={14} />
-              <span class="flex1">
-                <b>{t('failed')}</b> {session.error}
-              </span>
-              <button class="btn small" onClick={() => post('retry', { id: session.id })}>
-                {t('retry')}
-              </button>
-            </div>
-          )}
-          <BackgroundRequests state={state} />
-          {state.permission && <PermissionCard p={state.permission} />}
-          {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
-          {state.question && <QuestionCard q={state.question} />}
-          {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
-        </div>
       </main>
-      {inspectorOpen && <Inspector />}
+      {inspectorOpen && !isSettings && <Inspector />}
     </div>
   )
 }

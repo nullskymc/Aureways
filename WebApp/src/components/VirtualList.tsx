@@ -55,6 +55,8 @@ export function VirtualList<T>(props: Props<T>) {
   const [measureVersion, force] = useReducer((x: number) => x + 1, 0)
   const [view, setView] = useState({ top: 0, height: 800 })
   const elements = useRef(new Map<Element, string>())
+  /** Scroll position and extent at the last scroll event; reset together with the pin. */
+  const last = useRef({ top: 0, height: 0 })
 
   const layout = useMemo(() => {
     const n = rows.length
@@ -109,8 +111,7 @@ export function VirtualList<T>(props: Props<T>) {
     const el = scroller.current!
     let raf = 0
     let locking = false
-    let lastTop = el.scrollTop
-    let lastHeight = el.scrollHeight
+    last.current = { top: el.scrollTop, height: el.scrollHeight }
     const setPinned = (next: boolean) => {
       if (next === pinned.current) return
       pinned.current = next
@@ -121,8 +122,8 @@ export function VirtualList<T>(props: Props<T>) {
       const top = el.scrollTop
       const height = el.scrollHeight
       const gap = height - top - el.clientHeight
-      const topDelta = top - lastTop
-      const heightDelta = height - lastHeight
+      const topDelta = top - last.current.top
+      const heightDelta = height - last.current.height
       const userUp = topDelta < -2 && topDelta < heightDelta - 2
       const towardEnd = topDelta > 2 && topDelta > heightDelta + 2
       // Close enough that the tail is still crossing the composer.
@@ -141,8 +142,7 @@ export function VirtualList<T>(props: Props<T>) {
         pinToEnd(el)
         locking = false
       }
-      lastTop = el.scrollTop
-      lastHeight = el.scrollHeight
+      last.current = { top: el.scrollTop, height: el.scrollHeight }
       if (!raf)
         raf = requestAnimationFrame(() => {
           raf = 0
@@ -184,9 +184,27 @@ export function VirtualList<T>(props: Props<T>) {
       scrollToBottom() {
         const el = scroller.current
         if (!el) return
+        // Also the manual recovery path: drop cached heights (re-measuring the
+        // mounted rows right away, since the observer won't re-fire for an
+        // unchanged size) and the scroll bookkeeping, so a stale layout or
+        // pin state cannot survive the click.
+        for (const r of rows) heightCache.delete(rowKey(r))
+        for (const [node, key] of elements.current) {
+          const h = Math.round(node.getBoundingClientRect().height)
+          if (h > 0) heightCache.set(key, h)
+        }
         pinned.current = true
         props.onPinnedChange?.(true)
+        force(0)
+        setView({ top: el.scrollTop, height: el.clientHeight })
         pinToEnd(el)
+        last.current = { top: el.scrollTop, height: el.scrollHeight }
+        // Once the re-measured layout has rendered, land on the true end.
+        requestAnimationFrame(() => {
+          pinToEnd(el)
+          last.current = { top: el.scrollTop, height: el.scrollHeight }
+          setView({ top: el.scrollTop, height: el.clientHeight })
+        })
       },
       isAtBottom: () => pinned.current,
     }

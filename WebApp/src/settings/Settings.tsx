@@ -19,7 +19,31 @@ const SECTIONS = [
 
 const set = (key: string, value: unknown) => rpc('settings.set', { key, value })
 
-export function Settings({ state, section }: { state: AppState; section?: string }) {
+export function SettingsNav({ state, current }: { state: AppState; current: string }) {
+  const s = state.settings
+  return (
+    <>
+      <div class="sidebar-actions">
+        <button class="nav-row" onClick={() => (route.value = { name: 'main' })}>
+          <Icon name="arrowLeft" size={15} />
+          <span>{t('backToApp')}</span>
+          <kbd>esc</kbd>
+        </button>
+      </div>
+      <div class="sidebar-list">
+        {SECTIONS.map((sec) => (
+          <button key={sec.id} class={'nav-row' + (current === sec.id ? ' selected' : '')} onClick={() => (route.value = { name: 'settings', section: sec.id })}>
+            <Icon name={sec.icon} size={15} />
+            <span>{t('settings_' + sec.id)}</span>
+          </button>
+        ))}
+      </div>
+      <div class="sidebar-foot settings-version">Aureways {s.version}</div>
+    </>
+  )
+}
+
+export function SettingsContent({ state, section }: { state: AppState; section?: string }) {
   const current = section ?? 'general'
   const s = state.settings
   useEffect(() => {
@@ -28,43 +52,35 @@ export function Settings({ state, section }: { state: AppState; section?: string
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+  return (
+    <div class="settings-scroll">
+      <div class="settings-page">
+        {current === 'general' && <General s={s} />}
+        {current === 'agents' && <Agents s={s} quota={state.quota} />}
+        {current === 'usage' && <Usage s={s} quota={state.quota} />}
+        {current === 'workspaces' && <Workspaces s={s} />}
+        {current === 'permissions' && <Permissions s={s} />}
+        {current === 'mcp' && <Mcp s={s} />}
+      </div>
+    </div>
+  )
+}
+
+export function Settings({ state, section }: { state: AppState; section?: string }) {
+  const current = section ?? 'general'
   const lights = state.chrome.trafficLights
   const headPad = state.chrome.fullscreen ? 12 : Math.max(76, lights.x + lights.w + 14)
   return (
     <>
       <aside class="sidebar settings-nav" data-glass="sidebar">
         <div class="sidebar-head" style={{ paddingLeft: headPad }} />
-        <div class="sidebar-actions">
-          <button class="nav-row" onClick={() => (route.value = { name: 'main' })}>
-            <Icon name="arrowLeft" size={15} />
-            <span>{t('backToApp')}</span>
-            <kbd>esc</kbd>
-          </button>
-        </div>
-        <div class="sidebar-list">
-          {SECTIONS.map((sec) => (
-            <button key={sec.id} class={'nav-row' + (current === sec.id ? ' selected' : '')} onClick={() => (route.value = { name: 'settings', section: sec.id })}>
-              <Icon name={sec.icon} size={15} />
-              <span>{t('settings_' + sec.id)}</span>
-            </button>
-          ))}
-        </div>
-        <div class="sidebar-foot settings-version">Aureways {s.version}</div>
+        <SettingsNav state={state} current={current} />
       </aside>
       <main class="main settings-main">
         <header class="main-head" style={{ paddingLeft: 24 }}>
           <div class="head-titles"><span class="head-title">{t('settings_' + current)}</span></div>
         </header>
-        <div class="settings-scroll">
-          <div class="settings-page">
-            {current === 'general' && <General s={s} />}
-            {current === 'agents' && <Agents s={s} quota={state.quota} />}
-            {current === 'usage' && <Usage s={s} quota={state.quota} />}
-            {current === 'workspaces' && <Workspaces s={s} />}
-            {current === 'permissions' && <Permissions s={s} />}
-            {current === 'mcp' && <Mcp s={s} />}
-          </div>
-        </div>
+        <SettingsContent state={state} section={section} />
       </main>
     </>
   )
