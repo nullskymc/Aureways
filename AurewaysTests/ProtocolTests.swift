@@ -628,6 +628,23 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(qoder.launchArguments(autoApprove: true), ["--acp", "--yolo"])
         XCTAssertNil(qoder.sessionMeta(autoApprove: true))
         XCTAssertEqual(HarnessRegistry.migrateAgentId("qoder-cn"), QoderHarness.id)
+
+        XCTAssertTrue(ids.contains(HermesHarness.id))
+        let hermes = HermesHarness()
+        let hermesCommand = hermes.launchCommand()
+        if hermesCommand == "hermes-acp" || hermesCommand.hasSuffix("/hermes-acp") {
+            XCTAssertEqual(hermes.launchArguments(autoApprove: false), [])
+            XCTAssertEqual(hermes.launchArguments(autoApprove: true), [])
+        } else {
+            XCTAssertTrue(
+                hermesCommand == "hermes" || hermesCommand.hasSuffix("/hermes"),
+                hermesCommand
+            )
+            XCTAssertEqual(hermes.launchArguments(autoApprove: false), ["acp"])
+            XCTAssertEqual(hermes.launchArguments(autoApprove: true), ["acp"])
+        }
+        XCTAssertNil(hermes.sessionMeta(autoApprove: true))
+        XCTAssertNil(hermes.sessionMeta(autoApprove: false))
     }
 
     func testGrokImageCapabilityOverride() {

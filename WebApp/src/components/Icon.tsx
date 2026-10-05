@@ -74,14 +74,17 @@ export function Spinner({ size = 12 }: { size?: number }) {
   return <span class="spinner" style={{ width: size, height: size }} />
 }
 
-// Harness marks (from Assets.xcassets), drawn with currentColor via mask.
+// Harness marks (Lobe Icons mono, copied in Assets.xcassets), drawn with currentColor via mask.
 import antigravity from '../assets/harness/antigravity.svg?raw'
 import claude from '../assets/harness/claude.svg?raw'
 import copilot from '../assets/harness/githubcopilot.svg?raw'
 import cursor from '../assets/harness/cursor.svg?raw'
 import grok from '../assets/harness/grok.svg?raw'
+import hermes from '../assets/harness/hermes.svg?raw'
 import openai from '../assets/harness/openai.svg?raw'
 import opencode from '../assets/harness/opencode.svg?raw'
+import pi from '../assets/harness/pi.svg?raw'
+import qoder from '../assets/harness/qoder.svg?raw'
 
 const HARNESS: Record<string, string> = {
   'grok-build': grok,
@@ -91,6 +94,9 @@ const HARNESS: Record<string, string> = {
   copilot,
   cursor,
   opencode,
+  hermes,
+  'oh-my-pi': pi,
+  qoder,
 }
 const maskCache = new Map<string, string>()
 function maskFor(id: string): string | null {

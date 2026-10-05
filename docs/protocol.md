@@ -61,6 +61,7 @@ Agent 我们改不了，只能在客户端吸收。请求形状挂在 `Harness.n
 | OpenCode | camelCase（`filePath`/`workdir`）；pending 标题是工具名 `read`/`write`/`bash`；write 完成后 title 变成相对路径 | `normalizeToolCall`：别名 `path`/`cwd`，从工具名推断 `kind`，路径标题改成 `Edit foo.ts`，必要时从 `content` 合成 diff |
 | Oh My Pi | 文件工具用 `path`；move 用 `oldPath`/`newPath`；完成后的 diff 在 `rawOutput.details` | `normalizeToolCall`：补 locations，把 nested diff 提升到 `content` |
 | Qoder | `initialize` 按规范（protocolVersion 1、`loadSession`、图片输入）；未登录时 `session/new` 直接回 `-32000 Authentication required`；`--acp` / `--yolo` 都不在 `--help` 里；国际版（`qoder`）与国内版（`qoderclicn`）协议一致 | 暂无改写钩子。自动检测已安装的 CLI（优先 `qoder`，次选 `qoderclicn`）。鉴权走 `HarnessRuntime.withAuthentication` 的懒重试，取第一个 authMethod |
+| Hermes | 打磨过的工具已带 `kind`、`locations` 和 diff `content`，但不发 `rawInput`。标题前缀带字段：`terminal: `、`python: `、`process `、`search: `、`web search: `、`extract: `、`navigate: `、`read: `、`write: `、`patch (…): `。模型走 `session/set_model`；审批模式 `default` / `accept_edits` / `dont_ask` 走 `session/set_mode`。启动是 `hermes acp`，没有 `hermes` 时用 `hermes-acp`。不传 `--yolo` / `--accept-hooks` | `normalizeToolCall`：缺的 `rawInput` 从标题前缀补上（已有非空值不覆盖，`?` 不当值）。没有 shell 命令的 `execute`（浏览器、委托）降成 `kind: other`。自动批准仍用 `request_permission` 的第一个 allow 选项（`allow_once`）回答，不改启动参数 |
 | Antigravity | MCP 信封 `{ServerName,ToolName,Arguments:{CommandLine,Cwd}}` 且 `kind: other`；文件键是 `TargetFile`；输出是 `combinedOutput`/`exitCode` | `normalizeToolCall`：拆信封、Pascal/snake 别名、按工具名表填 `kind` |
 | Copilot / Cursor | ACP 适配器闭源，键名未核实 | 保守地走同一套常见别名；不要把猜测写进页面 |
 
@@ -122,6 +123,6 @@ session/cancel（可选，打断当前 turn）
 - Grok `normalizeModels`：缓存合并、排序、跳过 hidden、无缓存 / 无模型时不造数据（缓存由测试注入，不读本机 `~/.grok`）
 - `session/resume`：能力握手解码（支持 `resumeSession`、`sessionCapabilities.resume`、`session.resume`）与端到端恢复会话执行测试
 
-`AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff），以及 Grok 隐藏 / `<system-reminder>` 用户块的过滤。规范形状的 execute 卡片仍在 `ProtocolTests`。
+`AurewaysTests/ToolCallNormalizationTests.swift`：各 Harness 的 `normalizeToolCall`（Grok tagged `rawInput`、Claude `file_path`、OpenCode camelCase、Codex diff 标题、Antigravity MCP 信封、Oh My Pi nested diff、Hermes 标题补 `rawInput`），以及 Grok 隐藏 / `<system-reminder>` 用户块的过滤。规范形状的 execute 卡片仍在 `ProtocolTests`。
 
 未覆盖真实 Codex / Grok / Claude 二进制。

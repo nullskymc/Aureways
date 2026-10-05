@@ -96,7 +96,7 @@ JSON-RPC `id` 必须按数字解析。`JSONValue` 对 `NSNumber` 先区分 CFBoo
 | Harness | API Key、CLI 登录 | 不进 Aureways。Agent 页只说明去哪登录 |
 | 额度 | `QuotaStore` 按源限流 | 设置「用量」、菜单栏 |
 
-自动批准决定 Client 如何回答 `session/request_permission`。是否再传给 CLI，由各 `Harness` 决定（Grok 加 `--always-approve` 和 `_meta.yoloMode`；Oh My Pi 与 Qoder 加 `--yolo`）。
+自动批准决定 Client 如何回答 `session/request_permission`。是否再传给 CLI，由各 `Harness` 决定（Grok 加 `--always-approve` 和 `_meta.yoloMode`；Oh My Pi 与 Qoder 加 `--yolo`）。Hermes 不改启动参数，编辑审批用会话模式。
 
 ## 窗口与进程
 

@@ -1218,6 +1218,22 @@
         }
       }
     },
+    "需要已安装 Hermes Agent（hermes 或 hermes-acp）。在终端运行 hermes model 配置模型和供应商。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requires Hermes Agent (hermes or hermes-acp). Configure the model and provider with hermes model."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要已安装 Hermes Agent（hermes 或 hermes-acp）。在终端运行 hermes model 配置模型和供应商。"
+          }
+        }
+      }
+    },
     "需要已安装 Oh My Pi（omp）与 Bun。登录和模型在 omp 自己的配置里。": {
       "localizations": {
         "en": {

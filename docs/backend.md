@@ -37,7 +37,7 @@
 
 从 Finder 打开的 App 没有 shell 里的 nvm PATH。若 `npx` 只在 `~/.nvm/.../bin`，Codex 和 Claude 会显示不可用。把 `node` 链到 `/opt/homebrew/bin`，或在自定义 Agent 里写绝对路径。
 
-自动批准时由 `Harness.launchArguments` 和 `sessionMeta` 决定怎么传。Grok Build 换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 再声明一次。Oh My Pi 换成 `["acp", "--yolo"]`，Qoder 换成 `["--acp", "--yolo"]`。
+自动批准时由 `Harness.launchArguments` 和 `sessionMeta` 决定怎么传。Grok Build 换成 `["agent", "--always-approve", "stdio"]`，并在 `session/new` 的 `_meta.yoloMode` 再声明一次。Oh My Pi 换成 `["acp", "--yolo"]`，Qoder 换成 `["--acp", "--yolo"]`。Hermes 不改启动参数；编辑审批是会话模式（`default` / `accept_edits` / `dont_ask`），自动批准只回答 `session/request_permission`。
 
 ## JSON-RPC
 

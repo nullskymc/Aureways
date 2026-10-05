@@ -160,6 +160,7 @@ enum HarnessRegistry {
             OpenCodeHarness(),
             OhMyPiHarness(),
             QoderHarness(),
+            HermesHarness(),
         ]
     }
 

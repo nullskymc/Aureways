@@ -446,6 +446,82 @@ final class ToolCallNormalizationTests: XCTestCase {
         XCTAssertEqual(call.locations.first?.path, "/tmp/a.ts")
     }
 
+    func testHermesSeedsCommandFromTitle() throws {
+        let json = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h1",
+            "title": "terminal: git status",
+            "kind": "execute",
+            "status": "in_progress"
+        }
+        """)
+        let call = ToolCallView(json: HermesHarness().normalizeToolCall(json))
+        XCTAssertEqual(call.kind, "execute")
+        XCTAssertEqual(call.terminalCommand, "git status")
+        XCTAssertEqual(call.compactTitle, "git status")
+        XCTAssertEqual(call.cardLayout, .command)
+    }
+
+    func testHermesKeepsExistingCommandAndSeedsSearch() throws {
+        let kept = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h2",
+            "title": "terminal: other",
+            "kind": "execute",
+            "rawInput": { "command": "keep me" }
+        }
+        """)
+        let keptCall = ToolCallView(json: HermesHarness().normalizeToolCall(kept))
+        XCTAssertEqual(keptCall.terminalCommand, "keep me")
+
+        let search = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h3",
+            "title": "search: TODO",
+            "kind": "search"
+        }
+        """)
+        let searchCall = ToolCallView(json: HermesHarness().normalizeToolCall(search))
+        XCTAssertEqual(searchCall.searchPattern, "TODO")
+        XCTAssertEqual(searchCall.cardLayout, .search)
+
+        let missing = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h4",
+            "title": "terminal: ?",
+            "kind": "execute"
+        }
+        """)
+        let missingCall = ToolCallView(json: HermesHarness().normalizeToolCall(missing))
+        XCTAssertNil(missingCall.terminalCommand)
+        XCTAssertEqual(missingCall.kind, "other")
+    }
+
+    func testHermesFileTitleBecomesLocation() throws {
+        let json = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h5",
+            "title": "patch (replace): src/a.ts",
+            "kind": "edit"
+        }
+        """)
+        let call = ToolCallView(json: HermesHarness().normalizeToolCall(json))
+        XCTAssertEqual(call.filePath, "src/a.ts")
+        XCTAssertEqual(call.locations.first?.path, "src/a.ts")
+        XCTAssertEqual(call.cardLayout, .edit)
+
+        let browser = try JSONValue.decode(from: """
+        {
+            "toolCallId": "h6",
+            "title": "browser_click",
+            "kind": "execute"
+        }
+        """)
+        let browserCall = ToolCallView(json: HermesHarness().normalizeToolCall(browser))
+        XCTAssertEqual(browserCall.kind, "other")
+        XCTAssertEqual(browserCall.cardLayout, .other)
+    }
+
     func testCustomHarnessDoesNotRewrite() throws {
         let json = try JSONValue.decode(from: """
         {
