@@ -85,6 +85,8 @@
 		B20100000000000000000052 /* OhMyPi.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000052 /* OhMyPi.swift */; };
 		B10100000000000000000083 /* Qoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000083 /* Qoder.swift */; };
 		B20100000000000000000083 /* Qoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000083 /* Qoder.swift */; };
+		B10100000000000000000084 /* Hermes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000084 /* Hermes.swift */; };
+		B20100000000000000000084 /* Hermes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000084 /* Hermes.swift */; };
 		B10100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		B20100000000000000000029 /* CustomHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000029 /* CustomHarness.swift */; };
 		BF10200000000000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = PD10200000000000000000001 /* SwiftTerm */; };
@@ -174,6 +176,7 @@
 		F10100000000000000000028 /* OpenCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCode.swift; sourceTree = "<group>"; };
 		F10100000000000000000052 /* OhMyPi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OhMyPi.swift; sourceTree = "<group>"; };
 		F10100000000000000000083 /* Qoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Qoder.swift; sourceTree = "<group>"; };
+		F10100000000000000000084 /* Hermes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hermes.swift; sourceTree = "<group>"; };
 		F10100000000000000000029 /* CustomHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomHarness.swift; sourceTree = "<group>"; };
 		F1010000000000000000002B /* AppModel+Inspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Inspector.swift"; sourceTree = "<group>"; };
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
@@ -346,6 +349,7 @@
 				F10100000000000000000028 /* OpenCode.swift */,
 				F10100000000000000000052 /* OhMyPi.swift */,
 				F10100000000000000000083 /* Qoder.swift */,
+				F10100000000000000000084 /* Hermes.swift */,
 				F10100000000000000000029 /* CustomHarness.swift */,
 				F10100000000000000000050 /* HarnessQuota.swift */,
 				F101000000000000000000E1 /* HarnessQuota+Antigravity.swift */,
@@ -511,6 +515,7 @@
 				B10100000000000000000028 /* OpenCode.swift in Sources */,
 				B10100000000000000000052 /* OhMyPi.swift in Sources */,
 				B10100000000000000000083 /* Qoder.swift in Sources */,
+				B10100000000000000000084 /* Hermes.swift in Sources */,
 				B10100000000000000000029 /* CustomHarness.swift in Sources */,
 				B10100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B101000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */,
@@ -560,6 +565,7 @@
 				B20100000000000000000028 /* OpenCode.swift in Sources */,
 				B20100000000000000000052 /* OhMyPi.swift in Sources */,
 				B20100000000000000000083 /* Qoder.swift in Sources */,
+				B20100000000000000000084 /* Hermes.swift in Sources */,
 				B20100000000000000000029 /* CustomHarness.swift in Sources */,
 				B20100000000000000000050 /* HarnessQuota.swift in Sources */,
 				B201000000000000000000E1 /* HarnessQuota+Antigravity.swift in Sources */,
@@ -627,7 +633,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = NO;
@@ -644,7 +650,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -660,7 +666,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Aureways/Info.plist;
@@ -675,7 +681,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -689,10 +695,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;
@@ -706,10 +712,10 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 6.0;

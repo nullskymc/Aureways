@@ -28,7 +28,7 @@ Aureways 完全实现 [Agent Client Protocol (ACP)](https://agentclientprotocol.
   - **常驻菜单栏模式**：关闭窗口或按下 `⌘Q` 仅收起窗口并保留在系统状态栏，随时点击或快捷键唤回；退出应用仅需点击菜单栏中的「退出」。
 
 - **全能力 ACP 客户端与会话恢复**
-  - 内置 9 家主流编码 Agent 支持，亦可在设置面板随时添加自定义 ACP 启动命令。
+  - 内置 10 家主流编码 Agent 支持，亦可在设置面板随时添加自定义 ACP 启动命令。
   - 会话依工作区隔离并持久化于本地 SQLite；Agent 声明 `session/load` 能力时可无缝跨会话与跨启动恢复。
   - 完整协议支持：自动合并工具调用（按 `toolCallId`）、流式更新、权限决策卡、计划审批模式（Plan Mode）、交互选择题等。
 
@@ -80,6 +80,7 @@ Aureways 完全实现 [Agent Client Protocol (ACP)](https://agentclientprotocol.
 | **OpenCode** | `opencode acp` | — | 开源 ACP Agent |
 | **Oh My Pi** | `omp acp` | — | 基于 Bun 的 Agent，支持 `--yolo` |
 | **Qoder** | `qoder --acp` / `qoderclicn --acp` | — | 自动识别国际版与国内版 CLI |
+| **Hermes** | `hermes acp`（否则 `hermes-acp`） | — | Nous Research；模型与审批走会话 |
 
 > **提示**：命令行需事先在终端安装并完成登录认证，各 Agent 的登录态与 API Key 由各家 CLI 独立管理。自定义 Agent 可随时在「设置 (`⌘,`)」中自由配置。
 
@@ -87,6 +88,7 @@ Aureways 完全实现 [Agent Client Protocol (ACP)](https://agentclientprotocol.
 
 - **Oh My Pi**：需 Bun (`>= 1.3.14`)。安装：`bun install -g @oh-my-pi/pi-coding-agent`，运行 `omp` 登录。设置中开启「自动批准」将自动带上 `--yolo`。
 - **Qoder**：同时适配国际版 (`qoder`，包名 `@qoder-ai/qodercli`) 与国内版 (`qoderclicn`，包名 `@qodercn-ai/qoderclicn`)。Aureways 会自动使用当前 `PATH` 中的可用程序。
+- **Hermes**：需已安装 Hermes Agent，且 `hermes` 或 `hermes-acp` 在 PATH 上（已包含 `~/.local/bin`）。在终端运行 `hermes setup` / `hermes model` 配置供应商和模型。自动批准只回答权限请求，不附加 `--yolo` 或 `--accept-hooks`。编辑审批是会话模式（Default / Accept Edits / Don't Ask）。
 - **Antigravity**：Google 官方 ACP 服务包提供独立的 `agy_acp_server.par`，请将其与 `localharness_external` 置于同级目录（例如 `~/.local/share/antigravity-acp`），并通过启动脚本软链至 PATH。初次连接使用 Google 账号完成 `oauth-personal` 认证。
 
 ---
@@ -170,11 +172,11 @@ make web
 只有推送形如 `v*` 的 Git Tag 时才会触发 GitHub Actions 持续集成与打包发布：
 
 ```bash
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
-自动化流水线将自动运行 `make test` 全量验证，执行 Release 构建并封装生成 `Aureways-v0.3.1.dmg`，同步发布至 GitHub Releases。
+自动化流水线将自动运行 `make test` 全量验证，执行 Release 构建并封装生成 `Aureways-v0.3.2.dmg`，同步发布至 GitHub Releases。
 
 ---
 

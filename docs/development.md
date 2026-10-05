@@ -145,7 +145,7 @@ npm run build   # 写入 Aureways/WebAppBundle/；make web 还会按锁文件安
 
 | 项 | 值 |
 | --- | --- |
-| Marketing version | 0.3.1（build 19） |
+| Marketing version | 0.3.2（build 20） |
 | Bundle ID | `ai.aureways.client` |
 | 协议 | ACP v1 |
 | 最低系统 | macOS 26 |

@@ -28,7 +28,7 @@ Aureways fully implements the [Agent Client Protocol (ACP)](https://agentclientp
   - **Persistent Menu Bar Resident**: Closing the window or pressing `⌘Q` keeps the process alive in the macOS status menu bar for instant summon; quitting the app is handled cleanly via the menu bar's "Quit".
 
 - **Full-Featured ACP Client & Session Continuity**
-  - Nine built-in agent harnesses, plus the ability to configure arbitrary custom ACP agents in Settings.
+  - Ten built-in agent harnesses, plus the ability to configure arbitrary custom ACP agents in Settings.
   - Sessions are categorized by workspace and persisted in local SQLite; agents declaring `session/load` automatically restore previous conversations across app restarts.
   - Comprehensive protocol conformance: tool call coalescing by `toolCallId`, streaming updates, permission prompts, plan approval workflows, and multiple-choice user questions.
 
@@ -81,6 +81,7 @@ Aureways fully implements the [Agent Client Protocol (ACP)](https://agentclientp
 | **OpenCode** | `opencode acp` | — | Open-source ACP agent |
 | **Oh My Pi** | `omp acp` | — | Bun-based agent supporting `--yolo` |
 | **Qoder** | `qoder --acp` / `qoderclicn --acp` | — | Auto-detects global and CN CLIs |
+| **Hermes** | `hermes acp` (fallback `hermes-acp`) | — | Nous Research; model and approval are session settings |
 
 > **Note**: Each CLI tool must be installed and signed in via its vendor CLI beforehand. Credentials and API keys are managed by each tool independently. Custom agents can be configured in Settings (`⌘,`).
 
@@ -88,6 +89,7 @@ Aureways fully implements the [Agent Client Protocol (ACP)](https://agentclientp
 
 - **Oh My Pi**: Requires Bun (`>= 1.3.14`). Install: `bun install -g @oh-my-pi/pi-coding-agent`, authenticate via `omp`. Enabling auto-approve in Settings launches `omp acp --yolo`.
 - **Qoder**: Supports both the international CLI (`qoder`, package `@qoder-ai/qodercli`) and mainland China CLI (`qoderclicn`, package `@qodercn-ai/qoderclicn`). Aureways will pick whichever binary is present on `PATH`.
+- **Hermes**: Requires Hermes Agent (`hermes` or `hermes-acp` on `PATH`; `~/.local/bin` is already searched). Configure the provider and model with `hermes setup` / `hermes model`. Auto-approve answers permission prompts and does not pass `--yolo` or `--accept-hooks`. Edit approval is the session mode (`Default` / `Accept Edits` / `Don't Ask`).
 - **Antigravity**: Google's ACP release provides `agy_acp_server.par`. Place it in a directory together with `localharness_external` (e.g. `~/.local/share/antigravity-acp`), and create a launcher script on `PATH`. Initial connect authenticates via Google `oauth-personal`.
 
 ---
@@ -171,11 +173,11 @@ Detailed architectural and developer guides are available in `docs/`:
 Releases are triggered by pushing a Git tag matching `v*`:
 
 ```bash
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
-The GitHub Actions workflow executes `make test`, builds the Release package, bundles `Aureways-v0.3.1.dmg`, and publishes a GitHub Release.
+The GitHub Actions workflow executes `make test`, builds the Release package, bundles `Aureways-v0.3.2.dmg`, and publishes a GitHub Release.
 
 ---
 
