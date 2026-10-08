@@ -2,18 +2,18 @@ import { signal, useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../i18n'
 import { rpc, type GitDiff } from '../rpc'
-import { app, transcript } from '../store'
+import { app } from '../store'
 import type { DiffFile } from '../types'
 import { Icon, Spinner } from '../components/Icon'
 import { filesVersion, openDiff, openFile } from './state'
 import { DiffStat, StatusBadge } from './DiffPane'
-import { fileIcon, fileStatus, joinPath, mergeSessionEdits, parseUnifiedDiff, splitPath } from './diffModel'
+import { fileIcon, fileStatus, joinPath, parseUnifiedDiff, splitPath } from './diffModel'
 
 export { parseUnifiedDiff } from './diffModel'
 
 /** Folded folders, keyed by workspace + folder. Survives refreshes and reopening the tab. */
 const foldedDirs = signal<Record<string, boolean>>({})
-/** Selected row per workspace and mode, kept while the file is still changed. */
+/** Selected row per workspace, kept while the file is still changed. */
 const selections = signal<Record<string, string>>({})
 
 const typing = (target: EventTarget | null) =>
@@ -22,11 +22,12 @@ const typing = (target: EventTarget | null) =>
 interface Row { path: string; file?: DiffFile }
 
 /**
- * The Changes tab is the change list only: one tree grouped by folder.
- * Opening a file shows its diff in that file's own diff tab, focused if open.
+ * The Changes tab is the working tree's git changes only (`git diff HEAD` plus
+ * untracked files): one tree grouped by folder. Opening a file shows its diff
+ * in that file's own diff tab, focused if open. Edits the chat already
+ * committed are not listed; their diffs stay in the chat's edit cards.
  */
 export function ChangesView() {
-  const mode = useSignal<'session' | 'git'>('git')
   const data = useSignal<GitDiff | null>(null)
   const error = useSignal('')
   const loading = useSignal(false)
@@ -50,11 +51,8 @@ export function ChangesView() {
     return () => { live = false }
   }, [cwd, filesVersion.value, refresh.value])
 
-  void transcript.version.value
-  const files = mode.value === 'git'
-    ? parseUnifiedDiff(data.value?.diff ?? '', cwd)
-    : mergeSessionEdits(transcript.items.flatMap((item) => item.kind === 'tool' && item.diffs ? [item.diffs] : []))
-  const untracked = mode.value === 'git' ? data.value?.untracked ?? [] : []
+  const files = parseUnifiedDiff(data.value?.diff ?? '', cwd)
+  const untracked = data.value?.untracked ?? []
   const added = files.reduce((n, file) => n + file.added, 0)
   const removed = files.reduce((n, file) => n + file.removed, 0)
   const needle = query.value.toLowerCase()
@@ -76,7 +74,7 @@ export function ChangesView() {
   const anyOpen = dirs.some((dir) => !folded(dir))
   // Rows in screen order, skipping folded folders: what ↑/↓ walk.
   const ordered = [...[...groups].flatMap(([dir, rows]) => folded(dir) ? [] : rows), ...untrackedRows]
-  const selectionKey = mode.value + '\0' + cwd
+  const selectionKey = cwd
   const active = ordered.find((row) => row.path === selections.value[selectionKey]) ?? ordered[0]
   const select = (path: string) => { selections.value = { ...selections.value, [selectionKey]: path } }
   const open = (row: Row) => {
@@ -102,8 +100,8 @@ export function ChangesView() {
     }
   }
 
-  const pending = mode.value === 'git' && loading.value && !data.value
-  const empty = mode.value === 'session' ? t('noSessionEdits') : error.value || (data.value?.repo ? t('cleanTree') : t('notRepo'))
+  const pending = loading.value && !data.value
+  const empty = error.value || (data.value?.repo ? t('cleanTree') : t('notRepo'))
   const count = files.length + untracked.length
   const row = (item: Row) => {
     const { name, rel, dir } = splitPath(item.path, cwd)
@@ -126,13 +124,9 @@ export function ChangesView() {
   return (
     <div class="changes review" ref={rootEl} tabIndex={-1} onKeyDown={onKeyDown}>
       <div class="review-toolbar">
-        <div class="seg" aria-label={t('changes')}>
-          <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>{t('workingTree')}</button>
-          <button class={mode.value === 'session' ? 'on' : ''} onClick={() => (mode.value = 'session')}>{t('sessionEdits')}</button>
-        </div>
         {!!count && <span class="review-count">{t('filesChanged', count)}</span>}
         <span class="diffstat"><span class="add">+{added}</span> <span class="del">−{removed}</span></span>
-        {mode.value === 'git' && data.value?.branch && <span class="review-branch" title={data.value.branch}><Icon name="branch" size={12} /><span>{data.value.branch}</span></span>}
+        {data.value?.branch && <span class="review-branch" title={data.value.branch}><Icon name="branch" size={12} /><span>{data.value.branch}</span></span>}
         <div class="flex1" />
         {!!dirs.length && (
           <button class="icon-btn tiny" title={t(anyOpen ? 'collapseAll' : 'expandAll')} aria-label={t(anyOpen ? 'collapseAll' : 'expandAll')}

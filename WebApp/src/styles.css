@@ -811,8 +811,6 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
 .explorer-open strong { font-size: 14px; font-weight: 500; }
 .explorer-open > span { font-size: 11.5px; color: var(--text-3); }
 .review-toolbar { display: flex; align-items: center; flex: none; min-height: 38px; padding: 4px 9px; gap: 9px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
-.review-toolbar .seg { margin: 0; flex: none; padding: 2px; border: 1px solid var(--border); border-radius: 14px; background: none; }
-.review-toolbar .seg button { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
 .review-toolbar .diffstat { white-space: nowrap; font-size: 11px; }
 .review-branch { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; padding: 3px 9px; border: 1px solid var(--border); border-radius: 14px; }
 .review-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-3); font-size: 12px; padding: 20px; text-align: center; }
