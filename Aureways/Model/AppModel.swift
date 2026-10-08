@@ -114,6 +114,7 @@ final class AppModel {
     }
 
     init() {
+        RetiredDefaults.remove()
         let stored = UserDefaults.standard.string(forKey: "workspacePath")
         let initialWorkspace = stored ?? FileManager.default.homeDirectoryForCurrentUser.path
         workspacePath = initialWorkspace

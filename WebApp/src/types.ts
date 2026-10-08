@@ -80,7 +80,6 @@ export interface Settings {
   systemLanguage: string
   showMenuBar: boolean
   /** Remaining quota next to the menu bar icon. */
-  menuBarQuota?: 'always' | 'whenLow' | 'never'
   /** Notify at 20% and 5% remaining, once per reset window. */
   quotaNotifications?: boolean
   markdownDefault: boolean

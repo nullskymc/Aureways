@@ -1,26 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Menu bar status item: the template icon, plus the lowest remaining quota next to
-/// it when the 菜单栏显示剩余额度 setting asks for it (default: only below 20%).
+/// Menu bar status item: just the Aureways template icon. (A lowest-remaining
+/// percentage used to sit next to it; across providers it matched no specific
+/// quota, so it was removed along with its 菜单栏显示剩余额度 setting.)
 struct MenuBarExtraLabel: View {
-    let model: AppModel
-    @AppStorage(QuotaIndicatorMode.defaultsKey) private var indicatorRaw = QuotaIndicatorMode.whenLow.rawValue
-
     var body: some View {
-        let mode = QuotaIndicatorMode(rawValue: indicatorRaw) ?? .whenLow
-        let ids = Set(model.agents.filter { model.isAgentEnabled($0) && model.availability[$0.id] == true }.map(\.id))
-        let text = mode.label(for: model.quotaStore.quotas.values.filter { ids.contains($0.harnessId) })
-        HStack(spacing: 3) {
-            Image(nsImage: Self.templateImage)
-                .renderingMode(.template)
-            if let text {
-                Text(text)
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(text.map { "Aureways, " + "剩余额度 %@".localized($0) } ?? "Aureways")
+        Image(nsImage: Self.templateImage)
+            .renderingMode(.template)
+            .accessibilityLabel("Aureways")
     }
 
     private static let templateImage: NSImage = {
@@ -39,6 +27,16 @@ struct MenuBarExtraLabel: View {
         }
         return canvas
     }()
+}
+
+/// Settings that no longer exist; their stored values are dropped at launch.
+enum RetiredDefaults {
+    /// 菜单栏显示剩余额度 (always / whenLow / never).
+    static let keys = ["menuBarQuotaIndicator"]
+
+    static func remove(from defaults: UserDefaults = .standard) {
+        for key in keys where defaults.object(forKey: key) != nil { defaults.removeObject(forKey: key) }
+    }
 }
 
 extension Notification.Name {

@@ -23,7 +23,6 @@ extension WebShellBridge {
             "language": model.appLanguage,
             "systemLanguage": L10n.systemLanguage,
             "showMenuBar": showMenuBar,
-            "menuBarQuota": QuotaIndicatorMode.current(defaults).rawValue,
             "quotaNotifications": QuotaNotifier.isEnabled(defaults),
             "markdownDefault": markdownDefaultCache,
             "autoApprove": model.autoApprove,
@@ -113,9 +112,6 @@ extension WebShellBridge {
             case "appearance": model.appearance = value as? String ?? "system"
             case "language": model.appLanguage = value as? String ?? L10n.systemLanguage
             case "showMenuBar": UserDefaults.standard.set(value as? Bool ?? true, forKey: Self.menuBarKey)
-            case "menuBarQuota":
-                let mode = (value as? String).flatMap(QuotaIndicatorMode.init(rawValue:)) ?? .whenLow
-                UserDefaults.standard.set(mode.rawValue, forKey: QuotaIndicatorMode.defaultsKey)
             case "quotaNotifications": model.quotaNotifier.setEnabled(value as? Bool ?? false)
             case "autoApprove": model.autoApprove = value as? Bool ?? false
             case "defaultAgent":

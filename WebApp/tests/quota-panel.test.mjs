@@ -53,15 +53,8 @@ test('levels, labels and summaries follow the approved bands and always speak in
   assert.equal(quota.windowLabel('Weekly Opus'), '每周 Opus')
   assert.equal(quota.countdown(now + 2 * H + 15 * 60e3, now), '2 小时 15 分')
   assert.equal(quota.countdown(now + 3 * 24 * H + 4 * H, now), '3 天 4 小时')
-  const ok = provider('codex', [win('p', '5h', 30)])
-  const low = provider('claude', [win('p', '5h', 90)])
-  const signedOut = { ...provider('grok', []), status: 'notSignedIn' }
-  const unsupported = { ...provider('cursor', []), status: 'unsupported' }
-  assert.equal(quota.summarize([ok, unsupported]).text, '全部正常')
-  assert.equal(quota.summarize([ok, low, signedOut]).text, '1 家快用完 · 1 家未登录')
-  assert.equal(quota.summarize([]).text, '暂无额度数据')
+  assert.equal(quota.summarize, undefined, 'no cross-provider summary line')
   app.value = { locale: 'en' }
-  assert.equal(quota.summarize([ok, low, signedOut]).text, '1 running low · 1 not signed in')
   assert.equal(quota.percentText(38, true), '~38%')
 })
 
@@ -82,8 +75,11 @@ test('one row per provider with the tightest limit, its remaining %, bar colour 
   assert.equal(codex.querySelectorAll('.mb-w').length, 0, 'collapsed: only the tightest window')
   assert.equal(text(claude.querySelector('.mb-q-pct')), '约 12%')
   assert.equal(claude.querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill low')
-  assert.equal(text(root.querySelector('.mb-summary')), '1 家快用完')
+  // Compact header: app name, when it was updated, refresh. No summary line.
+  assert.equal(root.querySelector('.mb-summary'), null)
+  assert.equal(text(root.querySelector('.mb-head .mb-title')), 'Aureways')
   assert.match(text(root.querySelector('.mb-updated')), /更新于 3 分钟前/)
+  assert.doesNotMatch(text(root.querySelector('.mb-head')), /快用完|未登录|全部正常/)
   assert.equal(root.querySelectorAll('.mb-row').length, 3, 'recent chats reduced to 3')
   assert.deepEqual([...root.querySelectorAll('.mb-foot .mb-link')].map(text), ['新对话', '打开 Aureways', '设置', '退出'])
 })
@@ -132,5 +128,5 @@ test('stale readings keep their numbers and say why', async () => {
   await mount({ codex: provider('codex', [win('p', '5h', 40)], { status: 'stale', statusDetail: 'rateLimited' }) }, [agent('codex')], 'en')
   assert.equal(text(rows()[0].querySelector('.mb-q-pct')), '60%')
   assert.match(text(rows()[0].querySelector('.mb-q-note')), /May be out of date · Rate limited/)
-  assert.equal(text(root.querySelector('.mb-summary')), 'All good')
+  assert.equal(root.querySelector('.mb-summary'), null)
 })
