@@ -12,6 +12,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar'
 import { closeTab, createNote, currentPane, moveTabRight, openExplorer, openTerminal, paneVersion, selectTab, showInspector, toggleWorkbench, buffers, type Column, type Tab } from './state'
 import { TerminalView } from './Terminal'
 import type { AppState, Session } from '../types'
+import { leadingPad, nativeTitlebarControls } from '../chrome'
 
 export function TabStrip({ state, sidebarOpen, session, column, index, documents }: {
   state: AppState
@@ -26,8 +27,7 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
   const workbenchVisible = pane.columns.length > 1 && !pane.workbenchCollapsed
   const navigatorVisible = prefs.inspectorOpen.value && column.tabs.find((tab) => tab.id === column.active)?.kind !== 'term'
   const strip = useRef<HTMLDivElement>(null)
-  const lights = state.chrome.trafficLights
-  const pad = index > 0 || sidebarOpen || state.chrome.fullscreen ? 6 : Math.max(76, lights.x + lights.w + 14)
+  const pad = index > 0 || sidebarOpen ? 6 : leadingPad(state, 6)
   useEffect(() => {
     const element = strip.current
     if (!element) return
@@ -60,40 +60,53 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
     if (id === 'md') void import('./open').then((m) => m.pickMarkdown())
   }
 
+  // Native mode: the sidebar circle and the file tree / inspector capsule
+  // are native glass (TitlebarGlass.swift); tabs and "+" sit in one capsule
+  // whose glass is drawn natively underneath (data-glass="tabs").
+  const native = nativeTitlebarControls(state)
+  const lastVisible = pane.workbenchCollapsed ? index === 0 : index === pane.columns.length - 1
+  const padRight = native && !documents && route.value.name === 'main' && lastVisible ? state.chrome.trailingInset : undefined
+  const stripEl = (
+    <div ref={strip} class="insp-tab-strip" role="tablist" aria-label={chat ? t('chat') : t('workspaceTabs')} data-no-drag onKeyDown={(e) => {
+      if (!(e.target instanceof HTMLElement) || !e.target.matches('[role="tab"]')) return
+      const tabs = [...(strip.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])]
+      const at = tabs.indexOf(e.target as HTMLButtonElement)
+      let next = at
+      if (e.key === 'ArrowRight') next = (at + 1) % tabs.length
+      else if (e.key === 'ArrowLeft') next = (at + tabs.length - 1) % tabs.length
+      else if (e.key === 'Home') next = 0
+      else if (e.key === 'End') next = tabs.length - 1
+      else return
+      e.preventDefault()
+      tabs[next]?.click()
+      tabs[next]?.focus()
+    }}>
+      {column.tabs.map((tab) => <TabButton key={tab.id} tab={tab} active={tab.id === column.active} panelId={'panel-' + column.id} />)}
+    </div>
+  )
+  const addEl = (!chat || !workbenchVisible) && (
+    <button class="icon-btn small tab-add" title={t('addTab')} onClick={(e) => void addTab(e.currentTarget)}><Icon name="plus" size={14} /></button>
+  )
+
   return (
-    <header class={'main-head tab-strip' + (chat ? ' chat-head' : '')} style={{ paddingLeft: pad }}>
+    <header class={'main-head tab-strip' + (chat ? ' chat-head' : '') + (native ? ' glass-tabs' : '')} style={{ paddingLeft: pad, paddingRight: padRight }}>
       {index === 0 && !sidebarOpen && (
         <span class="head-tools" data-no-drag>
-          <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value)}>
-            <Icon name="sidebar" size={15} />
-          </button>
+          {!native && (
+            <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value)}>
+              <Icon name="sidebar" size={15} />
+            </button>
+          )}
           <button class="icon-btn" title={t('newChat')} onClick={() => { route.value = { name: 'main' }; selectTab('chat'); post('newSession') }}>
             <Icon name="compose" size={15} />
           </button>
         </span>
       )}
-      <div ref={strip} class="insp-tab-strip" role="tablist" aria-label={chat ? t('chat') : t('workspaceTabs')} data-no-drag onKeyDown={(e) => {
-        if (!(e.target instanceof HTMLElement) || !e.target.matches('[role="tab"]')) return
-        const tabs = [...(strip.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])]
-        const at = tabs.indexOf(e.target as HTMLButtonElement)
-        let next = at
-        if (e.key === 'ArrowRight') next = (at + 1) % tabs.length
-        else if (e.key === 'ArrowLeft') next = (at + tabs.length - 1) % tabs.length
-        else if (e.key === 'Home') next = 0
-        else if (e.key === 'End') next = tabs.length - 1
-        else return
-        e.preventDefault()
-        tabs[next]?.click()
-        tabs[next]?.focus()
-      }}>
-        {column.tabs.map((tab) => <TabButton key={tab.id} tab={tab} active={tab.id === column.active} panelId={'panel-' + column.id} />)}
-      </div>
+      {native ? <div class="tab-capsule" data-glass="tabs" data-no-drag>{stripEl}{addEl}</div> : stripEl}
       {chat && session?.phase === 'connecting' && <span class="head-status" title={t('connecting', session.agentTitle)}><Spinner size={12} /></span>}
       {chat && session?.phase === 'idle' && <button class="btn small" onClick={() => post('selectSession', { id: session.id })}>{t('open')}</button>}
-      {(!chat || !workbenchVisible) && (
-        <button class="icon-btn small tab-add" title={t('addTab')} onClick={(e) => void addTab(e.currentTarget)}><Icon name="plus" size={14} /></button>
-      )}
-      {chat && !documents && (
+      {!native && addEl}
+      {chat && !documents && !native && (
         <button class={'icon-btn small workbench-toggle' + (workbenchVisible ? ' on' : '')}
           title={t(workbenchVisible ? 'hideWorkbench' : 'showWorkbench') + ' · ⌥⌘I'}
           aria-label={t(workbenchVisible ? 'hideWorkbench' : 'showWorkbench')}
@@ -105,7 +118,7 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
       {!chat && (
         <span class="tab-head-actions" data-no-drag>
           <button class="icon-btn small" title={t('splitRight')} disabled={index === pane.columns.length - 1 && pane.columns.length >= 3} onClick={() => moveTabRight(column.active)}><Icon name="split" size={14} /></button>
-          {!documents && <button class={'icon-btn small' + (navigatorVisible ? ' on' : '')} title={t('toggleFileTree')} aria-label={t('toggleFileTree')} aria-pressed={navigatorVisible} onClick={() => {
+          {!documents && !native && <button class={'icon-btn small' + (navigatorVisible ? ' on' : '')} title={t('toggleFileTree')} aria-label={t('toggleFileTree')} aria-pressed={navigatorVisible} onClick={() => {
             if (column.tabs.find((tab) => tab.id === column.active)?.kind === 'term') openExplorer()
             else prefs.inspectorOpen.value = !prefs.inspectorOpen.value
           }}><Icon name="folder" size={14} /></button>}

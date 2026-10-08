@@ -15,6 +15,7 @@ func userContentController(_ userContentController: WKUserContentController, did
     }
 
     private func handle(_ type: String, _ body: [String: Any]) {
+        if PerfProbe.isRunning { PerfProbe.noteMessage(type, role: role) }
         if role == .menuBar, handleMenuBar(type, body) { return }
         if role == .composer {
             switch type {
@@ -24,7 +25,7 @@ func userContentController(_ userContentController: WKUserContentController, did
             case "composerEscape":
                 WebShellBridge.current?.sendCommand("escape")
                 return
-            case "uiPrefs", "dragRegions", "glass":
+            case "uiPrefs", "dragRegions", "glass", "titlebar":
                 return
             default:
                 break
@@ -182,8 +183,19 @@ func userContentController(_ userContentController: WKUserContentController, did
             onDragRegions?(rects, (body["height"] as? NSNumber).map { CGFloat($0.doubleValue) })
         case "composerInsert":
             if let text = body["text"] as? String { composerPeer?.sendCommand("insertText", ["text": text]) }
+        case "titlebar":
+            onTitlebarState?(body)
         case "glass":
-            let panels = (body["rects"] as? [[String: Any]] ?? []).compactMap { rect -> GlassLayerView.Panel? in
+            let rects = body["rects"] as? [[String: Any]] ?? []
+            let tabs = rects.filter { $0["k"] as? String == "tabs" }.compactMap { rect -> TabCapsule? in
+                func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
+                guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
+                else { return nil }
+                return TabCapsule(base: x, share: number("f") ?? 0, y: y, width: w, height: h,
+                                  activeX: number("ax"), activeWidth: number("aw"))
+            }
+            onTabCapsules?(tabs, body["sidebar"] as? Bool ?? true)
+            let panels = rects.filter { $0["k"] as? String != "tabs" }.compactMap { rect -> GlassLayerView.Panel? in
                 func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
                 guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
                 else { return nil }

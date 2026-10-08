@@ -10,6 +10,7 @@ import { prefs } from '../prefs'
 import type { AppState, Session } from '../types'
 import { HarnessIcon, Icon, Spinner } from './Icon'
 import { lazy } from './Lazy'
+import { nativeTitlebarControls } from '../chrome'
 
 const SettingsNav = lazy(() => import('../settings/Settings').then((m) => m.SettingsNav))
 
@@ -38,9 +39,12 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
     <aside class={'sidebar' + (isSettings ? ' settings-nav' : '')} data-glass="sidebar">
       <div class="sidebar-head" style={{ paddingLeft: headPad }}>
         <div class="flex1" />
-        <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle} data-no-drag>
-          <Icon name="sidebar" size={15} />
-        </button>
+        {/* Native mode: the toggle is a glass circle beside the traffic lights. */}
+        {!nativeTitlebarControls(state) && (
+          <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle} data-no-drag>
+            <Icon name="sidebar" size={15} />
+          </button>
+        )}
       </div>
       {isSettings ? (
         <SettingsNav state={state} current={settingsSection ?? 'general'} />

@@ -10,7 +10,8 @@ import { ColumnBody, TabStrip } from '../inspector/Inspector'
 import '../reader/state'
 import { lazy } from './Lazy'
 import { installGlass } from '../glass'
-import { headerHeight, observeTitlebar } from '../chrome'
+import { installTitlebar, toggleFileTree } from '../titlebar'
+import { headerHeight, leadingPad, nativeTitlebarControls, observeTitlebar } from '../chrome'
 
 const SettingsContent = lazy(() => import('../settings/Settings').then((m) => m.SettingsContent))
 import { BackgroundRequests } from './Cards'
@@ -36,6 +37,9 @@ export function App() {
         break
       case 'toggleInspector':
         toggleWorkbench()
+        break
+      case 'toggleFileTree':
+        toggleFileTree()
         break
       case 'showFiles':
         showInspector()
@@ -103,9 +107,11 @@ export function App() {
   }, [state?.selectedSessionId == null, isSettings, onChat])
 
   const glass = !!state?.chrome.glass
+  const nativeControls = !!state && nativeTitlebarControls(state)
   useEffect(() => {
     if (glass) installGlass()
-  }, [glass])
+    if (nativeControls) installTitlebar()
+  }, [glass, nativeControls])
   // With a session open the composer is a native overlay (its own web view on
   // glass) and the transcript scrolls underneath it to the window bottom.
   const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId && onChat
@@ -154,12 +160,12 @@ export function App() {
               class="main-head"
               style={{
                 paddingLeft:
-                  sidebarOpen.value || state.chrome.fullscreen
+                  sidebarOpen.value
                     ? 16
-                    : Math.max(76, state.chrome.trafficLights.x + state.chrome.trafficLights.w + 14),
+                    : leadingPad(state),
               }}
             >
-              {!sidebarOpen.value && (
+              {!sidebarOpen.value && !nativeControls && (
                 <span class="head-tools" data-glass="control">
                   <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (sidebarOpen.value = !sidebarOpen.value)}>
                     <Icon name="sidebar" size={15} />

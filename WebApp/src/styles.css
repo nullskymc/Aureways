@@ -904,3 +904,17 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
   .chat-column .landing { padding-inline: 12px; }
   .head-tools { gap: 0; margin-right: 0; }
 }
+
+/* Native glass title bar (TitlebarGlass.swift). The tab capsule's glass and
+   the active tab's brighter platter are drawn natively under this
+   transparent markup, so nothing here paints a background or tint. */
+.tab-capsule { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; height: 30px; padding: 0 2px; border-radius: 15px; }
+.glass-tabs .tab-capsule .insp-tab-strip { flex: 0 1 auto; min-width: 0; height: 30px; gap: 0; align-items: center; }
+.glass-tabs .insp-tab { height: 26px; border-radius: 13px; background: transparent; box-shadow: none; color: var(--text-2); }
+.glass-tabs .insp-tab::after { display: none; }
+.glass-tabs .insp-tab.active { background: transparent; box-shadow: none; color: var(--text); }
+.glass-tabs .insp-tab:not(.active):hover { background: color-mix(in oklch, var(--text) 6%, transparent); }
+.glass-tabs .insp-tab-main { height: 26px; }
+.glass-tabs .insp-tab-main:focus-visible { border-radius: 13px; }
+.glass-tabs .chat-tab { flex: none; width: auto; min-width: 0; }
+.glass-tabs .tab-capsule .tab-add { flex: none; margin: 0; width: 26px; height: 26px; border-radius: 13px; }

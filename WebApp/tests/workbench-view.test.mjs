@@ -123,3 +123,61 @@ test('the project file tree and its toggle stay available while the Changes tab 
   assert.ok(tree())
   await flush(() => render(null, root))
 })
+
+test('native title bar: tabs and + share one glass capsule; fixed toggles are left to native glass', async () => {
+  const native = { ...model, workspacePath: '/glass', inspectorRoot: '/glass', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, trailingInset: 88 } }
+  app.value = native
+  route.value = { name: 'main' }
+  prefs.inspectorOpen.value = true
+  prefs.sidebarOpen.value = false
+  state.showInspector('changes')
+  await flush(() => render(h(EditorColumns, { state: native, session: null, sidebarOpen: false, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
+  const heads = [...root.querySelectorAll('header.tab-strip')]
+  assert.equal(heads.length, 2)
+  assert.ok(heads.every(head => head.classList.contains('glass-tabs')))
+  for (const head of heads) {
+    const capsule = head.querySelector('.tab-capsule')
+    assert.equal(capsule.dataset.glass, 'tabs')
+    assert.ok(capsule.querySelector('[role="tablist"]'), 'tabs inside the capsule')
+  }
+  assert.ok(heads[1].querySelector('.tab-capsule .tab-add'), '+ in the same capsule')
+  assert.equal(root.querySelector('[aria-label="Toggle file tree"], .workbench-toggle, [title="Toggle sidebar"]'), null, 'no web copies of the native toggles')
+  assert.ok(heads[1].querySelector('[title="Split right"]'), 'split stays a page control')
+  // Sidebar closed: column 0 clears the traffic lights and the native circle; only New chat stays in the page.
+  assert.equal(heads[0].style.paddingLeft, '122px')
+  assert.deepEqual([...heads[0].querySelectorAll('.head-tools button')].map(b => b.title), ['New chat'])
+  // The last visible column keeps clear of the native right capsule.
+  assert.equal(heads[1].style.paddingRight, '88px')
+  assert.equal(heads[0].style.paddingRight, '')
+  prefs.sidebarOpen.value = true
+  await flush(() => render(null, root))
+})
+
+test('native title bar state goes out only on change; the file tree toggle hides, shows or opens the navigator', async () => {
+  const { installTitlebar, titlebarState, toggleFileTree } = await import('../src/titlebar.ts')
+  app.value = { ...model, workspacePath: '/tb', inspectorRoot: '/tb' }
+  route.value = { name: 'main' }
+  prefs.inspectorOpen.value = true
+  state.showInspector('changes')
+  const sent = () => messages.filter(m => m.type === 'titlebar')
+  const before = sent().length
+  installTitlebar()
+  assert.equal(sent().length, before + 1)
+  assert.deepEqual({ ...sent().at(-1), type: undefined }, { type: undefined, sidebar: true, right: true, files: true, inspector: true })
+  prefs.inspectorOpen.value = true
+  assert.equal(sent().length, before + 1, 'unchanged state is not re-sent')
+  toggleFileTree()
+  assert.equal(prefs.inspectorOpen.value, false)
+  assert.equal(sent().at(-1).files, false)
+  toggleFileTree()
+  assert.equal(prefs.inspectorOpen.value, true)
+  state.toggleWorkbench()
+  assert.equal(titlebarState().inspector, false)
+  assert.equal(titlebarState().files, false)
+  toggleFileTree()
+  assert.equal(titlebarState().inspector, true, 'the file tree button brings the workbench back')
+  assert.equal(titlebarState().files, true)
+  route.value = { name: 'settings' }
+  assert.equal(sent().at(-1).right, false, 'no right capsule outside the main view')
+  route.value = { name: 'main' }
+})

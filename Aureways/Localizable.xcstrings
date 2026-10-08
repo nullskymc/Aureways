@@ -1281,6 +1281,22 @@
           }
         }
       }
+    },
+    "切换文件树": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle File Tree"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换文件树"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
