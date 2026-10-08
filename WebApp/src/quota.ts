@@ -4,9 +4,6 @@
 import { t } from './i18n'
 import type { ProviderQuota, QuotaLevel, QuotaWindow } from './types'
 
-/** Below this much remaining a provider counts as 快用完 / running low. */
-export const LOW_THRESHOLD = 20
-
 /** Same bands as native QuotaLevel: >50 green, 20–50 orange, <20 red. */
 export function levelFor(remaining: number | null | undefined): QuotaLevel {
   if (remaining == null) return 'unknown'
@@ -78,26 +75,6 @@ export function statusNote(p: ProviderQuota): string | undefined {
     case 'stale': return p.statusDetail ? t('quotaStaleBecause', errorText(p.statusDetail)) : t('quotaStaleOld')
     default: return p.windows.length ? undefined : p.refreshing ? t('quotaLoading') : t('quotaNotFetched')
   }
-}
-
-export interface QuotaSummary { low: number; notSignedIn: number; failed: number; text: string; ok: boolean }
-
-/** Header line: 全部正常, or "1 家快用完 · 1 家未登录". Unsupported providers don't count. */
-export function summarize(providers: ProviderQuota[]): QuotaSummary {
-  let low = 0, notSignedIn = 0, failed = 0
-  for (const p of providers) {
-    if (p.status === 'notSignedIn') notSignedIn++
-    else if (p.status === 'error') failed++
-    else if (hasReading(p) && (p.remainingPercent ?? 100) < LOW_THRESHOLD) low++
-  }
-  const parts = [
-    low && t('sumLow', low),
-    notSignedIn && t('sumNotSignedIn', notSignedIn),
-    failed && t('sumFailed', failed),
-  ].filter(Boolean) as string[]
-  const ok = parts.length === 0
-  const anyReading = providers.some(hasReading)
-  return { low, notSignedIn, failed, ok, text: ok ? (anyReading ? t('sumAllOk') : t('sumNoData')) : parts.join(' · ') }
 }
 
 /** Newest reading across providers (for 更新于 …). */

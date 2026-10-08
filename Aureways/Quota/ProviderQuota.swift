@@ -221,29 +221,3 @@ struct ProviderQuota: Identifiable, Sendable, Codable, Hashable {
         return nil
     }
 }
-
-// MARK: - Summary across providers (menu bar icon, panel header)
-
-enum QuotaIndicatorMode: String, Sendable, CaseIterable {
-    case always, whenLow, never
-
-    static let defaultsKey = "menuBarQuotaIndicator"
-    static let lowThreshold: Double = 20
-
-    static func current(_ defaults: UserDefaults = .standard) -> QuotaIndicatorMode {
-        defaults.string(forKey: defaultsKey).flatMap(QuotaIndicatorMode.init(rawValue:)) ?? .whenLow
-    }
-
-    /// Text next to the menu bar icon, or nil for the plain icon.
-    func label(for quotas: [ProviderQuota], now: Date = Date()) -> String? {
-        guard self != .never else { return nil }
-        let readings = quotas.filter {
-            let status = $0.effectiveStatus(now: now)
-            return status == .ok || status == .stale
-        }
-        guard let lowest = readings.compactMap(\.remainingPercent).min() else { return nil }
-        if self == .whenLow, lowest >= Self.lowThreshold { return nil }
-        let estimated = readings.first { $0.remainingPercent == lowest }?.isEstimated ?? false
-        return (estimated ? "~" : "") + "\(Int(lowest.rounded()))%"
-    }
-}

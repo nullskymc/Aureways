@@ -155,7 +155,7 @@ struct AurewaysApp: App {
             MenuBarWebView(model: model)
                 .frame(width: MenuBarWebView.size.width, height: MenuBarWebView.size.height)
         } label: {
-            MenuBarExtraLabel(model: model)
+            MenuBarExtraLabel()
         }
         .menuBarExtraStyle(.window)
     }

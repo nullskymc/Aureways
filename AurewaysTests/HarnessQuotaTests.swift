@@ -65,18 +65,16 @@ final class HarnessQuotaTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(QuotaSourceKind.self, from: Data(#""localCache""#.utf8)), .localEstimate)
     }
 
-    func testIndicatorLabel() {
-        let now = Date()
-        func q(_ id: String, used: Double, source: QuotaSourceKind = .officialAPI, status: ProviderQuota.Status = .ok) -> ProviderQuota {
-            ProviderQuota(harnessId: id, providerTitle: id, windows: [QuotaWindow(id: "w", label: "5h", usedPercent: used, source: source)], status: status, lastUpdated: now)
-        }
-        XCTAssertNil(QuotaIndicatorMode.whenLow.label(for: [q("a", used: 40), q("b", used: 70)], now: now))
-        XCTAssertEqual(QuotaIndicatorMode.always.label(for: [q("a", used: 40), q("b", used: 70)], now: now), "30%")
-        XCTAssertEqual(QuotaIndicatorMode.whenLow.label(for: [q("a", used: 40), q("b", used: 88)], now: now), "12%")
-        XCTAssertEqual(QuotaIndicatorMode.whenLow.label(for: [q("a", used: 88, source: .localEstimate)], now: now), "~12%")
-        XCTAssertNil(QuotaIndicatorMode.never.label(for: [q("a", used: 99)], now: now))
-        XCTAssertNil(QuotaIndicatorMode.always.label(for: [q("a", used: 99, status: .notSignedIn)], now: now), "only real readings count")
-        XCTAssertNil(QuotaIndicatorMode.always.label(for: [], now: now))
+    func testRetiredMenuBarQuotaSettingIsDropped() throws {
+        let suite = "aureways.tests.retired.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("always", forKey: "menuBarQuotaIndicator")
+        defaults.set(true, forKey: "quotaNotifications")
+        RetiredDefaults.remove(from: defaults)
+        XCTAssertNil(defaults.object(forKey: "menuBarQuotaIndicator"), "old menu bar percentage setting is gone")
+        XCTAssertEqual(defaults.object(forKey: "quotaNotifications") as? Bool, true, "other settings untouched")
+        RetiredDefaults.remove(from: defaults)
     }
 
     func testCodexDateParsing() {

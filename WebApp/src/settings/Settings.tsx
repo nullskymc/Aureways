@@ -288,7 +288,6 @@ function Agents({ s, quota }: { s: S; quota: Record<string, ProviderQuota> }) {
 
 function Usage({ s, quota }: { s: S; quota: Record<string, ProviderQuota> }) {
   const agents = s.agents.filter((a) => a.enabled)
-  const mode = s.menuBarQuota ?? 'whenLow'
   return (
     <>
       <div class="usage-head">
@@ -301,15 +300,6 @@ function Usage({ s, quota }: { s: S; quota: Record<string, ProviderQuota> }) {
         ))}
       </div>
       <Group footer={t('quotaDisplayFooter')}>
-        <Row label={t('menuBarQuota')}>
-          <div class="seg">
-            {(['always', 'whenLow', 'never'] as const).map((v) => (
-              <button key={v} class={mode === v ? 'on' : ''} onClick={() => set('menuBarQuota', v)}>
-                {t('menuBarQuota_' + v)}
-              </button>
-            ))}
-          </div>
-        </Row>
         <Row label={t('quotaNotify')}>
           <Switch on={!!s.quotaNotifications} onChange={(v) => set('quotaNotifications', v)} />
         </Row>

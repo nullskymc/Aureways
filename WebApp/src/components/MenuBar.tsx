@@ -3,7 +3,7 @@ import { useEffect } from 'preact/hooks'
 import { post } from '../bridge'
 import { relativeTime, t } from '../i18n'
 import { app } from '../store'
-import { ago, hasReading, lastUpdated, panelProviders, percentText, resetText, statusNote, summarize, tightestWindow, windowLabel } from '../quota'
+import { ago, hasReading, lastUpdated, panelProviders, percentText, resetText, statusNote, tightestWindow, windowLabel } from '../quota'
 import type { ProviderQuota, QuotaWindow } from '../types'
 import { HarnessIcon, Icon, Spinner } from './Icon'
 
@@ -26,14 +26,13 @@ export function MenuBar() {
   const all = panelProviders(state.quota, state.settings.agents)
   const rows = all.filter((p) => p.status !== 'unsupported')
   const unsupported = all.filter((p) => p.status === 'unsupported')
-  const summary = summarize(rows)
   const updated = lastUpdated(rows)
   const refreshing = rows.some((p) => p.refreshing)
   const recent = [...state.sessions].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3)
   return (
     <div class="menubar">
       <div class="mb-head">
-        <span class={'mb-summary' + (summary.ok ? '' : ' attention')}>{summary.text}</span>
+        <span class="mb-title">Aureways</span>
         <div class="flex1" />
         {updated != null && <span class="mb-updated">{t('updated', ago(updated))}</span>}
         <button class="icon-btn tiny" title={t('refresh')} aria-label={t('refresh')} disabled={refreshing} onClick={() => post('refreshQuota')}>
