@@ -30,7 +30,7 @@ try {
       loader: { '.css': 'empty', '.svg': 'text' },
       banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
       // Component tests exercise real Preact/DOM lifecycles without a canvas or PTY.
-      plugins: /(?:terminal|workbench)-view\.test\.mjs$/.test(entry) ? [{
+      plugins: /(?:terminal|workbench|changes)-view\.test\.mjs$/.test(entry) ? [{
         name: 'test-xterm',
         setup(build) {
           build.onResolve({ filter: /^@xterm\/(xterm|addon-fit)$/ }, () => ({

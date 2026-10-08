@@ -497,20 +497,6 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--fill); gap: 2px; flex: none; }
 .seg button { height: 24px; padding: 0 10px; border-radius: 6px; font-size: 12px; color: var(--text-2); }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 0.5px var(--border-strong), 0 1px 2px oklch(0 0 0 / 0.08); }
-.changes > .seg { margin: 8px 10px; align-self: flex-start; }
-.changes-list { flex: 1; min-height: 0; overflow: auto; padding: 0 6px 20px; display: flex; flex-direction: column; gap: 6px; }
-.changes-list > * { flex: none; }
-.changes-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); padding: 4px 6px 2px; }
-.changes-empty { padding: 32px 16px; text-align: center; color: var(--text-3); font-size: 12.5px; }
-.changes-files { display: flex; flex-direction: column; gap: 1px; }
-
-.change-row {
-  display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 8px;
-  border-radius: 6px; font-size: 12px; color: var(--text); white-space: nowrap; text-align: left;
-}
-.change-row:hover { background: var(--hover); }
-.change-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-.change-dir { color: var(--text-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; margin-left: 2px; }
 .change-badge {
   font-size: 10px; font-weight: 700; width: 15px; height: 15px; border-radius: 3px;
   display: grid; place-items: center; line-height: 1; flex: none;
@@ -518,7 +504,8 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .change-badge.m { color: var(--amber); background: color-mix(in oklch, var(--amber) 15%, transparent); }
 .change-badge.a { color: var(--green); background: color-mix(in oklch, var(--green) 15%, transparent); }
 .change-badge.d { color: var(--red); background: color-mix(in oklch, var(--red) 15%, transparent); }
-.change-badge.untracked { color: var(--text-3); background: var(--fill); }
+.change-badge.r { color: var(--link); background: color-mix(in oklch, var(--link) 14%, transparent); }
+.change-badge.u { color: var(--text-3); background: var(--fill); }
 
 .untracked-head { font-size: 11px; font-weight: 600; color: var(--text-3); padding: 8px 6px 2px; }
 
@@ -840,13 +827,70 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
 .review-folder > summary::-webkit-details-marker { display: none; }
 .review-folder > summary span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .review-folder[open] > summary > .icon { transform: rotate(90deg); }
-.review-file > .icon { color: var(--red); }
 .review-file .tree-name { flex: 1; }
 .review-file .diffstat { font-size: 10px; }
 .review-editor .hunk-head { font-size: 10px; background: var(--fill-2); }
 .review-editor .dl { font-size: 11px; line-height: 21px; }
-.review-editor .dl.ins { box-shadow: inset 3px 0 var(--green); }
-.review-editor .dl.del { box-shadow: inset 3px 0 var(--red); }
+.review-editor .dl.ins, .diff-pane .dl.ins { box-shadow: inset 3px 0 var(--green); }
+.review-editor .dl.del, .diff-pane .dl.del { box-shadow: inset 3px 0 var(--red); }
+/* A whole-file add or delete is one colour already: tint it lightly and mark the
+   edge once instead of flooding every line with saturated green or red. */
+.status-a .dl.ins { background: color-mix(in oklch, var(--green) 5%, transparent); box-shadow: none; }
+.status-d .dl.del { background: color-mix(in oklch, var(--red) 5%, transparent); box-shadow: none; }
+.diff-card.status-a .diff-card-body, .diff-pane.status-a .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
+.diff-card.status-d .diff-card-body, .diff-pane.status-d .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
+
+/* ---- Changes review: one card per file ------------------------------------- */
+.review-count { flex: none; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.review-toolbar .icon-btn { flex: none; }
+.review-toolbar .review-branch { flex: 0 1 auto; min-width: 0; }
+.review-branch > span { overflow: hidden; text-overflow: ellipsis; }
+.review-toolbar .diffstat .add + .del, .diffstat .add + .del { margin-left: 4px; }
+.changes.review { min-width: 0; }
+.review-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; container-type: inline-size; padding: 0 12px 28px; display: flex; flex-direction: column; gap: 12px; }
+/* No top padding: sticky headers pin to the padding edge and would leave a strip of the previous file above them. */
+.review-scroll > * { flex: none; }
+.review-scroll > :first-child { margin-top: 10px; }
+.diff-card { min-width: 0; border: 1px solid var(--border-strong); border-radius: 9px; overflow: clip; background: var(--code-bg); }
+.diff-card.selected { border-color: color-mix(in oklch, var(--accent) 60%, transparent); }
+.diff-file-head { gap: 7px; }
+.review-editor .diff-card > .diff-file-head, .review-editor .untracked-card > .diff-file-head {
+  position: sticky; top: 0; z-index: 2; height: 34px; padding: 0 6px 0 6px;
+  background: color-mix(in oklch, var(--main-bg) 95%, var(--text) 5%); border-bottom: 1px solid var(--border);
+}
+.diff-card.collapsed > .diff-file-head { border-bottom-color: transparent; }
+.diff-file-head.toggles:hover { background: color-mix(in oklch, var(--main-bg) 92%, var(--text) 8%); }
+.diff-pane > .diff-file-head { padding-left: 10px; }
+.diff-fold { flex: none; color: var(--text-3); }
+.diff-fold .icon { transition: transform 0.12s ease; }
+.diff-fold[aria-expanded="true"] .icon { transform: rotate(90deg); }
+.diff-file-head .diffstat { font-size: 11px; flex: none; }
+.diff-actions { display: flex; align-items: center; gap: 1px; flex: none; }
+.file-label { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.file-label .tree-icon { flex: none; }
+.file-label-name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; font: 600 12px var(--sans); color: var(--text); }
+.file-label-dir, .file-label-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--text-3); }
+.file-label-from { flex: none; max-width: 40%; }
+.diff-card-body { overflow-x: auto; font: 11px/1.55 var(--mono); }
+.diff-card-body .hunk + .hunk { border-top: 1px solid var(--border); }
+.diff-note { padding: 10px 14px; font: 11.5px var(--sans); color: var(--text-3); }
+.review-index { border: 1px solid var(--border-strong); border-radius: 9px; background: var(--main-bg); padding-bottom: 4px; }
+.review-index:not([open]) { padding-bottom: 0; }
+.review-index > summary { list-style: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+.review-index > summary::-webkit-details-marker { display: none; }
+.review-index > summary > .icon { color: var(--text-3); transition: transform 0.12s ease; }
+.review-index[open] > summary > .icon { transform: rotate(90deg); }
+.review-index-row, .untracked-row { display: flex; align-items: center; gap: 7px; width: calc(100% - 8px); height: 26px; margin: 0 4px; padding: 0 8px; border-radius: 6px; text-align: left; color: var(--text); }
+.review-index-row:hover, .untracked-row:hover { background: var(--hover); }
+.review-index-row .file-label, .untracked-row .file-label { flex: 1; }
+.review-index-row .diffstat { font-size: 10.5px; flex: none; }
+.untracked-card { background: var(--main-bg); padding-bottom: 4px; }
+/* Narrow workbench: keep the name readable, show per-file actions on hover. */
+@container (max-width: 380px) {
+  .diff-card .diff-actions { display: none; }
+  .diff-card > .diff-file-head:hover .diff-actions, .diff-card > .diff-file-head:focus-within .diff-actions { display: flex; }
+}
+.untracked-title { font-size: 12px; font-weight: 600; color: var(--text); }
 @container (max-width: 420px) {
   .composer-bar .chip { padding-inline: 6px; gap: 3px; font-size: 12px; max-width: 120px; }
   .composer-bar .chip-icon { display: none; }

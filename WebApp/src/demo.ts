@@ -2,6 +2,7 @@
 // streaming transcript so the UI can be styled without the Swift side.
 import type { AppState, Item } from './types'
 import { seedDemoText } from './inspector/state'
+import { setOfflineRPC } from './rpc'
 
 const READER_GUIDE = `/Users/demo/Aureways/docs/guide.md`
 const READER_NOTES = `/Users/demo/Aureways/docs/notes.md`
@@ -66,6 +67,14 @@ export function loadDemo() {
       files.seedDemoText(READER_GUIDE, GUIDE_MD)
       files.seedDemoText(READER_NOTES, NOTES_MD)
       reader.openDocuments([READER_GUIDE])
+    })
+  } else if (location.hash.includes('changes')) {
+    setOfflineRPC((method) => method === 'git.diff'
+      ? import('./demoChanges').then((fixture) => ({ repo: true, root: '/Users/demo/Aureways', branch: 'feature/review-polish', diff: fixture.DEMO_GIT_DIFF, untracked: fixture.DEMO_UNTRACKED }))
+      : undefined)
+    void Promise.all([import('./demoChanges'), import('./inspector/state')]).then(([fixture, files]) => {
+      window.__aw.receive({ type: 'patch', sessionId: 's1', ops: [{ op: 'upsert', index: 0, item: { kind: 'tool', id: 'demo-edits', callId: 'demo-edits', title: 'Edited 3 files', fullTitle: '', toolKind: 'edit', status: 'completed', layout: 'edit', progress: false, diffs: fixture.DEMO_SESSION_EDITS } }] })
+      files.showInspector('changes')
     })
   } else if (location.hash.includes('settings')) void import('./store').then((m) => (m.route.value = { name: 'settings', section: location.hash.split('settings-')[1] }))
   const now = Date.now()

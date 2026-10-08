@@ -14,8 +14,13 @@ onMessage((m) => {
   else p.resolve(m.result)
 })
 
+type OfflineHandler = (method: string, params: Record<string, unknown>) => Promise<unknown> | undefined
+let offline: OfflineHandler | null = null
+/** demo.ts only: answer selected calls outside the app so views can be styled headless. */
+export function setOfflineRPC(handler: OfflineHandler | null) { offline = handler }
+
 export function rpc<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-  if (!inApp) return Promise.reject(new Error('offline'))
+  if (!inApp) return (offline?.(method, params) as Promise<T> | undefined) ?? Promise.reject(new Error('offline'))
   const id = ++seq
   return new Promise<T>((resolve, reject) => {
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject })

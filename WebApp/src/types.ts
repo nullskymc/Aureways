@@ -133,6 +133,11 @@ export interface DiffFile {
   truncated: boolean
   isNew: boolean
   hunks: { header: string; oldStart: number; newStart: number; lines: string[] }[]
+  /** Set by the `git diff` parser; transcript edits only carry `isNew`. */
+  status?: 'M' | 'A' | 'D' | 'R'
+  /** Rename source, same form as `path`. */
+  oldPath?: string
+  binary?: boolean
 }
 
 export interface ToolFields {
