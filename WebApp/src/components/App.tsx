@@ -136,6 +136,7 @@ export function App() {
   const attention =
     !!state.error ||
     session?.phase === 'failed' ||
+    session?.phase === 'idle' ||
     !!state.permission ||
     !!state.planApproval ||
     !!state.question ||
@@ -316,6 +317,16 @@ function Alerts({ state, session }: { state: AppState; session: Session | null }
           </span>
           <button class="btn small" onClick={() => post('retry', { id: session.id })}>
             {t('retry')}
+          </button>
+        </div>
+      )}
+      {session?.phase === 'idle' && (
+        // Not in the title bar: a disconnected session is offered here.
+        <div class="banner info">
+          <Icon name="info" size={14} />
+          <span class="flex1">{t('sessionIdle')}</span>
+          <button class="btn small" onClick={() => post('selectSession', { id: session.id })}>
+            {t('open')}
           </button>
         </div>
       )}

@@ -23,6 +23,8 @@
 
 `TitlebarBackdropView` 在原生底层与透明 WKWebView 之间铺一整条底色，覆盖红绿灯下方。侧栏使用相同动态颜色的原生平面底板，贴边铺满，不再使用内缩玻璃卡片，避免标题栏截断圆角与高光。`chrome.nativeTitlebar` 为真时 Web 顶栏不再自行铺底；聊天滚动区从标题栏下方开始并裁剪。圆角交给 NSWindow，不在页面仿造 macOS 窗口。
 
+标题栏里没有普通网页按钮：侧栏开关、（侧栏收起时的）新对话、新建标签 “+”、文件树与右侧标签区开关都是 `TitlebarButtons` 里的系统 Liquid Glass 圆形按钮，由原生按窗口边缘布局；每个工作区标签条后的“向右分栏”是 `TabCapsuleLayer` 画在标签条旁的玻璃圆，页面只在上面放一个透明的命中按钮，并把它相对标签条的偏移、尺寸和禁用状态随标签条报告一起发出（仅在变化时）。聊天栏标题显示当前会话标题，未命名时为“新对话”。
+
 `chrome.ts` 观察顶栏 DOM、尺寸和标签横向滚动，合并上报可见控件的 `dragRegions`。只在 App render 时上报是不够的：标签的 signals 会局部更新。拖拽层高度始终由 Swift 决定，页面只提供避让矩形。
 
 验证需要 `TitlebarTests` 的 AppKit 命中测试和真实 WKWebView 布局测试，不能只用 Chromium 预览代替。改动 Swift 壳后必须重新构建并重新启动应用才能生效。

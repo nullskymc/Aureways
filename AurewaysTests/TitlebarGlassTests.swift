@@ -23,6 +23,42 @@ final class TitlebarGlassTests: XCTestCase {
         XCTAssertEqual(insets.addOnly, 50)
     }
 
+    func testNewChatIsANativeCircleGroupedWithTheSidebarToggle() {
+        let side = TitlebarMetrics.sidebarFrame(lights: lights, fullscreen: false, headerHeight: 52)
+        XCTAssertEqual(TitlebarMetrics.newChatFrame(sidebar: side), CGRect(x: 122, y: 11, width: 30, height: 30))
+        XCTAssertEqual(TitlebarMetrics.insets(sidebar: side, width: 1200).newChat, 160, "page content clears both circles")
+        let buttons = TitlebarButtons(frame: CGRect(x: 0, y: 0, width: 1200, height: 52))
+        buttons.layout(lights: lights, fullscreen: false, headerHeight: 52)
+        XCTAssertFalse(buttons.isNewChatVisible, "sidebar open: New chat is the sidebar's row")
+        buttons.setNewChatVisible(true)
+        XCTAssertTrue(buttons.isNewChatVisible)
+        XCTAssertEqual(buttons.newChatFrame, CGRect(x: 122, y: 11, width: 30, height: 30))
+        XCTAssertTrue(buttons.newChatGlass.superview === buttons.sidebarGlass.superview, "same glass container as the sidebar toggle")
+        // Full screen: follows the sidebar circle natively.
+        buttons.layout(lights: lights, fullscreen: true, headerHeight: 44)
+        XCTAssertEqual(buttons.newChatFrame, CGRect(x: 50, y: 7, width: 30, height: 30))
+        buttons.setNewChatVisible(false)
+        XCTAssertFalse(buttons.isNewChatVisible)
+    }
+
+    func testSplitRightCircleFollowsItsStripThroughResize() {
+        let strip = TabCapsule(base: 650 - 0.375 * 1000, share: 0.375, y: 13, widthBase: 330 - 0.25 * 1000, widthShare: 0.25,
+                               height: 26, activeIndex: 1, count: 3, split: .init(offset: 6, size: 26, enabled: true))
+        XCTAssertEqual(strip.splitFrame(hostWidth: 1000), CGRect(x: 986, y: 13, width: 26, height: 26))
+        XCTAssertEqual(strip.splitFrame(hostWidth: 1200), CGRect(x: 1111, y: 13, width: 26, height: 26), "same report, wider window")
+        let layer = TabCapsuleLayer(frame: CGRect(x: 0, y: 0, width: 1000, height: 52))
+        var plain = strip
+        plain.split = nil
+        layer.apply([strip, plain], sidebarOpen: true)
+        XCTAssertEqual(layer.splitFrames, [CGRect(x: 986, y: 13, width: 26, height: 26), nil])
+        layer.setFrameSize(NSSize(width: 1200, height: 52))
+        XCTAssertEqual(layer.splitFrames.first ?? nil, CGRect(x: 1111, y: 13, width: 26, height: 26), "live resize, no page report")
+        XCTAssertNil(layer.hitTest(NSPoint(x: 1120, y: 26)), "clicks go to the page's transparent button")
+        var disabled = strip
+        disabled.split?.enabled = false
+        XCTAssertFalse(disabled.sameShape(as: strip), "a disabled split is a real change")
+    }
+
     func testClosedWorkbenchLeavesOnlyTheInspectorToggle() {
         XCTAssertEqual(TitlebarMetrics.rightFrame(width: 1200, centerY: 26, compact: true), CGRect(x: 1158, y: 11, width: 30, height: 30))
         let compact = TitlebarMetrics.rightButtonFrames(width: 30, compact: true)

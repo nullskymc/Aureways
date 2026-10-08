@@ -1,6 +1,8 @@
 // The title bar's fixed controls are native glass buttons (TitlebarGlass.swift):
-// the sidebar circle beside the traffic lights, the new-tab "+" circle and the
-// file tree + inspector capsule at the right edge. The page only tells native their state, and
+// the sidebar circle beside the traffic lights (plus New chat while the sidebar
+// is closed), the new-tab "+" circle and the file tree + inspector capsule at
+// the right edge. Each workbench strip's Split right circle is native glass too
+// (TabCapsuleLayer, under the page's transparent button). The page only tells native their state, and
 // only when it changes; native lays them out from the window edges itself.
 import { effect } from '@preact/signals'
 import { post } from './bridge'
@@ -12,6 +14,8 @@ const TREE_KINDS = ['explorer', 'file', 'diff', 'changes']
 
 export interface TitlebarState {
   sidebar: boolean
+  /** The New chat circle beside the sidebar toggle: sidebar closed, main or Documents. */
+  newChat: boolean
   /** The right capsule (file tree + inspector) is shown. */
   right: boolean
   /** The "+" circle (new workbench / Documents tab) is shown: not while the workbench is closed. */
@@ -29,12 +33,14 @@ function treeTabShown(): boolean {
 
 export function titlebarState(): TitlebarState {
   const main = route.value.name === 'main'
+  const documents = route.value.name === 'documents'
   const pane = currentPane()
   const inspector = main && pane.columns.length > 1 && !pane.workbenchCollapsed
   return {
     sidebar: prefs.sidebarOpen.value,
+    newChat: !prefs.sidebarOpen.value && (main || documents),
     right: main,
-    add: inspector || route.value.name === 'documents',
+    add: inspector || documents,
     files: inspector && treeTabShown() && prefs.inspectorOpen.value,
     inspector,
   }

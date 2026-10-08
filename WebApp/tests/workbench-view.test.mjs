@@ -4,6 +4,8 @@ import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { instances } from './fixtures/xterm.mjs'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const { window, document } = parseHTML('<html><body><div id="app"></div></body></html>')
 // Linkedom omits the browser's onkeydown property used by Preact's event normalization.
@@ -127,7 +129,7 @@ test('the project file tree and its toggle stay available while the Changes tab 
 })
 
 test('native title bar: chat is a plain title; workbench tabs fill one slim strip; + and toggles are native', async () => {
-  const native = { ...model, workspacePath: '/glass', inspectorRoot: '/glass', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, trailingInset: 126, addInset: 50 } }
+  const native = { ...model, workspacePath: '/glass', inspectorRoot: '/glass', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, newChatInset: 160, trailingInset: 126, addInset: 50 } }
   app.value = native
   route.value = { name: 'main' }
   prefs.inspectorOpen.value = true
@@ -140,22 +142,26 @@ test('native title bar: chat is a plain title; workbench tabs fill one slim stri
   assert.ok(heads.every(head => head.classList.contains('glass-tabs')))
   // Chat column: no capsule, no tabs, no "+": just the title.
   assert.equal(heads[0].querySelector('.tab-capsule, [role="tablist"], [role="tab"], .tab-add'), null)
-  assert.equal(heads[0].querySelector('.chat-title').textContent, 'Chat')
+  assert.equal(heads[0].querySelector('.chat-title').textContent, 'New chat', 'no session yet: New chat')
   // Workbench: one strip with every tab, no page "+" anywhere.
   const capsule = heads[1].querySelector('.tab-capsule')
   assert.equal(capsule.dataset.glass, 'tabs')
   assert.deepEqual([...capsule.querySelectorAll('[role="tab"]')].map(tab => tab.textContent), ['Changes', 'a.txt', 'Open file'])
   assert.equal(root.querySelector('.tab-add'), null, 'new tab is the native + circle')
   assert.equal(root.querySelector('[aria-label="Toggle file tree"], .workbench-toggle, [title="Toggle sidebar"]'), null, 'no web copies of the native toggles')
-  assert.ok(heads[1].querySelector('[title="Split right"]'), 'split stays a page control')
-  // Sidebar closed: column 0 clears the traffic lights and the native circle; only New chat stays in the page.
-  assert.equal(heads[0].style.paddingLeft, '122px')
-  assert.deepEqual([...heads[0].querySelectorAll('.head-tools button')].map(b => b.title), ['New chat'])
+  // Split right: a transparent hit target over the strip's native glass circle.
+  const split = heads[1].querySelector('button.tab-split')
+  assert.equal(split.title, 'Split right')
+  assert.equal(split.classList.contains('icon-btn'), false, 'not a plain web icon button')
+  // Sidebar closed: sidebar toggle and New chat are native circles; the title sits 16 after them.
+  assert.equal(heads[0].querySelector('.head-tools'), null)
+  assert.equal(root.querySelector('header button.icon-btn, header .btn'), null, 'no plain web buttons left in the title bar')
+  assert.equal(heads[0].style.paddingLeft, '168px')
+  assert.equal(heads[1].style.paddingLeft, '6px')
   // The last visible column keeps clear of the native "+" and toggle capsule.
   assert.equal(heads[1].style.paddingRight, '126px')
   assert.equal(heads[0].style.paddingRight, '')
-  // The title follows New chat; with the sidebar open it sits at the content inset.
-  assert.equal(heads[0].querySelector('.head-tools').nextElementSibling.className.includes('chat-title'), true)
+  // With the sidebar open the title sits at the content inset.
   prefs.sidebarOpen.value = true
   await flush(() => render(h(EditorColumns, { state: native, session: null, sidebarOpen: true, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
   const chatHead = () => root.querySelector('header.tab-strip')
@@ -196,7 +202,7 @@ test('native title bar state goes out only on change; the file tree toggle hides
   const before = sent().length
   installTitlebar()
   assert.equal(sent().length, before + 1)
-  assert.deepEqual({ ...sent().at(-1), type: undefined }, { type: undefined, sidebar: true, right: true, add: true, files: true, inspector: true })
+  assert.deepEqual({ ...sent().at(-1), type: undefined }, { type: undefined, sidebar: true, newChat: false, right: true, add: true, files: true, inspector: true })
   prefs.inspectorOpen.value = true
   assert.equal(sent().length, before + 1, 'unchanged state is not re-sent')
   toggleFileTree()
@@ -213,11 +219,45 @@ test('native title bar state goes out only on change; the file tree toggle hides
   assert.equal(titlebarState().inspector, true, 'the file tree button brings the workbench back')
   assert.equal(titlebarState().files, true)
   assert.equal(titlebarState().add, true, '+ returns with the workbench')
+  prefs.sidebarOpen.value = false
+  assert.equal(sent().at(-1).newChat, true, 'sidebar closed: native New chat circle')
   route.value = { name: 'settings' }
+  assert.equal(sent().at(-1).newChat, false, 'no New chat circle in Settings')
   assert.equal(sent().at(-1).right, false, 'no right capsule outside the main view')
   assert.equal(sent().at(-1).add, false, 'no + in settings')
   route.value = { name: 'documents' }
   assert.equal(titlebarState().add, true, 'Documents keeps the + circle')
   assert.equal(titlebarState().right, false)
+  assert.equal(titlebarState().newChat, true, 'Documents keeps New chat')
+  prefs.sidebarOpen.value = true
+  assert.equal(titlebarState().newChat, false)
   route.value = { name: 'main' }
+})
+
+test('the chat title is the session title, live, with a tooltip; untitled chats read New chat', async () => {
+  const native = { ...model, workspacePath: '/titled', inspectorRoot: '/titled', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, newChatInset: 160, trailingInset: 126, addInset: 50 } }
+  app.value = native
+  route.value = { name: 'main' }
+  state.selectTab('chat')
+  const long = 'Refactor the session store so renames persist across relaunches and agents'
+  const mount = (session) => flush(() => render(h(EditorColumns, { state: native, session, sidebarOpen: true, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
+  const title = () => root.querySelector('header .chat-title')
+  const session = { id: 's1', title: 'Fix login bug', agentTitle: 'Claude', cwd: '/titled', ws: '/titled', phase: 'ready', streaming: false }
+  await mount(session)
+  assert.equal(title().textContent, 'Fix login bug')
+  assert.equal(title().title, 'Fix login bug')
+  // Renamed / auto-titled: the next state carries the new title.
+  await mount({ ...session, title: long })
+  assert.equal(title().textContent, long, 'full text; CSS truncates with an ellipsis')
+  assert.equal(title().title, long, 'tooltip shows the full title')
+  await mount({ ...session, title: '  ' })
+  assert.equal(title().textContent, 'New chat')
+  // Ellipsis: the title shrinks inside the header instead of a fixed max width.
+  const css = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8')
+  assert.match(css.match(/\.head-title \{([^}]*)\}/)[1], /text-overflow: ellipsis;/)
+  assert.match(css.match(/\.glass-tabs \.chat-title \{([^}]*)\}/)[1], /min-width: 0;/)
+  // A disconnected session's Open button is no longer in the title bar.
+  await mount({ ...session, phase: 'idle' })
+  assert.equal(root.querySelector('header.chat-head button'), null)
+  await flush(() => render(null, root))
 })

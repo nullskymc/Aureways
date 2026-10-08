@@ -116,6 +116,8 @@ final class WebShellHostView: NSView {
     private let titlebarBackdrop = TitlebarBackdropView()
     private let tabGlass = TabCapsuleLayer()
     private let titlebarButtons = TitlebarButtons()
+    /// The page's view has a New chat circle (main / Documents, not Settings).
+    private var newChatAllowed = false
     private var sidebarOpen = true
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
@@ -171,6 +173,11 @@ final class WebShellHostView: NSView {
                 guard let self else { return }
                 switch action {
                 case .sidebar: self.bridge.sendCommand("toggleSidebar")
+                case .newChat:
+                    // Same as the sidebar's New chat row: chat view, new session, composer.
+                    self.bridge.sendCommand("newChat")
+                    self.bridge.model.startNewSession()
+                    self.bridge.sendCommand("focusComposer")
                 case .addTab:
                     let frame = self.titlebarButtons.addButtonFrame
                     self.bridge.sendCommand("addTab", ["x": frame.minX, "y": frame.maxY + 4])
@@ -213,11 +220,15 @@ final class WebShellHostView: NSView {
             // Native first: capsules move in this click, the page follows.
             self.sidebarOpen.toggle()
             self.tabGlass.sidebarWillToggle(to: self.sidebarOpen)
+            if self.newChatAllowed { self.titlebarButtons.setNewChatVisible(!self.sidebarOpen) }
         }
         bridge.onTitlebarState = { [weak self] state in
             guard let self else { return }
             if let open = state["sidebar"] as? Bool { self.sidebarOpen = open }
             let right = state["right"] as? Bool ?? false
+            // New chat lives in the sidebar; closed, it is a circle beside the toggle (not in Settings).
+            self.newChatAllowed = right || state["add"] as? Bool ?? false
+            self.titlebarButtons.setNewChatVisible(state["newChat"] as? Bool ?? false)
             // Workbench closed: one circle with the inspector toggle; "+" and file tree hide.
             self.titlebarButtons.setRightVisible(right, add: state["add"] as? Bool ?? false,
                                                  compact: right && !(state["inspector"] as? Bool ?? false))
@@ -392,6 +403,7 @@ final class WebShellHostView: NSView {
             fullscreen: fullscreen,
             titlebarHeight: height,
             leadingInset: insets.leading,
+            newChatInset: insets.newChat,
             trailingInset: insets.trailing,
             addInset: insets.addOnly
         ))
