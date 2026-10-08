@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Native Grok Quota Probing
 
 extension HarnessQuotaFetcher {
-func fetchGrok(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+func fetchGrok(agent: AgentProfile) async throws -> ProviderQuota {
         let authPath = NSString(string: "~/.grok/auth.json").expandingTildeInPath
         guard FileManager.default.fileExists(atPath: authPath),
               let authData = try? Data(contentsOf: URL(fileURLWithPath: authPath)),
@@ -49,7 +49,7 @@ func fetchGrok(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
         email: String?,
         planTitle: String,
         now: Date = Date()
-    ) throws -> HarnessQuotaSnapshot {
+    ) throws -> ProviderQuota {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let config = json["config"] as? [String: Any]
         else {
@@ -98,31 +98,31 @@ func fetchGrok(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
             throw QuotaFetchError.invalidResponse
         }
 
-        let primaryWindow = HarnessQuotaWindow(
+        // Pooled: the product rows are shares of the one weekly limit. Not pooled:
+        // each product is its own limit, so each gets its own window.
+        var windows = [QuotaWindow(
             id: "grok-weekly-window",
-            title: "共享周限额 (Weekly)",
+            label: "Weekly",
+            kind: .weekly,
             usedPercent: totalUsed,
             resetsAt: resetsAt,
-            resetDescription: nil,
-            windowMinutes: 10080
-        )
-        let breakdown = shares.map {
-            HarnessQuotaBreakdownItem(id: $0.id, title: $0.title, usedPercent: $0.percent, pooled: pooled)
+            windowMinutes: 10080,
+            shares: pooled ? shares.map { QuotaShare(id: $0.id, title: $0.title, usedPercent: $0.percent) } : []
+        )]
+        if !pooled {
+            if creditUsed == nil { windows.removeAll() }
+            windows += shares.map {
+                QuotaWindow(id: $0.id, label: $0.title, kind: .weekly, usedPercent: $0.percent, resetsAt: resetsAt, windowMinutes: 10080)
+            }
         }
 
-        return HarnessQuotaSnapshot(
+        return ProviderQuota(
             harnessId: agent.id,
             providerTitle: agent.title,
-            planType: planTitle,
-            accountEmail: email,
-            primaryWindow: primaryWindow,
-            secondaryWindow: nil,
-            extraWindows: [],
-            usageBreakdown: breakdown,
-            creditsRemaining: nil,
-            creditsUnit: nil,
-            resetCreditsAvailable: nil,
-            updatedAt: now
+            plan: planTitle,
+            account: email,
+            windows: windows,
+            lastUpdated: now
         )
     }
 }

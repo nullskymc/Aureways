@@ -18,34 +18,18 @@
         }
       }
     },
-    "%1$lld 天 %2$lld 小时后重置": {
+    "%1$@ 还剩 %2$@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Resets in %1$lldd %2$lldh"
+            "value": "%1$@: %2$@ left"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld 天 %2$lld 小时后重置"
-          }
-        }
-      }
-    },
-    "%1$lld 小时 %2$lld 分后重置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Resets in %1$lldh %2$lldm"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 小时 %2$lld 分后重置"
+            "value": "%1$@ 还剩 %2$@"
           }
         }
       }
@@ -114,18 +98,18 @@
         }
       }
     },
-    "%lld 分钟后重置": {
+    "%@ 额度快用完了": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Resets in %lld minutes"
+            "value": "%@ is running low"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld 分钟后重置"
+            "value": "%@ 额度快用完了"
           }
         }
       }
@@ -158,6 +142,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "(音频)"
+          }
+        }
+      }
+    },
+    "5 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5h"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5 小时"
           }
         }
       }
@@ -210,22 +210,6 @@
         }
       }
     },
-    "主限额 (Session)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Main Limit (Session)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "主限额 (Session)"
-          }
-        }
-      }
-    },
     "仍在等待 ": {
       "localizations": {
         "en": {
@@ -258,18 +242,18 @@
         }
       }
     },
-    "代码审查限额": {
+    "代码审查": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code Review Limit"
+            "value": "Code review"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代码审查限额"
+            "value": "代码审查"
           }
         }
       }
@@ -306,6 +290,22 @@
         }
       }
     },
+    "余额": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Credits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余额"
+          }
+        }
+      }
+    },
     "停止": {
       "localizations": {
         "en": {
@@ -318,22 +318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "停止"
-          }
-        }
-      }
-    },
-    "共享周限额 (Weekly)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shared Weekly Limit (Weekly)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "共享周限额 (Weekly)"
           }
         }
       }
@@ -402,22 +386,6 @@
         }
       }
     },
-    "向右分栏": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Move Right"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "向右分栏"
-          }
-        }
-      }
-    },
     "删除会话": {
       "localizations": {
         "en": {
@@ -446,6 +414,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除文件"
+          }
+        }
+      }
+    },
+    "剩余额度 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ quota left"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剩余额度 %@"
           }
         }
       }
@@ -482,18 +466,18 @@
         }
       }
     },
-    "周限额 (Weekly)": {
+    "向右分栏": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weekly Limit (Weekly)"
+            "value": "Move Right"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "周限额 (Weekly)"
+            "value": "向右分栏"
           }
         }
       }
@@ -706,22 +690,6 @@
         }
       }
     },
-    "已重置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已重置"
-          }
-        }
-      }
-    },
     "打开": {
       "localizations": {
         "en": {
@@ -914,18 +882,34 @@
         }
       }
     },
-    "正常": {
+    "每周": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Normal"
+            "value": "Weekly"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正常"
+            "value": "每周"
+          }
+        }
+      }
+    },
+    "每日": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日"
           }
         }
       }
@@ -1294,22 +1278,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要本机已安装 OpenCode。"
-          }
-        }
-      }
-    },
-    "额外限额": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Extra Limit"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "额外限额"
           }
         }
       }

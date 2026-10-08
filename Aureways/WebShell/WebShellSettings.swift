@@ -23,6 +23,8 @@ extension WebShellBridge {
             "language": model.appLanguage,
             "systemLanguage": L10n.systemLanguage,
             "showMenuBar": showMenuBar,
+            "menuBarQuota": QuotaIndicatorMode.current(defaults).rawValue,
+            "quotaNotifications": QuotaNotifier.isEnabled(defaults),
             "markdownDefault": markdownDefaultCache,
             "autoApprove": model.autoApprove,
             "defaultAgentId": model.selectedAgentId,
@@ -37,7 +39,6 @@ extension WebShellBridge {
                     "notes": agent.notes,
                     "enabled": model.isAgentEnabled(agent),
                     "available": model.availability[agent.id] == true,
-                    "quotaRefreshing": model.quotaStore.isRefreshing[agent.id] == true,
                     "quotaSupported": model.quotaStore.supportsQuota(agent.id),
                 ]
             },
@@ -57,22 +58,41 @@ extension WebShellBridge {
         return settings
     }
 
+    /// Unified quota for every enabled agent (placeholders included), keyed by harness id.
+    /// The web side reads only this; `remainingPercent` / `level` / `estimated` are
+    /// computed here so the panel, settings and menu bar icon agree.
     func encodeQuota() -> [String: Any] {
-        var out: [String: Any] = [:]
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
         let store = model.quotaStore
-        for (id, snapshot) in store.snapshots {
-            guard let data = try? encoder.encode(snapshot),
-                  var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            let hasData = snapshot.mostUrgentWindow != nil || snapshot.creditsRemaining != nil
-            object["severity"] = hasData ? snapshot.overallSeverity.rawValue : "unknown"
-            object["summary"] = snapshot.shortSummary
-            object["fetchedAt"] = snapshot.fetchedAt.timeIntervalSince1970 * 1000
-            if let next = store.nextAllowedFetch(for: id) {
-                object["nextRefreshAt"] = next.timeIntervalSince1970 * 1000
+        let now = Date()
+        func object<T: Encodable>(_ value: T) -> [String: Any]? {
+            guard let data = try? encoder.encode(value) else { return nil }
+            return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        }
+        var out: [String: Any] = [:]
+        for quota in store.providers(for: model.agents.filter { model.isAgentEnabled($0) }) {
+            guard var row = object(quota) else { continue }
+            row["status"] = quota.effectiveStatus(now: now).rawValue
+            row["windows"] = quota.windows.compactMap { window -> [String: Any]? in
+                guard var item = object(window) else { return nil }
+                if let remaining = window.remainingPercent { item["remainingPercent"] = remaining }
+                item["level"] = window.level.rawValue
+                item["estimated"] = window.isEstimated
+                item["reset"] = window.hasReset(now: now)
+                return item
             }
-            out[id] = object
+            if let tightest = quota.tightestWindow {
+                row["tightestId"] = tightest.id
+                row["remainingPercent"] = tightest.remainingPercent ?? NSNull()
+            }
+            row["level"] = quota.level.rawValue
+            row["estimated"] = quota.isEstimated
+            row["refreshing"] = store.isRefreshing[quota.harnessId] == true
+            if let next = store.nextAllowedFetch(for: quota.harnessId) {
+                row["nextRefreshAt"] = next.timeIntervalSince1970 * 1000
+            }
+            out[quota.harnessId] = row
         }
         return out
     }
@@ -93,6 +113,10 @@ extension WebShellBridge {
             case "appearance": model.appearance = value as? String ?? "system"
             case "language": model.appLanguage = value as? String ?? L10n.systemLanguage
             case "showMenuBar": UserDefaults.standard.set(value as? Bool ?? true, forKey: Self.menuBarKey)
+            case "menuBarQuota":
+                let mode = (value as? String).flatMap(QuotaIndicatorMode.init(rawValue:)) ?? .whenLow
+                UserDefaults.standard.set(mode.rawValue, forKey: QuotaIndicatorMode.defaultsKey)
+            case "quotaNotifications": model.quotaNotifier.setEnabled(value as? Bool ?? false)
             case "autoApprove": model.autoApprove = value as? Bool ?? false
             case "defaultAgent":
                 if let id = value as? String, model.agents.contains(where: { $0.id == id }) { model.selectedAgentId = id }

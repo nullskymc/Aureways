@@ -1,15 +1,6 @@
 import Foundation
 
-// MARK: - Unified model pieces
-
-/// Where a quota reading came from. ACP-reported session usage is never a source of
-/// limits; it rides along as `QuotaSessionSupplement`.
-enum QuotaSourceKind: String, Sendable, Codable {
-    /// The provider's own account/usage endpoint, authenticated with the CLI's login.
-    case officialAPI
-    /// Something the CLI already wrote to disk (session logs, caches). No network.
-    case localCache
-}
+// MARK: - Errors and supplements (the model itself is in ProviderQuota.swift)
 
 /// Typed fetch failure. `kind` is what the UI shows (web side localizes it).
 enum QuotaFetchError: Error, Sendable, Equatable {
@@ -58,7 +49,7 @@ protocol QuotaSource: Sendable {
     /// Stable id used by the config map, caches and backoff state (e.g. "codex.usage-api").
     var id: String { get }
     var kind: QuotaSourceKind { get }
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota
 }
 
 /// Shared actor for the network fetchers (Antigravity probing keeps per-process state).
@@ -67,7 +58,7 @@ private let sharedFetcher = HarnessQuotaFetcher()
 struct CodexUsageAPISource: QuotaSource {
     let id = "codex.usage-api"
     let kind = QuotaSourceKind.officialAPI
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota {
         try await sharedFetcher.fetchCodex(agent: agent)
     }
 }
@@ -75,7 +66,7 @@ struct CodexUsageAPISource: QuotaSource {
 struct GrokBillingSource: QuotaSource {
     let id = "grok.billing"
     let kind = QuotaSourceKind.officialAPI
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota {
         try await sharedFetcher.fetchGrok(agent: agent)
     }
 }
@@ -83,7 +74,7 @@ struct GrokBillingSource: QuotaSource {
 struct AntigravityCloudCodeSource: QuotaSource {
     let id = "antigravity.cloudcode"
     let kind = QuotaSourceKind.officialAPI
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota {
         try await sharedFetcher.fetchAntigravity(agent: agent)
     }
 }
@@ -108,32 +99,32 @@ struct ClaudeOAuthUsageSource: QuotaSource {
         return (token, oauth["subscriptionType"] as? String)
     }
 
-    static func parseUsage(_ data: Data, agent: AgentProfile, plan: String?, now: Date = Date()) throws -> HarnessQuotaSnapshot {
+    static func parseUsage(_ data: Data, agent: AgentProfile, plan: String?, now: Date = Date()) throws -> ProviderQuota {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw QuotaFetchError.invalidResponse
         }
-        func window(_ key: String, id: String, title: String, minutes: Int?) -> HarnessQuotaWindow? {
+        func window(_ key: String, id: String, label: String, minutes: Int) -> QuotaWindow? {
             guard let dict = json[key] as? [String: Any],
                   let utilization = (dict["utilization"] as? NSNumber)?.doubleValue else { return nil }
-            return HarnessQuotaWindow(
-                id: id, title: title, usedPercent: utilization,
+            return QuotaWindow(
+                id: id, label: label, usedPercent: utilization,
                 resetsAt: HarnessQuotaFetcher.parseDate(dict["resets_at"]), windowMinutes: minutes
             )
         }
-        let primary = window("five_hour", id: "claude-5h", title: "5h", minutes: 300)
-        let secondary = window("seven_day", id: "claude-7d", title: "7d", minutes: 10080)
-        let extras = [
-            window("seven_day_opus", id: "claude-7d-opus", title: "7d Opus", minutes: 10080),
-            window("seven_day_sonnet", id: "claude-7d-sonnet", title: "7d Sonnet", minutes: 10080),
+        let windows = [
+            window("five_hour", id: "claude-5h", label: "5h", minutes: 300),
+            window("seven_day", id: "claude-7d", label: "Weekly", minutes: 10080),
+            window("seven_day_opus", id: "claude-7d-opus", label: "Weekly Opus", minutes: 10080),
+            window("seven_day_sonnet", id: "claude-7d-sonnet", label: "Weekly Sonnet", minutes: 10080),
         ].compactMap { $0 }
-        guard primary != nil || secondary != nil || !extras.isEmpty else { throw QuotaFetchError.invalidResponse }
-        return HarnessQuotaSnapshot(
-            harnessId: agent.id, providerTitle: agent.title, planType: plan?.capitalized,
-            primaryWindow: primary, secondaryWindow: secondary, extraWindows: extras, updatedAt: now
+        guard !windows.isEmpty else { throw QuotaFetchError.invalidResponse }
+        return ProviderQuota(
+            harnessId: agent.id, providerTitle: agent.title, plan: plan?.capitalized,
+            windows: windows, lastUpdated: now
         )
     }
 
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota {
         let path = Self.credentialsPath()
         guard let data = FileManager.default.contents(atPath: path),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -161,7 +152,7 @@ struct ClaudeOAuthUsageSource: QuotaSource {
 /// network at all, so it's the fallback when the usage API isn't reachable / logged in.
 struct CodexSessionLogSource: QuotaSource {
     let id = "codex.session-log"
-    let kind = QuotaSourceKind.localCache
+    let kind = QuotaSourceKind.localEstimate
     var home: String?
     /// Only look this many days back.
     var lookbackDays = 7
@@ -172,30 +163,35 @@ struct CodexSessionLogSource: QuotaSource {
     }
 
     /// Parses one rollout line; nil unless it carries non-empty `rate_limits`.
-    static func parseRolloutLine(_ line: Data, agent: AgentProfile) -> HarnessQuotaSnapshot? {
+    /// Parses one rollout line; nil unless it carries non-empty `rate_limits`. The numbers
+    /// are what the server told the CLI at that moment, so they're flagged as an estimate.
+    static func parseRolloutLine(_ line: Data, agent: AgentProfile) -> ProviderQuota? {
         guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return nil }
         let payload = json["payload"] as? [String: Any] ?? json
         guard let limits = payload["rate_limits"] as? [String: Any] else { return nil }
         let at = HarnessQuotaFetcher.parseDate(json["timestamp"]) ?? Date()
-        func window(_ key: String, id: String, title: String) -> HarnessQuotaWindow? {
+        func window(_ key: String, id: String, fallback: String) -> QuotaWindow? {
             guard let dict = limits[key] as? [String: Any],
                   let used = (dict["used_percent"] as? NSNumber)?.doubleValue else { return nil }
             var resets = HarnessQuotaFetcher.parseDate(dict["resets_at"])
             if resets == nil, let seconds = (dict["resets_in_seconds"] as? NSNumber)?.doubleValue {
                 resets = at.addingTimeInterval(seconds)
             }
-            return HarnessQuotaWindow(
-                id: id, title: title, usedPercent: used, resetsAt: resets,
-                windowMinutes: (dict["window_minutes"] as? NSNumber)?.intValue
+            let minutes = (dict["window_minutes"] as? NSNumber)?.intValue
+            return QuotaWindow(
+                id: id, label: HarnessQuotaFetcher.codexWindowLabel(minutes: minutes, fallback: fallback),
+                usedPercent: used, resetsAt: resets, windowMinutes: minutes, source: .localEstimate
             )
         }
-        let primary = window("primary", id: "codex-primary", title: "主限额 (Session)")
-        let secondary = window("secondary", id: "codex-secondary", title: "周限额 (Weekly)")
-        guard primary != nil || secondary != nil else { return nil }
-        return HarnessQuotaSnapshot(
+        let windows = [
+            window("primary", id: "codex-primary", fallback: "5h"),
+            window("secondary", id: "codex-secondary", fallback: "Weekly"),
+        ].compactMap { $0 }
+        guard !windows.isEmpty else { return nil }
+        return ProviderQuota(
             harnessId: agent.id, providerTitle: agent.title,
-            planType: (limits["plan_type"] as? String)?.capitalized,
-            primaryWindow: primary, secondaryWindow: secondary, updatedAt: at
+            plan: (limits["plan_type"] as? String)?.capitalized,
+            windows: windows, lastUpdated: at
         )
     }
 
@@ -220,7 +216,7 @@ struct CodexSessionLogSource: QuotaSource {
         return files.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
-    static func latestSnapshot(inFile url: URL, agent: AgentProfile, tailBytes: Int = 512 * 1024) -> HarnessQuotaSnapshot? {
+    static func latestSnapshot(inFile url: URL, agent: AgentProfile, tailBytes: Int = 512 * 1024) -> ProviderQuota? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
@@ -234,7 +230,7 @@ struct CodexSessionLogSource: QuotaSource {
         return nil
     }
 
-    func fetch(for agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetch(for agent: AgentProfile) async throws -> ProviderQuota {
         let files = recentRolloutFiles()
         guard !files.isEmpty else { throw QuotaFetchError.notConfigured }
         for file in files.prefix(10) {
