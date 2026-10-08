@@ -138,12 +138,12 @@ export function App() {
         '--head-h': `${headH}px`,
       }}
     >
-      {sidebarOpen.value && (
+      {sidebarOpen.value ? (
         <>
           <Sidebar state={state} onToggle={() => (sidebarOpen.value = false)} />
           <SidebarResizer width={sidebarWidth} />
         </>
-      )}
+      ) : null}
       <div class="stage">
       <main class={'main' + (isSettings ? ' settings-main' : '')} style={{ '--dock-h': `${dockHeight.value}px` }}>
         {isSettings ? (
