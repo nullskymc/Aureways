@@ -70,6 +70,9 @@ func encodeState() -> [String: Any] {
         }
         if role == .main { notifier.update(sessions: sessions, selectedID: selected?.id) }
         state["uiPrefs"] = uiPrefs
+        if role == .menuBar, let provider = UserDefaults.standard.string(forKey: MenuBarCommand.providerKey) {
+            state["menuBarProvider"] = provider
+        }
         state["settings"] = encodeSettings()
         state["quota"] = encodeQuota()
         state["inspectorRoot"] = model.inspectorRoot

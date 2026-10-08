@@ -31,6 +31,27 @@ final class MenuBarCommandTests: XCTestCase {
         }
     }
 
+    /// The panel follows the page's content height: clamped to the screen,
+    /// top edge kept under the status item.
+    @MainActor
+    func testPanelHeightFollowsContentTopAnchored() {
+        XCTAssertEqual(MenuBarLayout.clamp(150, screenHeight: 900), MenuBarLayout.minHeight)
+        XCTAssertEqual(MenuBarLayout.clamp(512.3, screenHeight: 900), 513, "whole points, rounded up: never clips")
+        XCTAssertEqual(MenuBarLayout.clamp(2000, screenHeight: 900), 888, "fits the screen; the page scrolls the rest")
+        XCTAssertEqual(MenuBarLayout.clamp(640, screenHeight: nil), 640)
+        let top = MenuBarLayout.frame(for: CGRect(x: 900, y: 400, width: 340, height: 470), height: 560)
+        XCTAssertEqual(top, CGRect(x: 900, y: 310, width: 340, height: 560))
+        XCTAssertEqual(top.maxY, 870)
+
+        let window = NSWindow(contentRect: CGRect(x: 900, y: 400, width: 340, height: 470), styleMask: [.borderless], backing: .buffered, defer: true)
+        window.isReleasedWhenClosed = false
+        MenuBarLayout.resize(window, to: 380, animated: true)
+        XCTAssertEqual(window.frame, CGRect(x: 900, y: 490, width: 340, height: 380), "off screen: immediate, top stays at 870")
+        MenuBarLayout.resize(window, to: 600, animated: true)
+        XCTAssertEqual(window.frame.maxY, 870)
+        XCTAssertEqual(window.frame.height, 600)
+    }
+
     func testQuitAliases() {
         XCTAssertEqual(WebShellBridge.MenuBarCommand(message: "quitApp"), .quitApp)
         XCTAssertEqual(WebShellBridge.MenuBarCommand(message: "quit"), .quitApp)

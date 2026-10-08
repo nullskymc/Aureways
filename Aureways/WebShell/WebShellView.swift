@@ -23,7 +23,8 @@ struct WebShellRoot: View {
     }
 }
 
-/// Menu bar extra content: same bundle at `#menubar`, fixed size.
+/// Menu bar extra content: same bundle at `#menubar`, fixed width; the height
+/// follows the page's content (`MenuBarLayout`).
 struct MenuBarWebView: NSViewRepresentable {
     let model: AppModel
     static let size = CGSize(width: 340, height: 470)
@@ -34,8 +35,54 @@ struct MenuBarWebView: NSViewRepresentable {
 
     func updateNSView(_ nsView: WebShellHostView, context: Context) {}
 
+    /// Whatever height the window has been given (the host resizes it, top
+    /// anchored); ideal size is the last content height, so SwiftUI agrees.
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: WebShellHostView, context: Context) -> CGSize? {
-        Self.size
+        CGSize(width: Self.size.width, height: proposal.height ?? MenuBarLayout.height)
+    }
+}
+
+/// Menu bar panel height: the page reports its natural content height
+/// (`menuBarHeight`, only when it changes); the host resizes the panel
+/// window to it, keeping the top edge under the status item, animated.
+enum MenuBarLayout {
+    static let defaultsKey = "menuBarPanelHeight"
+    static let minHeight: CGFloat = 220
+    /// Space kept below the panel on the screen.
+    static let screenMargin: CGFloat = 12
+
+    /// Last content height (persisted, so the panel opens at the right size).
+    @MainActor static var height: CGFloat = {
+        let stored = UserDefaults.standard.double(forKey: defaultsKey)
+        return stored > 0 ? CGFloat(stored) : MenuBarWebView.size.height
+    }()
+
+    static func clamp(_ height: CGFloat, screenHeight: CGFloat?) -> CGFloat {
+        let maxHeight = screenHeight.map { max(minHeight, $0 - screenMargin) } ?? .greatestFiniteMagnitude
+        return min(max(height.rounded(.up), minHeight), maxHeight)
+    }
+
+    /// Same width and top edge, new height.
+    static func frame(for current: CGRect, height: CGFloat) -> CGRect {
+        CGRect(x: current.minX, y: current.maxY - height, width: current.width, height: height)
+    }
+
+    /// Resize the panel window to `height`, top edge fixed. Animated only while
+    /// it is on screen (and not with Reduce Motion); otherwise immediate.
+    @MainActor
+    static func resize(_ window: NSWindow, to height: CGFloat, animated: Bool) {
+        guard abs(window.frame.height - height) >= 1 else { return }
+        let target = frame(for: window.frame, height: height)
+        guard animated, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            window.setFrame(target, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.allowsImplicitAnimation = true
+            window.animator().setFrame(target, display: true)
+        }
     }
 }
 
@@ -258,6 +305,18 @@ final class WebShellHostView: NSView {
         composerOverlay?.relayout(in: bounds)
     }
 
+    /// Menu bar panel: fit the window to the page's content height, top anchored.
+    /// Animated natively while the panel is on screen (not with Reduce Motion).
+    func applyMenuBarHeight(_ requested: CGFloat, animated: Bool = true) {
+        guard role == .menuBar else { return }
+        let height = MenuBarLayout.clamp(requested, screenHeight: window?.screen?.visibleFrame.height)
+        if height != MenuBarLayout.height {
+            MenuBarLayout.height = height
+            UserDefaults.standard.set(Double(height), forKey: MenuBarLayout.defaultsKey)
+        }
+        if let window { MenuBarLayout.resize(window, to: height, animated: animated) }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         windowObservers.forEach(NotificationCenter.default.removeObserver)
@@ -265,6 +324,7 @@ final class WebShellHostView: NSView {
         guard let window else { return }
         guard role == .main else {
             applyAppearance(bridge.model.appearance)
+            if role == .menuBar { applyMenuBarHeight(MenuBarLayout.height, animated: false) }
             return
         }
         if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }

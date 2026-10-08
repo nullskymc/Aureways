@@ -3,11 +3,17 @@ import { test } from 'node:test'
 import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const { window, document } = parseHTML('<html><body><div id="app"></div></body></html>')
+// Linkedom lacks onwheel, so Preact would listen for 'Wheel'.
+window.HTMLElement.prototype.onwheel = null
 Object.assign(globalThis, { window, document, HTMLElement: window.HTMLElement, Element: window.Element, location: { hash: '#menubar' } })
 globalThis.requestAnimationFrame = callback => setTimeout(callback, 0)
 globalThis.cancelAnimationFrame = clearTimeout
+globalThis.ResizeObserver = class { observe() {} disconnect() {} }
+globalThis.MutationObserver = window.MutationObserver ?? class { observe() {} disconnect() {} }
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
 
@@ -37,7 +43,6 @@ async function mount(quotaMap, agents, locale = 'zh') {
   render(null, root)
   await act(async () => { render(h(MenuBar, {}), root) })
 }
-const rows = () => [...root.querySelectorAll('.mb-q')]
 const text = el => el?.textContent ?? ''
 
 test('levels, labels and summaries follow the approved bands and always speak in REMAINING', () => {
@@ -58,75 +63,162 @@ test('levels, labels and summaries follow the approved bands and always speak in
   assert.equal(quota.percentText(38, true), '~38%')
 })
 
-test('one row per provider with the tightest limit, its remaining %, bar colour and reset countdown', async () => {
+const tabs = () => [...root.querySelectorAll('.mb-bar [role="tab"]')]
+const selectedTab = () => root.querySelector('.mb-bar [aria-selected="true"]')
+const detail = () => root.querySelector('#mb-detail')
+const lastPost = type => posted.filter(m => m.type === type).at(-1)
+const key = async k => act(async () => { document.dispatchEvent(Object.assign(new window.Event('keydown', { bubbles: true, cancelable: true }), { key: k })) })
+
+test('icon bar: one tab per provider, labelled, the first signed-in provider selected; its detail shows every limit', async () => {
   await mount({
-    codex: provider('codex', [win('p', '5h', 62), win('s', 'Weekly', 21, { kind: 'weekly' })], { plan: 'Plus' }),
-    claude: provider('claude', [win('p', '5h', 88, { estimated: true, source: 'localEstimate' })]),
-  }, [agent('codex'), agent('claude')])
-  assert.equal(rows().length, 2)
-  const [codex, claude] = rows()
-  assert.equal(text(codex.querySelector('.mb-q-name')), 'codex')
-  assert.equal(text(codex.querySelector('.badge')), 'Plus')
-  assert.equal(text(codex.querySelector('.mb-q-pct')), '38%', 'remaining of the tightest window, not used')
-  assert.equal(codex.querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill moderate')
-  assert.match(codex.querySelector('.mb-q-fill').getAttribute('style'), /width: ?38%/)
-  assert.equal(text(codex.querySelector('.mb-q-sub span')), '5 小时')
-  assert.match(text(codex.querySelector('.mb-q-sub')), /2 小时 15 分 后重置/)
-  assert.equal(codex.querySelectorAll('.mb-w').length, 0, 'collapsed: only the tightest window')
-  assert.equal(text(claude.querySelector('.mb-q-pct')), '约 12%')
-  assert.equal(claude.querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill low')
+    claude: { ...provider('claude', []), status: 'notSignedIn', statusDetail: 'notConfigured' },
+    codex: provider('codex', [win('p', '5h', 62), win('s', 'Weekly', 21, { kind: 'weekly' }), { id: 'c', label: 'Credits', kind: 'credits', balance: 12.5, unit: 'credits', level: 'unknown', source: 'officialAPI', estimated: false }], { plan: 'Plus', sourceKind: 'officialAPI', account: 'me@x.com' }),
+    cursor: { ...provider('cursor', []), status: 'unsupported' },
+    hidden: provider('hidden', [win('p', '5h', 1)]),
+  }, [agent('claude'), agent('codex'), agent('cursor'), agent('hidden', { available: false })])
+  assert.deepEqual(tabs().map(t => t.getAttribute('aria-label')), ['claude · 未登录', 'codex', 'cursor · 暂不支持查询额度'], 'not-installed hidden; status in the label')
+  assert.deepEqual(tabs().map(t => t.title), tabs().map(t => t.getAttribute('aria-label')), 'tooltip = label')
+  assert.deepEqual(tabs().map(t => t.classList.contains('dim')), [true, false, true], 'signed out / unsupported icons are dimmed')
+  assert.equal(root.querySelector('.mb-sev, .avail-dot, .attention-dot.mb'), null, 'no ambiguous dots')
+  assert.equal(selectedTab().getAttribute('aria-label'), 'codex', 'defaults to the first signed-in provider')
+  const d = detail()
+  assert.equal(d.getAttribute('aria-labelledby'), 'mb-tab-codex')
+  assert.equal(text(d.querySelector('.mb-q-name')), 'codex')
+  assert.equal(text(d.querySelector('.badge')), 'Plus')
+  const lines = [...d.querySelectorAll('.mb-w')]
+  assert.deepEqual(lines.map(l => text(l.querySelector('.mb-w-line span'))), ['5 小时', '每周', '余额'], 'every window')
+  assert.deepEqual(lines.map(l => text(l.querySelector('.mb-w-pct'))), ['38%', '79%', '12.50 credits'], 'remaining, not used')
+  assert.equal(lines[0].querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill moderate')
+  assert.equal(lines[1].querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill ample')
+  assert.match(lines[0].querySelector('.mb-q-fill').getAttribute('style'), /width: ?38%/)
+  assert.match(text(lines[0]), /2 小时 15 分 后重置/)
+  assert.match(text(d.querySelector('.mb-q-meta')), /me@x\.com · 账号接口 · 更新于 3 分钟前/)
   // Compact header: app name, when it was updated, refresh. No summary line.
   assert.equal(root.querySelector('.mb-summary'), null)
   assert.equal(text(root.querySelector('.mb-head .mb-title')), 'Aureways')
   assert.match(text(root.querySelector('.mb-updated')), /更新于 3 分钟前/)
-  assert.doesNotMatch(text(root.querySelector('.mb-head')), /快用完|未登录|全部正常/)
   assert.equal(root.querySelectorAll('.mb-row').length, 3, 'recent chats reduced to 3')
   assert.deepEqual([...root.querySelectorAll('.mb-foot .mb-link')].map(text), ['新对话', '打开 Aureways', '设置', '退出'])
-})
-
-test('clicking a row expands every limit; not signed in / unsupported / error are gray inline text', async () => {
-  posted.length = 0
-  await mount({
-    codex: provider('codex', [win('p', '5h', 62), win('s', 'Weekly', 21, { kind: 'weekly' }), { id: 'c', label: 'Credits', kind: 'credits', balance: 12.5, unit: 'credits', level: 'unknown', source: 'officialAPI', estimated: false }], { sourceKind: 'officialAPI', account: 'me@x.com' }),
-    claude: { ...provider('claude', []), status: 'notSignedIn', statusDetail: 'notConfigured' },
-    grok: { ...provider('grok', []), status: 'error', statusDetail: 'network' },
-    cursor: { ...provider('cursor', []), status: 'unsupported' },
-    opencode: { ...provider('opencode', []), status: 'unsupported' },
-    hidden: provider('hidden', [win('p', '5h', 1)]),
-  }, [agent('codex'), agent('claude'), agent('grok'), agent('cursor'), agent('opencode'), agent('hidden', { available: false })])
-  assert.deepEqual(rows().map(r => text(r.querySelector('.mb-q-name'))), ['codex', 'claude', 'grok'], 'unsupported grouped, not-installed hidden')
-  assert.equal(text(root.querySelector('.mb-unsupported')), '不支持查询额度：cursor · opencode')
-  const claude = rows()[1]
-  assert.equal(claude.querySelector('.mb-q-pct'), null)
-  assert.match(text(claude.querySelector('.mb-q-note')), /^未登录 · 去设置$/)
-  assert.equal(root.querySelector('.mb-sev, .avail-dot'), null, 'no ambiguous dots')
-  await act(async () => { claude.querySelector('.mb-inline-link').click() })
-  assert.deepEqual(posted.at(-1), { type: 'openSettings', section: 'usage' })
-  const grok = rows()[2]
-  assert.match(text(grok.querySelector('.mb-q-note')), /网络错误/)
-  await act(async () => { grok.querySelector('.mb-inline-link').click() })
-  assert.deepEqual(posted.at(-1), { type: 'refreshQuota', id: 'grok' })
-
-  await act(async () => { rows()[0].querySelector('.mb-q-main').click() })
-  const lines = [...rows()[0].querySelectorAll('.mb-w')]
-  assert.equal(lines.length, 3, 'expanded: every window')
-  assert.deepEqual(lines.map(l => text(l.querySelector('.mb-w-line span'))), ['5 小时', '每周', '余额'])
-  assert.equal(text(lines[1].querySelector('.mb-w-pct')), '79%')
-  assert.equal(text(lines[2].querySelector('.mb-w-pct')), '12.50 credits')
-  assert.match(text(rows()[0].querySelector('.mb-q-meta')), /me@x\.com · 账号接口 · 更新于 3 分钟前/)
-  await act(async () => { rows()[0].querySelector('.mb-q-main').click() })
-  assert.equal(rows()[0].querySelectorAll('.mb-w').length, 0, 'click again collapses')
-  await act(async () => { rows()[1].querySelector('.mb-q-main').click() })
-  assert.equal(rows()[1].querySelectorAll('.mb-w').length, 0, 'rows without numbers do not expand')
-
   await act(async () => { root.querySelector('.mb-head .icon-btn').click() })
   assert.deepEqual(posted.at(-1), { type: 'refreshQuota' })
   assert.ok(posted.some(m => m.type === 'menuBarOpened'), 'opening the panel asks for a stale-only refresh')
 })
 
+test('click, ←/→ and a horizontal swipe switch providers; the choice is remembered', async () => {
+  posted.length = 0
+  const map = {
+    codex: provider('codex', [win('p', '5h', 62)]),
+    claude: provider('claude', [win('p', '5h', 88, { estimated: true, source: 'localEstimate' }), win('w', 'Weekly', 40)]),
+    grok: { ...provider('grok', []), status: 'error', statusDetail: 'network' },
+  }
+  const agents = [agent('codex'), agent('claude'), agent('grok')]
+  await mount(map, agents)
+  assert.equal(selectedTab().getAttribute('aria-label'), 'codex')
+  await act(async () => { tabs()[1].click() })
+  assert.equal(selectedTab().getAttribute('aria-label'), 'claude')
+  assert.deepEqual(lastPost('menuBarProvider'), { type: 'menuBarProvider', id: 'claude' })
+  assert.equal(text(detail().querySelector('.mb-w-pct')), '约 12%')
+  assert.equal(detail().querySelector('.mb-q-fill').getAttribute('class'), 'mb-q-fill low')
+  // Slide: the old page leaves to the left, the new one comes from the right.
+  assert.ok(root.querySelector('.mb-page.leaving.to-left'))
+  assert.ok(detail().classList.contains('from-right'))
+  await key('ArrowRight')
+  assert.equal(selectedTab().getAttribute('aria-label'), 'grok')
+  assert.match(text(detail().querySelector('.mb-q-note')), /网络错误.* · 重试 · 去设置$/)
+  await act(async () => { detail().querySelector('.mb-inline-link').click() })
+  assert.deepEqual(posted.at(-1), { type: 'refreshQuota', id: 'grok' })
+  await key('ArrowRight')
+  assert.equal(selectedTab().getAttribute('aria-label'), 'grok', 'stops at the last provider')
+  await key('ArrowLeft')
+  assert.equal(selectedTab().getAttribute('aria-label'), 'claude')
+  assert.ok(root.querySelector('.mb-page.leaving.to-right'), 'going back slides the other way')
+  // Trackpad: one step per gesture, however long the swipe.
+  const pager = root.querySelector('.mb-pager')
+  await act(async () => {
+    for (let i = 0; i < 12; i++) pager.dispatchEvent(Object.assign(new window.Event('wheel', { bubbles: true, cancelable: true }), { deltaX: -12, deltaY: 1 }))
+  })
+  assert.equal(selectedTab().getAttribute('aria-label'), 'codex')
+  await act(async () => { pager.dispatchEvent(Object.assign(new window.Event('wheel', { bubbles: true }), { deltaX: 2, deltaY: 30 })) })
+  assert.equal(selectedTab().getAttribute('aria-label'), 'codex', 'vertical scrolling does not switch')
+  // Reopened (fresh page): the remembered provider comes back from native state.
+  app.value = { ...app.value, menuBarProvider: 'claude' }
+  render(null, root)
+  await act(async () => { render(h(MenuBar, {}), root) })
+  assert.equal(selectedTab().getAttribute('aria-label'), 'claude')
+  assert.equal(root.querySelector('.mb-page.leaving'), null, 'no slide on open')
+  // A remembered provider that is gone falls back to the first signed-in one.
+  app.value = { ...app.value, menuBarProvider: 'gone' }
+  render(null, root)
+  await act(async () => { render(h(MenuBar, {}), root) })
+  assert.equal(selectedTab().getAttribute('aria-label'), 'codex')
+})
+
+test('not signed in and unsupported read as gray text; Reduce Motion switches without a slide', async () => {
+  const media = globalThis.matchMedia
+  globalThis.matchMedia = q => ({ matches: q.includes('reduce'), addEventListener() {}, removeEventListener() {} })
+  await mount({
+    claude: { ...provider('claude', []), status: 'notSignedIn', statusDetail: 'notConfigured' },
+    cursor: { ...provider('cursor', []), status: 'unsupported' },
+  }, [agent('claude'), agent('cursor')])
+  assert.equal(selectedTab().getAttribute('aria-label'), 'claude · 未登录', 'nothing signed in: the first one')
+  assert.match(text(detail().querySelector('.mb-q-note')), /^未登录 · 去设置$/)
+  await act(async () => { detail().querySelector('.mb-inline-link').click() })
+  assert.deepEqual(posted.at(-1), { type: 'openSettings', section: 'usage' })
+  await act(async () => { tabs()[1].click() })
+  assert.equal(root.querySelector('.mb-page.leaving'), null, 'Reduce Motion: no slide')
+  assert.equal(text(detail().querySelector('.mb-q-note')), '暂不支持查询额度')
+  assert.equal(detail().querySelector('.mb-w'), null)
+  const css = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8')
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.mb-page \{ animation: none !important; \}/)
+  globalThis.matchMedia = media
+})
+
 test('stale readings keep their numbers and say why', async () => {
   await mount({ codex: provider('codex', [win('p', '5h', 40)], { status: 'stale', statusDetail: 'rateLimited' }) }, [agent('codex')], 'en')
-  assert.equal(text(rows()[0].querySelector('.mb-q-pct')), '60%')
-  assert.match(text(rows()[0].querySelector('.mb-q-note')), /May be out of date · Rate limited/)
-  assert.equal(root.querySelector('.mb-summary'), null)
+  assert.equal(text(detail().querySelector('.mb-w-pct')), '60%')
+  assert.match(text(detail().querySelector('.mb-q-note')), /May be out of date · Rate limited/)
+})
+
+test('panel height: the natural content height goes to native only when it changes', async () => {
+  const { naturalHeight, observeHeight } = await import('../src/components/MenuBar.tsx')
+  // Window taller than the content: the spacer takes the slack.
+  assert.equal(naturalHeight({ panel: 470, pager: 120, page: 120, spacer: 90 }), 380)
+  // Window shorter (mid-grow): the pager clips; the natural height is still the content's.
+  assert.equal(naturalHeight({ panel: 380, pager: 96, page: 210.4, spacer: 0 }), 495)
+  posted.length = 0
+  const panel = document.createElement('div')
+  panel.innerHTML = '<div class="mb-pager"><div class="mb-page"></div></div><div class="mb-spacer"></div><section class="mb-section"></section>'
+  const size = (el, h) => { el.getBoundingClientRect = () => ({ height: h, width: 340, top: 0, left: 0, right: 340, bottom: h }) }
+  const [pager, page, spacer] = ['.mb-pager', '.mb-page', '.mb-spacer'].map(sel => panel.querySelector(sel))
+  size(panel, 470); size(pager, 120); size(page, 120); size(spacer, 90)
+  const observers = []
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; observers.push(this) } observe() {} disconnect() {} }
+  const stop = observeHeight(panel)
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight'), [{ type: 'menuBarHeight', height: 380 }])
+  // Window resized to fit: same natural height, nothing re-sent.
+  size(panel, 380); size(spacer, 0)
+  observers[0].cb([])
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.equal(posted.filter(m => m.type === 'menuBarHeight').length, 1)
+  // A provider with more limits: one message with the new height.
+  size(page, 230); size(pager, 120)
+  observers[0].cb([])
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight').at(-1), { type: 'menuBarHeight', height: 490 })
+  stop()
+})
+
+test('swipe tracker: threshold, one step per gesture, resets when the wheel goes quiet', async () => {
+  const { swipeTracker } = await import('../src/components/MenuBar.tsx')
+  const steps = []
+  const tracker = swipeTracker(dir => steps.push(dir), 36, 20)
+  tracker.wheel({ deltaX: 20, deltaY: 0 })
+  assert.deepEqual(steps, [])
+  tracker.wheel({ deltaX: 20, deltaY: 0 })
+  tracker.wheel({ deltaX: 200, deltaY: 0 })
+  assert.deepEqual(steps, [1], 'momentum does not skip providers')
+  await new Promise(resolve => setTimeout(resolve, 30))
+  tracker.wheel({ deltaX: -40, deltaY: 0 })
+  assert.deepEqual(steps, [1, -1])
 })

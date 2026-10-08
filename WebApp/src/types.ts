@@ -67,6 +67,8 @@ export interface AppState {
   settings: Settings
   /** Every enabled agent, keyed by harness id (placeholders included). */
   quota: Record<string, ProviderQuota>
+  /** Menu bar panel: the provider last picked in its icon bar. */
+  menuBarProvider?: string
 }
 
 export interface SettingsAgent {
