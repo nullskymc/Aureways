@@ -114,6 +114,9 @@ final class WebShellHostView: NSView {
     let role: WebShellBridge.Role
     private let glassLayer = GlassLayerView()
     private let titlebarBackdrop = TitlebarBackdropView()
+    private let tabGlass = TabCapsuleLayer()
+    private let titlebarButtons = TitlebarButtons()
+    private var sidebarOpen = true
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
     private var windowObservers: [NSObjectProtocol] = []
@@ -139,6 +142,10 @@ final class WebShellHostView: NSView {
             titlebarBackdrop.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
             titlebarBackdrop.autoresizingMask = [.width, .maxYMargin]
             addSubview(titlebarBackdrop)
+            // Tab strip capsules: on the header surface, under the page's tabs.
+            tabGlass.frame = titlebarBackdrop.frame
+            tabGlass.autoresizingMask = [.width, .maxYMargin]
+            addSubview(tabGlass)
         }
 
         webView.frame = bounds
@@ -156,6 +163,18 @@ final class WebShellHostView: NSView {
             dragStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
             dragStrip.autoresizingMask = [.width, .maxYMargin]
             addSubview(dragStrip)
+            // Native glass toggles: topmost, only their buttons take clicks.
+            titlebarButtons.frame = dragStrip.frame
+            titlebarButtons.autoresizingMask = [.width, .maxYMargin]
+            addSubview(titlebarButtons)
+            titlebarButtons.onAction = { [weak self] action in
+                guard let self else { return }
+                switch action {
+                case .sidebar: self.bridge.sendCommand("toggleSidebar")
+                case .fileTree: self.bridge.sendCommand("toggleFileTree")
+                case .inspector: self.bridge.sendCommand("toggleInspector")
+                }
+            }
         }
 
         bridge.webView = webView
@@ -167,6 +186,37 @@ final class WebShellHostView: NSView {
             // Geometry comes from AppKit, not a delayed page measurement.
         }
         bridge.onAppearance = { [weak self] value in self?.applyAppearance(value) }
+        bridge.onTabCapsules = { [weak self] strips, open in
+            guard let self else { return }
+            self.sidebarOpen = open
+            if PerfProbe.isRunning, strips != self.tabGlass.strips {
+                // Which part changed: a clipped strip's width / active tab scroll are real
+                // changes; a move (base/share) would mean the resize-invariant form failed.
+                let old = self.tabGlass.strips
+                let kind: String
+                if strips.count != old.count || zip(strips, old).contains(where: { abs($0.width - $1.width) >= 1 }) {
+                    kind = "resized"
+                } else if zip(strips, old).contains(where: { abs($0.base - $1.base) >= 1 || abs($0.share - $1.share) > 0.002 }) {
+                    kind = "moved"
+                } else {
+                    kind = "activeTab"
+                }
+                PerfProbe.noteMessage("glass:tabs-" + kind, role: .main)
+            }
+            self.tabGlass.apply(strips, sidebarOpen: open)
+        }
+        bridge.onToggleSidebar = { [weak self] in
+            guard let self else { return }
+            // Native first: capsules move in this click, the page follows.
+            self.sidebarOpen.toggle()
+            self.tabGlass.sidebarWillToggle(to: self.sidebarOpen)
+        }
+        bridge.onTitlebarState = { [weak self] state in
+            guard let self else { return }
+            if let open = state["sidebar"] as? Bool { self.sidebarOpen = open }
+            self.titlebarButtons.setRightVisible(state["right"] as? Bool ?? false)
+            self.titlebarButtons.setState(fileTree: state["files"] as? Bool ?? false, inspector: state["inspector"] as? Bool ?? false)
+        }
         bridge.onGlassRects = { [weak self] rects in
             guard let self else { return }
             self.glassLayer.apply(rects.filter { $0.kind != "slot" })
@@ -326,10 +376,17 @@ final class WebShellHostView: NSView {
         let headerFrame = NSRect(x: 0, y: 0, width: bounds.width, height: height)
         if titlebarBackdrop.frame != headerFrame { titlebarBackdrop.frame = headerFrame }
         if dragStrip.frame != headerFrame { dragStrip.frame = headerFrame }
+        if tabGlass.frame != headerFrame { tabGlass.frame = headerFrame }
+        if titlebarButtons.frame != headerFrame { titlebarButtons.frame = headerFrame }
+        let lights = union.isNull ? CGRect.zero : union
+        titlebarButtons.layout(lights: lights, fullscreen: fullscreen, headerHeight: height)
+        let insets = TitlebarMetrics.insets(sidebar: titlebarButtons.sidebarGlass.frame, width: bounds.width)
         bridge.updateChrome(WebShellBridge.Chrome(
-            trafficLights: union.isNull ? .zero : union,
+            trafficLights: lights,
             fullscreen: fullscreen,
-            titlebarHeight: height
+            titlebarHeight: height,
+            leadingInset: insets.leading,
+            trailingInset: insets.trailing
         ))
     }
 

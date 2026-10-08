@@ -8,6 +8,17 @@ export function headerHeight(state: AppState | null): number {
   return height && Number.isFinite(height) && height > 0 ? height : 46
 }
 
+/** Native glass title bar controls (main window only). */
+export function nativeTitlebarControls(state: AppState): boolean {
+  return !!state.chrome.nativeTitlebar && !!state.chrome.glass && !!state.chrome.leadingInset
+}
+
+/** Header padding that clears the traffic lights (and the native sidebar circle). */
+export function leadingPad(state: AppState, fullscreenPad = 16): number {
+  if (nativeTitlebarControls(state)) return state.chrome.leadingInset!
+  return state.chrome.fullscreen ? fullscreenPad : Math.max(76, state.chrome.trafficLights.x + state.chrome.trafficLights.w + 14)
+}
+
 const HEADERS = '.main-head, .sidebar-head'
 const CONTROLS = 'button, input, textarea, a, select, [data-no-drag]'
 const RESIZERS = '.sidebar-resizer, .col-resizer'

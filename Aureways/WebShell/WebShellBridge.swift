@@ -27,6 +27,9 @@ final class WebShellBridge: NSObject {
         var trafficLights: CGRect
         var fullscreen: Bool
         var titlebarHeight: CGFloat
+        /// Room the page keeps clear for the native title bar glass controls.
+        var leadingInset: CGFloat = 0
+        var trailingInset: CGFloat = 0
     }
 
     enum Role { case main, menuBar, composer }
@@ -38,6 +41,12 @@ final class WebShellBridge: NSObject {
     var onDragRegions: (([CGRect], CGFloat?) -> Void)?
     var onAppearance: ((String) -> Void)?
     var onGlassRects: (([GlassLayerView.Panel]) -> Void)?
+    /// Tab strip capsules from the page (`Bool`: sidebar open when measured).
+    var onTabCapsules: (([TabCapsule], Bool) -> Void)?
+    /// Title bar toggle state from the page (`titlebar` message).
+    var onTitlebarState: (([String: Any]) -> Void)?
+    /// A sidebar toggle is about to be sent to the page (menu, native button).
+    var onToggleSidebar: (() -> Void)?
 
     var isReady = false
     private var flushPending = false
@@ -404,6 +413,8 @@ final class WebShellBridge: NSObject {
                 composerPeer?.sendCommand(name, extra)
             case "find", "openSettings", "openMarkdown", "openReader", "toggleInspector":
                 onFocusMain?()
+            case "toggleSidebar":
+                onToggleSidebar?()
             default:
                 break
             }

@@ -36,6 +36,7 @@
 		B101000000000000000000C3 /* WebAppBundle in Resources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000C3 /* WebAppBundle */; };
 		B20100000000000000000001 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000001 /* ProtocolTests.swift */; };
 		B20100000000000000000099 /* SessionTranscriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000099 /* SessionTranscriptTests.swift */; };
+		B20100000000000000001F05 /* TitlebarGlassTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000001F05 /* TitlebarGlassTests.swift */; };
 		B2010000000000000000009A /* MenuBarCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2010000000000000000009A /* MenuBarCommandTests.swift */; };
 		B201000000000000000000DA /* TitlebarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F201000000000000000000DA /* TitlebarTests.swift */; };
 		B20100000000000000000044 /* TerminalHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20100000000000000000042 /* TerminalHostTests.swift */; };
@@ -102,6 +103,7 @@
 		B101000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
 		B201000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
 		B10100000000000000001F03 /* PerfProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F03 /* PerfProbe.swift */; };
+		B10100000000000000001F04 /* TitlebarGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F04 /* TitlebarGlass.swift */; };
 		B10100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
 		B20100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
 		B10100000000000000001F01 /* ProviderQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F01 /* ProviderQuota.swift */; };
@@ -159,6 +161,7 @@
 		F101000000000000000000C3 /* WebAppBundle */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebAppBundle; sourceTree = "<group>"; };
 		F20100000000000000000001 /* ProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000099 /* SessionTranscriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTranscriptTests.swift; sourceTree = "<group>"; };
+		F20100000000000000001F05 /* TitlebarGlassTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarGlassTests.swift; sourceTree = "<group>"; };
 		F2010000000000000000009A /* MenuBarCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarCommandTests.swift; sourceTree = "<group>"; };
 		F201000000000000000000DA /* TitlebarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarTests.swift; sourceTree = "<group>"; };
 		F20100000000000000000042 /* TerminalHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostTests.swift; sourceTree = "<group>"; };
@@ -195,6 +198,7 @@
 		F101000000000000000000D8 /* QuotaSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaSources.swift; sourceTree = "<group>"; };
 		F101000000000000000000D9 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStore.swift; sourceTree = "<group>"; };
 		F10100000000000000001F03 /* PerfProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfProbe.swift; sourceTree = "<group>"; };
+		F10100000000000000001F04 /* TitlebarGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitlebarGlass.swift; sourceTree = "<group>"; };
 		F10100000000000000001F02 /* QuotaAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAlerts.swift; sourceTree = "<group>"; };
 		F10100000000000000001F01 /* ProviderQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderQuota.swift; sourceTree = "<group>"; };
 		F2010000000000000000009B /* QuotaStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStoreTests.swift; sourceTree = "<group>"; };
@@ -288,6 +292,7 @@
 			isa = PBXGroup;
 			children = (
 				F101000000000000000000D1 /* WebShellView.swift */,
+				F10100000000000000001F04 /* TitlebarGlass.swift */,
 				F10100000000000000001F03 /* PerfProbe.swift */,
 				F101000000000000000000D2 /* WebShellBridge.swift */,
 				F101000000000000000000E4 /* WebShellBridge+State.swift */,
@@ -341,6 +346,7 @@
 				F20100000000000000000001 /* ProtocolTests.swift */,
 				F20100000000000000000099 /* SessionTranscriptTests.swift */,
 				F2010000000000000000009A /* MenuBarCommandTests.swift */,
+				F20100000000000000001F05 /* TitlebarGlassTests.swift */,
 				F201000000000000000000DA /* TitlebarTests.swift */,
 				F2010000000000000000009B /* QuotaStoreTests.swift */,
 				F20100000000000000000042 /* TerminalHostTests.swift */,
@@ -512,6 +518,7 @@
 				B101000000000000000000D4 /* WebShellServices.swift in Sources */,
 				B101000000000000000000D3 /* WebTerminalService.swift in Sources */,
 				B101000000000000000000D1 /* WebShellView.swift in Sources */,
+				B10100000000000000001F04 /* TitlebarGlass.swift in Sources */,
 				B10100000000000000001F03 /* PerfProbe.swift in Sources */,
 				B10100000000000000000012 /* ChatSession.swift in Sources */,
 				B10100000000000000000043 /* PerfFixture.swift in Sources */,
@@ -562,6 +569,7 @@
 				B20100000000000000000001 /* ProtocolTests.swift in Sources */,
 				B20100000000000000000099 /* SessionTranscriptTests.swift in Sources */,
 				B2010000000000000000009A /* MenuBarCommandTests.swift in Sources */,
+				B20100000000000000001F05 /* TitlebarGlassTests.swift in Sources */,
 				B201000000000000000000DA /* TitlebarTests.swift in Sources */,
 				B20100000000000000000044 /* TerminalHostTests.swift in Sources */,
 				B20100000000000000000030 /* ComposerAttachment.swift in Sources */,

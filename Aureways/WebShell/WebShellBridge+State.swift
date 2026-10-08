@@ -23,6 +23,8 @@ func encodeState() -> [String: Any] {
                 ],
                 "fullscreen": chrome.fullscreen,
                 "titlebarHeight": chrome.titlebarHeight,
+                "leadingInset": chrome.leadingInset,
+                "trailingInset": chrome.trailingInset,
                 "nativeTitlebar": role == .main,
                 "glass": role != .menuBar,
                 "composerOverlay": role == .main,
