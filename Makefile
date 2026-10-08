@@ -38,7 +38,7 @@ ifneq ($(DEVELOPER_DIR),)
 export DEVELOPER_DIR
 endif
 
-.PHONY: build release test open clean web
+.PHONY: build release test open clean web web-test
 
 # WebAppBundle is a folder reference in the Xcode project. It is build output,
 # not source: compile it before xcodebuild copies it into the app.
@@ -62,6 +62,9 @@ $(WEB_STAMP): $(WEB_MODULES_STAMP) $(WEB_INPUTS)
 
 web: $(WEB_STAMP)
 
+web-test: $(WEB_MODULES_STAMP)
+	cd WebApp && npm test
+
 # SwiftTerm ships a build tool plugin; skip interactive plugin validation so
 # command-line builds do not stall on approval (macro validation likewise, in
 # case a dependency adds a macro package).
@@ -80,7 +83,7 @@ build: web
 release: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Release -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
-test: web
+test: web web-test
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in

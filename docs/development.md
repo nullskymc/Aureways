@@ -45,9 +45,10 @@ sudo xcodebuild -license accept
 make open          # Debug 编译并打开
 make build         # 只编译 Debug
 make release       # Release
-make test          # AurewaysTests
+make test          # 前端测试 + AurewaysTests
 make clean         # 删除 .derived
 make web           # 只编 WebApp → Aureways/WebAppBundle
+make web-test      # 只跑前端回归测试
 ```
 
 产物：
@@ -105,7 +106,11 @@ npm run build   # 写入 Aureways/WebAppBundle/；make web 还会按锁文件安
 
 ## 测试
 
-`make test`。测试包单独编译被测 Swift，不把应用当 TEST_HOST。
+`make test` 先构建 WebApp，并运行前端回归测试，再运行 AurewaysTests。原生测试包单独编译被测 Swift，不把应用当 TEST_HOST。
+
+前端也可用 `make web-test` 或在 `WebApp/` 下执行 `npm test`（建议 Node 22+）。测试覆盖本地链接/标题锚点、三栏权重、标签移动与关闭，以及终端异步初始化和组件跨栏重挂载。终端绘制和 PTY 使用替身，不启动真实 shell；输出编译到临时目录，用 Node 内置测试器运行。
+
+`.github/workflows/ci.yml` 在 PR 和 main 分支 push 时运行：Linux 验证前端测试与生产构建，macOS 验证 `make test`。两个工作流都固定使用 Node 22。
 
 | 文件 | 覆盖 |
 | --- | --- |
@@ -127,7 +132,7 @@ npm run build   # 写入 Aureways/WebAppBundle/；make web 还会按锁文件安
 
 1. 在终端用同一条命令试，例如 `grok agent stdio`、`npx -y @agentclientprotocol/codex-acp`、`agy_acp_server`、`omp acp`。
 2. GUI 的 PATH 不含 nvm。把可执行文件链到 `/opt/homebrew/bin` 或 `~/.local/bin`，或写绝对路径。
-3. 在检查器里开一个终端，看同一条命令的输出。
+3. 在主区域开一个终端标签，看同一条命令的输出。
 4. `initialize` 卡住时，确认对方 stdout 只有 NDJSON，横幅不要打到 stdout。
 
 ## 发版
