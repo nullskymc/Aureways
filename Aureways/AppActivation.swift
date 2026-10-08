@@ -36,6 +36,20 @@ enum AppActivation {
     @MainActor static var openMainWindow: (() -> Void)?
     @MainActor static var allowsTermination = false
     @MainActor private static var pendingOpenURLs: [URL] = []
+    /// Document open also posts a reopen. Ordering the window front during that
+    /// activation makes it flash and jump onto the file's screen.
+    @MainActor private static var suppressRevealUntil = Date.distantPast
+
+    /// True while AppKit is delivering an Open Documents (`odoc`) event.
+    @MainActor
+    static var isOpeningDocument: Bool {
+        NSAppleEventManager.shared().currentAppleEvent?.eventID == AEEventID(0x6F646F63)
+    }
+
+    @MainActor
+    static var shouldSuppressReveal: Bool {
+        isOpeningDocument || Date() < suppressRevealUntil
+    }
 
     @MainActor
     static var mainWindows: [NSWindow] {
@@ -48,6 +62,7 @@ enum AppActivation {
 
     @MainActor
     static func receiveOpenedURLs(_ urls: [URL]) {
+        suppressRevealUntil = Date().addingTimeInterval(0.6)
         pendingOpenURLs.append(contentsOf: urls)
         flushPendingOpens()
     }
@@ -58,7 +73,10 @@ enum AppActivation {
         let urls = pendingOpenURLs
         guard !urls.isEmpty else { return }
         pendingOpenURLs.removeAll()
-        revealMainWindow()
+        // Ordering the window front inside the document-open event makes macOS
+        // move it onto the file's screen. A visible window only switches tabs.
+        let visible = mainWindows.contains { $0.isVisible && !$0.isMiniaturized }
+        if !visible { revealMainWindow() }
         model.openMarkdownDocuments(urls: urls)
     }
 

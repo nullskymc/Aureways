@@ -201,6 +201,9 @@ final class WebShellHostView: NSView {
         if window.toolbar != nil { window.toolbar = nil }
         window.isMovableByWindowBackground = false
         window.tabbingMode = .disallowed
+        var behavior = window.collectionBehavior
+        behavior.remove(.moveToActiveSpace)
+        window.collectionBehavior = behavior
         applyAppearance(bridge.model.appearance)
         let lights = TrafficLightLayout(window: window)
         lights.onChange = { [weak self] in self?.publishChrome() }

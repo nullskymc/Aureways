@@ -27,10 +27,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     nonisolated func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Return false so AppKit does not also order the window front.
+        // A document open delivers reopen in the same turn; raising the window
+        // then flashes it and drags it onto the file's screen.
+        if MainActor.assumeIsolated({ AppActivation.isOpeningDocument }) { return false }
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .aurewaysRevealMainWindow, object: nil)
+            MainActor.assumeIsolated {
+                guard !AppActivation.shouldSuppressReveal else { return }
+                AppActivation.revealMainWindow()
+            }
         }
-        return true
+        return false
     }
 
     nonisolated func application(_ application: NSApplication, open urls: [URL]) {
@@ -59,6 +66,10 @@ struct AurewaysApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)
+        // Finder open must not retarget this scene. A retarget recreates the
+        // web view (blank flash) and moves the window onto the file's screen.
+        // AppDelegate.application(_:open:) switches the file tab instead.
+        .handlesExternalEvents(matching: [])
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("新对话".localized) {
@@ -67,7 +78,6 @@ struct AurewaysApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command])
                 Button("打开 Markdown…".localized) {
-                    AppActivation.revealMainWindow()
                     WebShellBridge.current?.sendCommand("openMarkdown")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
