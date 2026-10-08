@@ -100,3 +100,26 @@ test('collapse hides both right columns without unmounting editors or stopping a
   await state.closeTab('term:collapse-term')
   await flush(() => render(null, root))
 })
+
+test('the project file tree and its toggle stay available while the Changes tab is active', async () => {
+  app.value = { ...model, workspacePath: '/changes-nav', inspectorRoot: '/changes-nav' }
+  route.value = { name: 'main' }
+  prefs.inspectorOpen.value = true
+  state.showInspector('changes')
+  await flush(() => render(h(EditorColumns, { state: app.value, session: null, sidebarOpen: true, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
+  const column = () => [...root.querySelectorAll('section.column')].find(col => col.querySelector('.changes'))
+  assert.ok(column(), 'Changes tab is rendered')
+  const toggle = () => column().querySelector('[aria-label="Toggle file tree"]')
+  assert.ok(toggle(), 'toggle shown on the Changes tab')
+  assert.equal(toggle().getAttribute('aria-pressed'), 'true')
+  const tree = () => column().querySelector('.workspace-sidebar .tree')
+  assert.ok(tree(), 'project navigator beside the change list')
+  assert.ok(tree().querySelector('.tree-filter input'), 'navigator keeps its own filter')
+  await flush(() => toggle().click())
+  assert.equal(prefs.inspectorOpen.value, false)
+  assert.equal(tree(), null)
+  assert.ok(column().querySelector('.changes'))
+  await flush(() => toggle().click())
+  assert.ok(tree())
+  await flush(() => render(null, root))
+})
