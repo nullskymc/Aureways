@@ -30,6 +30,8 @@ final class WebShellBridge: NSObject {
         /// Room the page keeps clear for the native title bar glass controls.
         var leadingInset: CGFloat = 0
         var trailingInset: CGFloat = 0
+        /// Trailing inset when only the "+" circle shows (no toggle capsule).
+        var addInset: CGFloat = 0
     }
 
     enum Role { case main, menuBar, composer }

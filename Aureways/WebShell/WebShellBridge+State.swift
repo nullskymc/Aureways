@@ -25,6 +25,7 @@ func encodeState() -> [String: Any] {
                 "titlebarHeight": chrome.titlebarHeight,
                 "leadingInset": chrome.leadingInset,
                 "trailingInset": chrome.trailingInset,
+                "addInset": chrome.addInset,
                 "nativeTitlebar": role == .main,
                 "glass": role != .menuBar,
                 "composerOverlay": role == .main,

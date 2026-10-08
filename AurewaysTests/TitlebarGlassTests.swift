@@ -2,7 +2,7 @@ import XCTest
 @testable import Aureways
 
 /// Title bar glass geometry: native controls come from the window edges, tab
-/// capsules from a resize-invariant page report.
+/// strips from a resize-invariant page report.
 @MainActor
 final class TitlebarGlassTests: XCTestCase {
     private let lights = CGRect(x: 20, y: 19, width: 52, height: 14)
@@ -14,37 +14,50 @@ final class TitlebarGlassTests: XCTestCase {
         XCTAssertEqual(TitlebarMetrics.sidebarFrame(lights: lights, fullscreen: true, headerHeight: 44),
                        CGRect(x: 12, y: 7, width: 30, height: 30), "full screen: lights hidden")
         XCTAssertEqual(TitlebarMetrics.rightFrame(width: 1200, centerY: side.midY), CGRect(x: 1120, y: 11, width: 68, height: 30))
+        // "+" is its own circle, grouped just left of the toggles (or at the edge without them).
+        XCTAssertEqual(TitlebarMetrics.addFrame(width: 1200, centerY: side.midY, besideToggles: true), CGRect(x: 1082, y: 11, width: 30, height: 30))
+        XCTAssertEqual(TitlebarMetrics.addFrame(width: 1200, centerY: side.midY, besideToggles: false), CGRect(x: 1158, y: 11, width: 30, height: 30))
         let insets = TitlebarMetrics.insets(sidebar: side, width: 1200)
         XCTAssertEqual(insets.leading, 122)
-        XCTAssertEqual(insets.trailing, 88)
+        XCTAssertEqual(insets.trailing, 126)
+        XCTAssertEqual(insets.addOnly, 50)
     }
 
-    func testTabCapsuleReportIsResizeInvariant() {
-        // Page at 1000 pt: strip left 650 in a column with 35 % of the free width before it.
-        let report = TabCapsule(base: 650 - 0.35 * 1000, share: 0.35, y: 11, width: 240, height: 30, activeX: 2, activeWidth: 120)
-        XCTAssertEqual(report.frame(hostWidth: 1000).minX, 650)
-        // Same report, window now 1200 pt: the page would lay the strip out at 720.
-        XCTAssertEqual(report.frame(hostWidth: 1200).minX, 720)
-        XCTAssertEqual(report.frame(hostWidth: 1200.5, scale: 2).minX, 720)
-        XCTAssertEqual(report.activeFrame(), CGRect(x: 2, y: 2, width: 120, height: 26))
-        var scrolled = report
-        scrolled.activeX = 180
-        XCTAssertEqual(scrolled.activeFrame(), CGRect(x: 180, y: 2, width: 58, height: 26), "clipped to the capsule")
+    func testTabStripReportIsResizeInvariant() {
+        // Page at 1000 pt: strip left 650, width 330, in a column with 37.5 % of
+        // the free width before it and 25 % of it as its own width.
+        let report = TabCapsule(base: 650 - 0.375 * 1000, share: 0.375, y: 13, widthBase: 330 - 0.25 * 1000, widthShare: 0.25,
+                                height: 26, activeIndex: 1, count: 3)
+        XCTAssertEqual(report.frame(hostWidth: 1000), CGRect(x: 650, y: 13, width: 330, height: 26))
+        // Same report, window now 1200 pt: the page would lay the strip out at 725, 380 wide.
+        XCTAssertEqual(report.frame(hostWidth: 1200), CGRect(x: 725, y: 13, width: 380, height: 26))
+        XCTAssertEqual(report.frame(hostWidth: 1200.5, scale: 2).minX, 725)
+        // Equal-width tabs: the platter follows the resize too.
+        let tab: CGFloat = (330 - 4) / 3
+        XCTAssertEqual(report.activeFrame(hostWidth: 1000), CGRect(x: 2 + tab, y: 2, width: tab, height: 22))
+        XCTAssertEqual(report.activeFrame(hostWidth: 1200)?.width, (380 - 4) / 3)
+        var lone = report
+        lone.count = 1
+        lone.activeIndex = 0
+        XCTAssertNil(lone.activeFrame(hostWidth: 1000), "a lone tab needs no platter")
+        // Scrolled strip: pixel offsets, clipped to the strip.
+        var scrolled = TabCapsule(base: 400, share: 0, y: 13, widthBase: 240, height: 26, activeX: 180, activeWidth: 96)
+        XCTAssertEqual(scrolled.activeFrame(hostWidth: 1000), CGRect(x: 180, y: 2, width: 58, height: 22), "clipped to the strip")
         scrolled.activeX = 400
-        XCTAssertNil(scrolled.activeFrame(), "scrolled out of view")
+        XCTAssertNil(scrolled.activeFrame(hostWidth: 1000), "scrolled out of view")
     }
 
     func testSidebarToggleJumpsToTheRememberedLayoutWithoutWaitingForThePage() {
         let layer = TabCapsuleLayer(frame: CGRect(x: 0, y: 0, width: 1200, height: 52))
-        let closed = [TabCapsule(base: 160, share: 0, y: 11, width: 90, height: 30, activeX: 2, activeWidth: 86)]
-        let open = [TabCapsule(base: 266, share: 0, y: 11, width: 90, height: 30, activeX: 2, activeWidth: 86)]
+        let closed = [TabCapsule(base: 400, share: 0.3, y: 13, widthBase: -20, widthShare: 0.5, height: 26, activeIndex: 0, count: 2)]
+        let open = [TabCapsule(base: 520, share: 0.3, y: 13, widthBase: -120, widthShare: 0.5, height: 26, activeIndex: 0, count: 2)]
         layer.apply(closed, sidebarOpen: false)
         layer.apply(open, sidebarOpen: true)
         layer.sidebarWillToggle(to: false)
         XCTAssertEqual(layer.strips, closed)
         // Tabs changed since that layout was seen: wait for the page instead.
-        layer.apply([TabCapsule(base: 266, share: 0, y: 11, width: 270, height: 30, activeX: 2, activeWidth: 86)], sidebarOpen: true)
+        layer.apply([TabCapsule(base: 520, share: 0.3, y: 13, widthBase: -120, widthShare: 0.5, height: 26, activeIndex: 2, count: 3)], sidebarOpen: true)
         layer.sidebarWillToggle(to: false)
-        XCTAssertEqual(layer.strips.first?.width, 270)
+        XCTAssertEqual(layer.strips.first?.count, 3)
     }
 }

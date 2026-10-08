@@ -40,32 +40,16 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
     return () => observer.disconnect()
   }, [column.active])
 
-  const addTab = async (element: Element) => {
-    // Focus the target column before opening anything from its + menu.
-    if (column.active) selectTab(column.active)
-    const id = await nativeMenu(documents ? [
-      { id: 'note', title: t('newNote'), icon: 'square.and.pencil' },
-      { id: 'md', title: t('openMarkdown'), icon: 'doc.text' },
-    ] : [
-      { id: 'files', title: t('openFileTab'), icon: 'doc' },
-      { id: 'term', title: t('newTerminal'), icon: 'terminal' },
-      { id: 'changes', title: t('changes'), icon: 'square.split.diagonal' },
-      { type: 'separator' },
-      { id: 'md', title: t('openMarkdown'), icon: 'doc.text' },
-    ], element)
-    if (id === 'files') openExplorer()
-    if (id === 'term') void openTerminal()
-    if (id === 'changes') showInspector('changes')
-    if (id === 'note') void createNote()
-    if (id === 'md') void import('./open').then((m) => m.pickMarkdown())
-  }
-
-  // Native mode: the sidebar circle and the file tree / inspector capsule
-  // are native glass (TitlebarGlass.swift); tabs and "+" sit in one capsule
-  // whose glass is drawn natively underneath (data-glass="tabs").
+  // Native mode: the sidebar circle, the "+" circle and the file tree /
+  // inspector capsule are native glass (TitlebarGlass.swift). A workbench
+  // column's tabs sit in one slim full-width strip, Safari style, whose glass
+  // and active-tab platter are drawn natively underneath (data-glass="tabs").
+  // The chat column has no tabs to manage: just its title.
   const native = nativeTitlebarControls(state)
+  const chatTitle = !documents && index === 0 && column.tabs.length === 1 && chat
   const lastVisible = pane.workbenchCollapsed ? index === 0 : index === pane.columns.length - 1
-  const padRight = native && !documents && route.value.name === 'main' && lastVisible ? state.chrome.trailingInset : undefined
+  const padRight = native && lastVisible && (route.value.name === 'main' || documents)
+    ? (documents ? state.chrome.addInset : state.chrome.trailingInset) : undefined
   const stripEl = (
     <div ref={strip} class="insp-tab-strip" role="tablist" aria-label={chat ? t('chat') : t('workspaceTabs')} data-no-drag onKeyDown={(e) => {
       if (!(e.target instanceof HTMLElement) || !e.target.matches('[role="tab"]')) return
@@ -84,8 +68,9 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
       {column.tabs.map((tab) => <TabButton key={tab.id} tab={tab} active={tab.id === column.active} panelId={'panel-' + column.id} />)}
     </div>
   )
-  const addEl = (!chat || !workbenchVisible) && (
-    <button class="icon-btn small tab-add" title={t('addTab')} onClick={(e) => void addTab(e.currentTarget)}><Icon name="plus" size={14} /></button>
+  // Page "+" only without native controls, and never in the chat column.
+  const addEl = !native && !chat && (
+    <button class="icon-btn small tab-add" title={t('addTab')} onClick={(e) => void newTabMenu(e.currentTarget)}><Icon name="plus" size={14} /></button>
   )
 
   return (
@@ -102,10 +87,12 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
           </button>
         </span>
       )}
-      {native ? <div class="tab-capsule" data-glass="tabs" data-no-drag>{stripEl}{addEl}</div> : stripEl}
+      {chatTitle
+        ? <span class="head-title chat-title" id={'tab-chat-' + column.id}>{t('chat')}</span>
+        : native && !chat ? <div class="tab-capsule" data-glass="tabs" data-no-drag>{stripEl}</div> : stripEl}
       {chat && session?.phase === 'connecting' && <span class="head-status" title={t('connecting', session.agentTitle)}><Spinner size={12} /></span>}
       {chat && session?.phase === 'idle' && <button class="btn small" onClick={() => post('selectSession', { id: session.id })}>{t('open')}</button>}
-      {!native && addEl}
+      {addEl}
       {chat && !documents && !native && (
         <button class={'icon-btn small workbench-toggle' + (workbenchVisible ? ' on' : '')}
           title={t(workbenchVisible ? 'hideWorkbench' : 'showWorkbench') + ' · ⌥⌘I'}
@@ -114,7 +101,7 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
           aria-controls={pane.columns.slice(1).map((col) => 'column-' + col.id).join(' ') || undefined}
           onMouseDown={(e) => e.stopPropagation()} onClick={toggleWorkbench}><Icon name="panelRight" size={15} /></button>
       )}
-      {!chat && <div class="tab-head-spacer" />}
+      {!chat && !native && <div class="tab-head-spacer" />}
       {!chat && (
         <span class="tab-head-actions" data-no-drag>
           <button class="icon-btn small" title={t('splitRight')} disabled={index === pane.columns.length - 1 && pane.columns.length >= 3} onClick={() => moveTabRight(column.active)}><Icon name="split" size={14} /></button>
@@ -126,6 +113,30 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
       )}
     </header>
   )
+}
+
+/**
+ * The new-tab menu (native "+" circle, or the page's "+" without native
+ * controls). New tabs always land in a workbench column (or Documents),
+ * never in the chat column: placeOn targets column 1 or later.
+ */
+export async function newTabMenu(anchor: Element | { x: number; y: number }) {
+  const documents = route.peek().name === 'documents'
+  const id = await nativeMenu(documents ? [
+    { id: 'note', title: t('newNote'), icon: 'square.and.pencil' },
+    { id: 'md', title: t('openMarkdown'), icon: 'doc.text' },
+  ] : [
+    { id: 'files', title: t('openFileTab'), icon: 'doc' },
+    { id: 'term', title: t('newTerminal'), icon: 'terminal' },
+    { id: 'changes', title: t('changes'), icon: 'square.split.diagonal' },
+    { type: 'separator' },
+    { id: 'md', title: t('openMarkdown'), icon: 'doc.text' },
+  ], anchor)
+  if (id === 'files') openExplorer()
+  if (id === 'term') void openTerminal()
+  if (id === 'changes') showInspector('changes')
+  if (id === 'note') void createNote()
+  if (id === 'md') void import('./open').then((m) => m.pickMarkdown())
 }
 
 export function ColumnBody({ column, hidden, visible = true }: { column: Column; hidden: boolean; visible?: boolean }) {

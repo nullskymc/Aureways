@@ -5,12 +5,13 @@ import AppKit
 /// system Clear / Tinted setting and Reduce Transparency by itself.
 ///
 /// - `TitlebarButtons`: the sidebar toggle (one circle next to the traffic
-///   lights) and the file tree + inspector toggles (one two-button capsule at
-///   the right edge). Fully native and laid out from the window edges, so live
-///   resize and sidebar toggles never wait for the page.
-/// - `TabCapsuleLayer`: one capsule under each column's tab strip (tabs and
-///   its "+"), with the active tab as a brighter inner platter in the glass's
-///   content (a system fill, like a selected segment). The page draws
+///   lights), the new-tab "+" (a circle) and the file tree + inspector toggles
+///   (one two-button capsule at the right edge). Fully native and laid out
+///   from the window edges, so live resize and sidebar toggles never wait for
+///   the page.
+/// - `TabCapsuleLayer`: one slim strip under each workbench column's tabs,
+///   Safari style: full column width, equal-width tabs, the active tab as a
+///   subtle platter in the glass's content (a system fill). The page draws
 ///   the tabs transparently on top and reports each strip's geometry in a
 ///   resize-invariant form (see `TabCapsule`), coalesced to one message per
 ///   frame and only when it changes.
@@ -29,6 +30,8 @@ enum TitlebarMetrics {
     static let capsulePadding: CGFloat = 2
     /// Space the page keeps clear after the sidebar circle / before the capsule.
     static let clearance: CGFloat = 8
+    /// Gap between the "+" circle and the toggle capsule (one glass group).
+    static let groupGap: CGFloat = 8
 
     static var rightCapsuleWidth: CGFloat { segment * 2 + capsulePadding * 2 }
 
@@ -45,49 +48,79 @@ enum TitlebarMetrics {
                width: rightCapsuleWidth, height: control)
     }
 
-    /// Insets the page keeps clear for the native controls (published in `chrome`).
-    static func insets(sidebar: CGRect, width: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
-        (sidebar.maxX + clearance, trailing + rightCapsuleWidth + clearance)
+    /// "+" circle: left of the toggle capsule, or at the right edge when the
+    /// capsule is hidden (Documents).
+    static func addFrame(width: CGFloat, centerY: CGFloat, besideToggles: Bool) -> CGRect {
+        let right = besideToggles ? width - trailing - rightCapsuleWidth - groupGap : width - trailing
+        return CGRect(x: (right - control).rounded(), y: (centerY - control / 2).rounded(), width: control, height: control)
+    }
+
+    /// Insets the page keeps clear for the native controls (published in `chrome`):
+    /// `trailing` with the toggles and "+", `addOnly` with just "+".
+    static func insets(sidebar: CGRect, width: CGFloat) -> (leading: CGFloat, trailing: CGFloat, addOnly: CGFloat) {
+        (sidebar.maxX + clearance, trailing + rightCapsuleWidth + groupGap + control + clearance, trailing + control + clearance)
     }
 }
 
-/// One column's tab capsule as reported by the page. Columns share the free
-/// width in fixed proportions, so a strip's left edge moves linearly with the
-/// window width: `x = base + share * width`. Reporting `base`/`share` instead
-/// of `x` keeps the report unchanged during live resize; the native layer
-/// recomputes `x` in the same layout pass as the window.
+/// One workbench column's tab strip as reported by the page. Columns share
+/// the free width in fixed proportions, so a strip's left edge and its width
+/// both move linearly with the window width: `x = base + share * width`,
+/// `w = widthBase + widthShare * width`. Reporting those instead of pixels
+/// keeps the report unchanged during live resize; the native layer
+/// recomputes the frame in the same layout pass as the window.
+///
+/// The active tab is reported as `activeIndex` of `count` equal-width tabs
+/// while they all fit (Safari style, so it also follows resize natively), or
+/// as a pixel offset once the strip scrolls.
 struct TabCapsule: Equatable {
     var base: CGFloat
     var share: CGFloat
     var y: CGFloat
-    var width: CGFloat
+    var widthBase: CGFloat
+    var widthShare: CGFloat = 0
     var height: CGFloat
-    /// Active tab, relative to the capsule's left edge (nil: no active tab here).
+    var activeIndex: Int?
+    var count: Int?
+    /// Scrolled strip: active tab relative to the strip's left edge.
     var activeX: CGFloat?
     var activeWidth: CGFloat?
+
+    /// Inset of the tabs inside the strip (the page's strip padding).
+    static let padding: CGFloat = 2
+
+    func width(hostWidth: CGFloat) -> CGFloat { max(0, widthBase + widthShare * hostWidth) }
 
     func frame(hostWidth: CGFloat, scale: CGFloat = 2) -> CGRect {
         let step = max(scale, 1)
         let x = ((base + share * hostWidth) * step).rounded() / step
-        return CGRect(x: x, y: y, width: width, height: height)
+        let w = (width(hostWidth: hostWidth) * step).rounded() / step
+        return CGRect(x: x, y: y, width: w, height: height)
     }
 
-    /// Inner (active tab) frame in capsule coordinates, clipped to the capsule.
-    func activeFrame(inset: CGFloat = 2) -> CGRect? {
-        guard let activeX, let activeWidth, activeWidth > 0 else { return nil }
-        let inner = CGRect(x: activeX, y: inset, width: activeWidth, height: height - inset * 2)
-        let clipped = inner.intersection(CGRect(x: inset, y: 0, width: max(0, width - inset * 2), height: height))
+    /// Active tab platter in strip coordinates, clipped to the strip.
+    func activeFrame(hostWidth: CGFloat, inset: CGFloat = TabCapsule.padding) -> CGRect? {
+        let width = width(hostWidth: hostWidth)
+        let inner: CGRect
+        if let activeIndex, let count, count > 1, activeIndex >= 0, activeIndex < count {
+            let tab = (width - Self.padding * 2) / CGFloat(count)
+            inner = CGRect(x: Self.padding + CGFloat(activeIndex) * tab, y: inset, width: tab, height: height - inset * 2)
+        } else if let activeX, let activeWidth, activeWidth > 0 {
+            inner = CGRect(x: activeX, y: inset, width: activeWidth, height: height - inset * 2)
+        } else {
+            return nil
+        }
+        let clipped = inner.intersection(CGRect(x: Self.padding, y: 0, width: max(0, width - Self.padding * 2), height: height))
         return clipped.isNull || clipped.width < 1 ? nil : clipped
     }
 
-    /// Same tabs, possibly elsewhere: what a sidebar toggle changes.
+    /// Same tabs, possibly elsewhere or wider: what a sidebar toggle changes.
     func sameShape(as other: TabCapsule) -> Bool {
-        abs(width - other.width) < 1 && abs((activeWidth ?? 0) - (other.activeWidth ?? 0)) < 1
-            && abs((activeX ?? 0) - (other.activeX ?? 0)) < 1 && abs(height - other.height) < 1
+        activeIndex == other.activeIndex && count == other.count && abs(height - other.height) < 1
+            && abs((activeX ?? 0) - (other.activeX ?? 0)) < 1 && abs((activeWidth ?? 0) - (other.activeWidth ?? 0)) < 1
     }
 }
 
-/// Glass under the page's tab strips (below the transparent `WKWebView`).
+/// Glass under the page's workbench tab strips (below the transparent `WKWebView`).
 @MainActor
 final class TabCapsuleLayer: NSView {
     private let container = NSGlassEffectContainerView()
@@ -162,7 +195,7 @@ final class TabCapsuleLayer: NSView {
             let radius = frame.height / 2
             if capsule.cornerRadius != radius { capsule.cornerRadius = radius }
             let inner = inners[index]
-            if let active = strip.activeFrame() {
+            if let active = strip.activeFrame(hostWidth: bounds.width) {
                 if inner.frame != active {
                     inner.frame = active
                     inner.layer?.cornerRadius = active.height / 2
@@ -184,14 +217,16 @@ final class TabCapsuleLayer: NSView {
 /// Native glass buttons in the title bar row (topmost; only the buttons take clicks).
 @MainActor
 final class TitlebarButtons: NSView {
-    enum Action { case sidebar, fileTree, inspector }
+    enum Action { case sidebar, addTab, fileTree, inspector }
     var onAction: ((Action) -> Void)?
 
     private let container = NSGlassEffectContainerView()
     private let content = PassthroughFlippedView()
     let sidebarGlass = NSGlassEffectView()
     let rightGlass = NSGlassEffectView()
+    let addGlass = NSGlassEffectView()
     private let sidebarButton: NSButton
+    private let addButton: NSButton
     private let fileTreeButton: NSButton
     private let inspectorButton: NSButton
 
@@ -199,6 +234,7 @@ final class TitlebarButtons: NSView {
 
     override init(frame frameRect: NSRect) {
         sidebarButton = Self.button(symbol: "sidebar.left", label: "切换侧边栏".localized)
+        addButton = Self.button(symbol: "plus", label: "新建标签页".localized)
         fileTreeButton = Self.button(symbol: "folder", label: "切换文件树".localized)
         inspectorButton = Self.button(symbol: "sidebar.right", label: "切换右侧标签区".localized)
         super.init(frame: frameRect)
@@ -229,7 +265,17 @@ final class TitlebarButtons: NSView {
         rightGlass.isHidden = true
         content.addSubview(rightGlass)
 
-        for button in [sidebarButton, fileTreeButton, inspectorButton] {
+        let plus = NSView(frame: CGRect(x: 0, y: 0, width: TitlebarMetrics.control, height: TitlebarMetrics.control))
+        addButton.frame = plus.bounds
+        addButton.autoresizingMask = [.width, .height]
+        plus.addSubview(addButton)
+        addGlass.contentView = plus
+        addGlass.cornerRadius = TitlebarMetrics.control / 2
+        addGlass.autoresizingMask = [.minXMargin]
+        addGlass.isHidden = true
+        content.addSubview(addGlass)
+
+        for button in [sidebarButton, addButton, fileTreeButton, inspectorButton] {
             button.target = self
             button.action = #selector(clicked(_:))
         }
@@ -255,6 +301,7 @@ final class TitlebarButtons: NSView {
     @objc private func clicked(_ sender: NSButton) {
         switch sender {
         case sidebarButton: onAction?(.sidebar)
+        case addButton: onAction?(.addTab)
         case fileTreeButton: onAction?(.fileTree)
         default: onAction?(.inspector)
         }
@@ -267,11 +314,22 @@ final class TitlebarButtons: NSView {
         if sidebarGlass.frame != side { sidebarGlass.frame = side }
         let right = TitlebarMetrics.rightFrame(width: bounds.width, centerY: side.midY)
         if rightGlass.frame != right { rightGlass.frame = right }
+        placeAdd()
     }
 
-    func setRightVisible(_ visible: Bool) {
-        if rightGlass.isHidden == visible { rightGlass.isHidden = !visible }
+    private func placeAdd() {
+        let plus = TitlebarMetrics.addFrame(width: bounds.width, centerY: sidebarGlass.frame.midY, besideToggles: !rightGlass.isHidden)
+        if addGlass.frame != plus { addGlass.frame = plus }
     }
+
+    func setRightVisible(_ visible: Bool, add: Bool) {
+        if rightGlass.isHidden == visible { rightGlass.isHidden = !visible }
+        if addGlass.isHidden == add { addGlass.isHidden = !add }
+        placeAdd()
+    }
+
+    /// Where the "+" menu opens (host coordinates).
+    var addButtonFrame: CGRect { addGlass.frame }
 
     func setState(fileTree: Bool, inspector: Bool) {
         for (button, on) in [(fileTreeButton, fileTree), (inspectorButton, inspector)] {
@@ -279,11 +337,12 @@ final class TitlebarButtons: NSView {
             button.setAccessibilityValue(on ? "1" : "0")
         }
         sidebarButton.contentTintColor = .secondaryLabelColor
+        addButton.contentTintColor = .secondaryLabelColor
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let visible = [(sidebarGlass, [sidebarButton]), (rightGlass, [fileTreeButton, inspectorButton])]
+        let visible = [(sidebarGlass, [sidebarButton]), (addGlass, [addButton]), (rightGlass, [fileTreeButton, inspectorButton])]
         for (glass, buttons) in visible where !glass.isHidden && glass.frame.contains(local) {
             return buttons.first { $0.bounds.contains($0.convert(local, from: self)) }
         }
