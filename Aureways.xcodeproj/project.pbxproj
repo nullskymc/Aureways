@@ -101,6 +101,7 @@
 		B201000000000000000000D8 /* QuotaSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D8 /* QuotaSources.swift */; };
 		B101000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
 		B201000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
+		B10100000000000000001F03 /* PerfProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F03 /* PerfProbe.swift */; };
 		B10100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
 		B20100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
 		B10100000000000000001F01 /* ProviderQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F01 /* ProviderQuota.swift */; };
@@ -193,6 +194,7 @@
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
 		F101000000000000000000D8 /* QuotaSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaSources.swift; sourceTree = "<group>"; };
 		F101000000000000000000D9 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStore.swift; sourceTree = "<group>"; };
+		F10100000000000000001F03 /* PerfProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfProbe.swift; sourceTree = "<group>"; };
 		F10100000000000000001F02 /* QuotaAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAlerts.swift; sourceTree = "<group>"; };
 		F10100000000000000001F01 /* ProviderQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderQuota.swift; sourceTree = "<group>"; };
 		F2010000000000000000009B /* QuotaStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStoreTests.swift; sourceTree = "<group>"; };
@@ -286,6 +288,7 @@
 			isa = PBXGroup;
 			children = (
 				F101000000000000000000D1 /* WebShellView.swift */,
+				F10100000000000000001F03 /* PerfProbe.swift */,
 				F101000000000000000000D2 /* WebShellBridge.swift */,
 				F101000000000000000000E4 /* WebShellBridge+State.swift */,
 				F101000000000000000000E5 /* WebShellBridge+Transcript.swift */,
@@ -509,6 +512,7 @@
 				B101000000000000000000D4 /* WebShellServices.swift in Sources */,
 				B101000000000000000000D3 /* WebTerminalService.swift in Sources */,
 				B101000000000000000000D1 /* WebShellView.swift in Sources */,
+				B10100000000000000001F03 /* PerfProbe.swift in Sources */,
 				B10100000000000000000012 /* ChatSession.swift in Sources */,
 				B10100000000000000000043 /* PerfFixture.swift in Sources */,
 				B10100000000000000000080 /* MarkdownFile.swift in Sources */,

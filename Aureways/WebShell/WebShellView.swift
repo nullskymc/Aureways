@@ -242,6 +242,7 @@ final class WebShellHostView: NSView {
         }
         lights.apply()
         publishChrome()
+        PerfProbe.startIfRequested(window: window, host: self)
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, let window = self.window else { return }
