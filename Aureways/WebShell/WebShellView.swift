@@ -169,7 +169,10 @@ final class WebShellHostView: NSView {
         bridge.onTitlebarState = { [weak self] state in
             guard let self else { return }
             if let open = state["sidebar"] as? Bool { self.sidebarOpen = open }
-            self.titlebarButtons.setRightVisible(state["right"] as? Bool ?? false, add: state["add"] as? Bool ?? false)
+            let right = state["right"] as? Bool ?? false
+            // Workbench closed: one circle with the inspector toggle; "+" and file tree hide.
+            self.titlebarButtons.setRightVisible(right, add: state["add"] as? Bool ?? false,
+                                                 compact: right && !(state["inspector"] as? Bool ?? false))
             self.titlebarButtons.setState(fileTree: state["files"] as? Bool ?? false, inspector: state["inspector"] as? Bool ?? false)
         }
         bridge.onGlassRects = { [weak self] rects in

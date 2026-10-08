@@ -42,10 +42,19 @@ enum TitlebarMetrics {
         return CGRect(x: x.rounded(), y: y.rounded(), width: control, height: control)
     }
 
-    /// Right capsule frame for a host width.
-    static func rightFrame(width: CGFloat, centerY: CGFloat) -> CGRect {
-        CGRect(x: (width - trailing - rightCapsuleWidth).rounded(), y: (centerY - control / 2).rounded(),
-               width: rightCapsuleWidth, height: control)
+    /// Right group frame for a host width: the two-button capsule, or (`compact`,
+    /// workbench closed) a single circle holding just the inspector toggle.
+    static func rightFrame(width: CGFloat, centerY: CGFloat, compact: Bool = false) -> CGRect {
+        let w = compact ? control : rightCapsuleWidth
+        return CGRect(x: (width - trailing - w).rounded(), y: (centerY - control / 2).rounded(), width: w, height: control)
+    }
+
+    /// Buttons inside the right group: [pad | file tree | inspector | pad], or
+    /// (`compact`) the inspector toggle centred in one circle.
+    static func rightButtonFrames(width: CGFloat, compact: Bool) -> (fileTree: CGRect, inspector: CGRect) {
+        let inspectorX = compact ? width - control + (control - segment) / 2 : width - capsulePadding - segment
+        return (CGRect(x: inspectorX - segment, y: 0, width: segment, height: control),
+                CGRect(x: inspectorX, y: 0, width: segment, height: control))
     }
 
     /// "+" circle: left of the toggle capsule, or at the right edge when the
@@ -56,7 +65,8 @@ enum TitlebarMetrics {
     }
 
     /// Insets the page keeps clear for the native controls (published in `chrome`):
-    /// `trailing` with the toggles and "+", `addOnly` with just "+".
+    /// `trailing` with the toggles and "+", `addOnly` with one circle at the edge
+    /// (just "+" in Documents, or just the inspector toggle with the workbench closed).
     static func insets(sidebar: CGRect, width: CGFloat) -> (leading: CGFloat, trailing: CGFloat, addOnly: CGFloat) {
         (sidebar.maxX + clearance, trailing + rightCapsuleWidth + groupGap + control + clearance, trailing + control + clearance)
     }
@@ -254,9 +264,12 @@ final class TitlebarButtons: NSView {
         content.addSubview(sidebarGlass)
 
         let pair = NSView(frame: CGRect(x: 0, y: 0, width: TitlebarMetrics.rightCapsuleWidth, height: TitlebarMetrics.control))
-        let pad = TitlebarMetrics.capsulePadding
-        fileTreeButton.frame = CGRect(x: pad, y: 0, width: TitlebarMetrics.segment, height: TitlebarMetrics.control)
-        inspectorButton.frame = CGRect(x: pad + TitlebarMetrics.segment, y: 0, width: TitlebarMetrics.segment, height: TitlebarMetrics.control)
+        pair.autoresizingMask = [.width, .height]
+        // Pinned to the capsule's right edge, so collapsing to one circle keeps
+        // the inspector toggle in place while the file tree button fades out.
+        fileTreeButton.autoresizingMask = [.minXMargin]
+        inspectorButton.autoresizingMask = [.minXMargin]
+        Self.placeRightButtons(fileTree: fileTreeButton, inspector: inspectorButton, in: pair.bounds.width, compact: false)
         pair.addSubview(fileTreeButton)
         pair.addSubview(inspectorButton)
         rightGlass.contentView = pair
@@ -307,26 +320,81 @@ final class TitlebarButtons: NSView {
         }
     }
 
-    /// Native geometry from the traffic lights; the right capsule follows the
+    private static func placeRightButtons(fileTree: NSButton, inspector: NSButton, in width: CGFloat, compact: Bool) {
+        let frames = TitlebarMetrics.rightButtonFrames(width: width, compact: compact)
+        if fileTree.frame != frames.fileTree { fileTree.frame = frames.fileTree }
+        if inspector.frame != frames.inspector { inspector.frame = frames.inspector }
+    }
+
+    /// Workbench closed: the right group is one circle (inspector toggle only)
+    /// and "+" / file tree have nothing to act on, so they are hidden.
+    private(set) var compact = false
+    private var addShown = false
+
+    /// Native geometry from the traffic lights; the right group follows the
     /// right edge through its autoresizing mask.
     func layout(lights: CGRect, fullscreen: Bool, headerHeight: CGFloat) {
         let side = TitlebarMetrics.sidebarFrame(lights: lights, fullscreen: fullscreen, headerHeight: headerHeight)
         if sidebarGlass.frame != side { sidebarGlass.frame = side }
-        let right = TitlebarMetrics.rightFrame(width: bounds.width, centerY: side.midY)
-        if rightGlass.frame != right { rightGlass.frame = right }
-        placeAdd()
+        placeRight()
     }
 
-    private func placeAdd() {
-        let plus = TitlebarMetrics.addFrame(width: bounds.width, centerY: sidebarGlass.frame.midY, besideToggles: !rightGlass.isHidden)
+    private func placeRight() {
+        let midY = sidebarGlass.frame.midY
+        let right = TitlebarMetrics.rightFrame(width: bounds.width, centerY: midY, compact: compact)
+        if rightGlass.frame != right { rightGlass.frame = right }
+        if let pair = rightGlass.contentView, pair.frame != rightGlass.bounds { pair.frame = rightGlass.bounds }
+        Self.placeRightButtons(fileTree: fileTreeButton, inspector: inspectorButton, in: right.width, compact: compact)
+        let plus = TitlebarMetrics.addFrame(width: bounds.width, centerY: midY, besideToggles: !rightGlass.isHidden && !compact)
         if addGlass.frame != plus { addGlass.frame = plus }
     }
 
-    func setRightVisible(_ visible: Bool, add: Bool) {
+    /// Page state (only sent when it changes). `compact`: the workbench is
+    /// closed. The change animates natively; nothing is sent per frame.
+    func setRightVisible(_ visible: Bool, add: Bool, compact nextCompact: Bool = false) {
+        let wasShown = !rightGlass.isHidden
         if rightGlass.isHidden == visible { rightGlass.isHidden = !visible }
-        if addGlass.isHidden == add { addGlass.isHidden = !add }
-        placeAdd()
+        let animate = window != nil && wasShown && visible && (nextCompact != compact || add != addShown)
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        compact = nextCompact
+        addShown = add
+        if add, addGlass.isHidden { addGlass.alphaValue = animate ? 0 : 1; addGlass.isHidden = false }
+        if !compact, fileTreeButton.isHidden { fileTreeButton.alphaValue = animate ? 0 : 1; fileTreeButton.isHidden = false }
+        guard animate else {
+            addGlass.alphaValue = 1
+            fileTreeButton.alphaValue = 1
+            settleRight()
+            return
+        }
+        let midY = sidebarGlass.frame.midY
+        let right = TitlebarMetrics.rightFrame(width: bounds.width, centerY: midY, compact: compact)
+        let buttons = TitlebarMetrics.rightButtonFrames(width: right.width, compact: compact)
+        let plus = TitlebarMetrics.addFrame(width: bounds.width, centerY: midY, besideToggles: !compact)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.allowsImplicitAnimation = true
+            rightGlass.animator().frame = right
+            rightGlass.contentView?.animator().frame = CGRect(origin: .zero, size: right.size)
+            inspectorButton.animator().frame = buttons.inspector
+            fileTreeButton.animator().frame = buttons.fileTree
+            fileTreeButton.animator().alphaValue = compact ? 0 : 1
+            addGlass.animator().frame = plus
+            addGlass.animator().alphaValue = add ? 1 : 0
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.settleRight() }
+        })
     }
+
+    /// Final state after a change (also after an animation; a newer state wins).
+    private func settleRight() {
+        placeRight()
+        if !addShown { addGlass.isHidden = true }
+        if compact { fileTreeButton.isHidden = true }
+    }
+
+    var isAddVisible: Bool { !addGlass.isHidden }
+    var isFileTreeVisible: Bool { !rightGlass.isHidden && !fileTreeButton.isHidden }
 
     /// Where the "+" menu opens (host coordinates).
     var addButtonFrame: CGRect { addGlass.frame }
@@ -343,8 +411,8 @@ final class TitlebarButtons: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
         let visible = [(sidebarGlass, [sidebarButton]), (addGlass, [addButton]), (rightGlass, [fileTreeButton, inspectorButton])]
-        for (glass, buttons) in visible where !glass.isHidden && glass.frame.contains(local) {
-            return buttons.first { $0.bounds.contains($0.convert(local, from: self)) }
+        for (glass, buttons) in visible where !glass.isHidden && glass.alphaValue > 0.5 && glass.frame.contains(local) {
+            return buttons.first { !$0.isHidden && $0.alphaValue > 0.5 && $0.bounds.contains($0.convert(local, from: self)) }
         }
         return nil
     }

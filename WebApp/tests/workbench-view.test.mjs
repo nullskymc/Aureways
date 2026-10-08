@@ -154,7 +154,18 @@ test('native title bar: chat is a plain title; workbench tabs fill one slim stri
   // The last visible column keeps clear of the native "+" and toggle capsule.
   assert.equal(heads[1].style.paddingRight, '126px')
   assert.equal(heads[0].style.paddingRight, '')
+  // The title follows New chat; with the sidebar open it sits at the content inset.
+  assert.equal(heads[0].querySelector('.head-tools').nextElementSibling.className.includes('chat-title'), true)
   prefs.sidebarOpen.value = true
+  await flush(() => render(h(EditorColumns, { state: native, session: null, sidebarOpen: true, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
+  const chatHead = () => root.querySelector('header.tab-strip')
+  assert.equal(chatHead().style.paddingLeft, '16px')
+  assert.equal(chatHead().querySelector('.head-tools'), null)
+  // Workbench closed: the chat column is last and only clears the single native inspector circle.
+  await flush(() => state.toggleWorkbench())
+  assert.equal(chatHead().style.paddingRight, '50px')
+  await flush(() => state.toggleWorkbench())
+  assert.equal(chatHead().style.paddingRight, '')
   await flush(() => render(null, root))
 })
 
@@ -196,9 +207,12 @@ test('native title bar state goes out only on change; the file tree toggle hides
   state.toggleWorkbench()
   assert.equal(titlebarState().inspector, false)
   assert.equal(titlebarState().files, false)
+  assert.equal(titlebarState().add, false, 'workbench closed: no + (native shows only the inspector toggle)')
+  assert.equal(sent().at(-1).add, false)
   toggleFileTree()
   assert.equal(titlebarState().inspector, true, 'the file tree button brings the workbench back')
   assert.equal(titlebarState().files, true)
+  assert.equal(titlebarState().add, true, '+ returns with the workbench')
   route.value = { name: 'settings' }
   assert.equal(sent().at(-1).right, false, 'no right capsule outside the main view')
   assert.equal(sent().at(-1).add, false, 'no + in settings')
