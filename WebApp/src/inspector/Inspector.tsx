@@ -105,7 +105,7 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
       {!chat && (
         <span class="tab-head-actions" data-no-drag>
           <button class="icon-btn small" title={t('splitRight')} disabled={index === pane.columns.length - 1 && pane.columns.length >= 3} onClick={() => moveTabRight(column.active)}><Icon name="split" size={14} /></button>
-          {!documents && <button class={'icon-btn small' + (navigatorVisible ? ' on' : '')} title={t('toggleFileTree')} aria-label={t('toggleFileTree')} aria-pressed={navigatorVisible} onClick={() => {
+          {!documents && column.tabs.find((tab) => tab.id === column.active)?.kind !== 'changes' && <button class={'icon-btn small' + (navigatorVisible ? ' on' : '')} title={t('toggleFileTree')} aria-label={t('toggleFileTree')} aria-pressed={navigatorVisible} onClick={() => {
             if (column.tabs.find((tab) => tab.id === column.active)?.kind === 'term') openExplorer()
             else prefs.inspectorOpen.value = !prefs.inspectorOpen.value
           }}><Icon name="folder" size={14} /></button>}
@@ -169,7 +169,7 @@ function TabButton({ tab, active, panelId }: { tab: Tab; active: boolean; panelI
   }
   const closable = tab.kind !== 'chat'
   return (
-    <div class={'insp-tab' + (active ? ' active' : '') + (tab.kind === 'chat' ? ' chat-tab' : '')} data-no-drag title={tab.kind === 'file' ? tab.path : label}
+    <div class={'insp-tab' + (active ? ' active' : '') + (tab.kind === 'chat' ? ' chat-tab' : '')} data-no-drag title={tab.kind === 'file' ? tab.path : tab.kind === 'diff' ? tab.file.path : label}
       onMouseDown={(e) => { if (e.button === 1 && closable) { e.preventDefault(); e.stopPropagation(); void closeTab(tab.id) } }}
       onContextMenu={closable ? async (e) => {
         e.preventDefault()

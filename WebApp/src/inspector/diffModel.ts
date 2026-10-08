@@ -57,14 +57,6 @@ export function splitPath(path: string, root: string): { rel: string; name: stri
   return { rel, name: rel.slice(at + 1), dir: at > 0 ? rel.slice(0, at) : '' }
 }
 
-/** Large, deleted and binary files start folded so the review stays scannable. */
-export function autoCollapsed(file: DiffFile): boolean {
-  const status = fileStatus(file)
-  if (status === 'D' || file.binary) return true
-  if (status === 'A') return file.added > 160
-  return file.added + file.removed > 400
-}
-
 /** Text shown in place of hunks when a file has none. */
 export function emptyBodyKey(file: DiffFile): string {
   if (file.binary) return 'binaryFile'

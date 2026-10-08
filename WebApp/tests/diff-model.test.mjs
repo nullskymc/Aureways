@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEMO_GIT_DIFF } from '../src/demoChanges.ts'
-import { autoCollapsed, emptyBodyKey, fileIcon, fileStatus, mergeSessionEdits, parseUnifiedDiff, splitPath } from '../src/inspector/diffModel.ts'
+import { emptyBodyKey, fileIcon, fileStatus, mergeSessionEdits, parseUnifiedDiff, splitPath } from '../src/inspector/diffModel.ts'
 
 const root = '/repo'
 const files = parseUnifiedDiff(DEMO_GIT_DIFF, root)
@@ -31,7 +31,6 @@ test('binary changes are flagged instead of looking clean', () => {
   const [file] = parseUnifiedDiff('diff --git a/icon.png b/icon.png\nindex 1..2 100644\nBinary files a/icon.png and b/icon.png differ\n', root)
   assert.equal(file.binary, true)
   assert.equal(emptyBodyKey(file), 'binaryFile')
-  assert.equal(autoCollapsed(file), true)
 })
 
 test('same-named files are told apart by their parent folder', () => {
@@ -41,13 +40,7 @@ test('same-named files are told apart by their parent folder', () => {
   assert.deepEqual(splitPath('/elsewhere/a/b.ts', root), { rel: '/elsewhere/a/b.ts', name: 'b.ts', dir: '/elsewhere/a' })
 })
 
-test('deleted, huge and long new files start collapsed', () => {
-  const file = (patch) => ({ path: '/repo/x.ts', added: 0, removed: 0, truncated: false, isNew: false, hunks: [], ...patch })
-  assert.equal(autoCollapsed(byPath('docs/old-notes.md')), true)
-  assert.equal(autoCollapsed(byPath('src/components/index.ts')), false)
-  assert.equal(autoCollapsed(file({ added: 300, removed: 120 })), true)
-  assert.equal(autoCollapsed(file({ isNew: true, added: 107 })), false)
-  assert.equal(autoCollapsed(file({ isNew: true, added: 500 })), true)
+test('empty bodies explain renames', () => {
   assert.equal(emptyBodyKey(byPath('Aureways/Views/WebShellRoot.swift')), 'renamedOnly')
 })
 

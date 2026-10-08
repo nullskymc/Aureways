@@ -42,23 +42,16 @@ export function DiffStat({ file }: { file: Pick<DiffFile, 'added' | 'removed'> }
   )
 }
 
-/** Header shared by diff tabs and the Changes review cards. */
-export function DiffFileHead({ file, root, collapsed, onToggle }: { file: DiffFile; root: string; collapsed?: boolean; onToggle?: () => void }) {
+/** Pinned header of a diff tab. */
+export function DiffFileHead({ file, root }: { file: DiffFile; root: string }) {
   const status = fileStatus(file)
-  const label = splitPath(file.path, root).rel
   return (
-    <div class={'file-head diff-file-head' + (onToggle ? ' toggles' : '')} onClick={onToggle}>
-      {onToggle && (
-        <button class="icon-btn tiny diff-fold" aria-expanded={!collapsed} aria-label={`${t(collapsed ? 'expandFile' : 'collapseFile')} ${label}`}
-          onClick={(e) => { e.stopPropagation(); onToggle() }}>
-          <Icon name="chevronRight" size={11} />
-        </button>
-      )}
+    <div class="file-head diff-file-head">
       <StatusBadge status={status} />
       <FileLabel file={file} root={root} />
       <DiffStat file={file} />
       <div class="flex1" />
-      <span class="diff-actions" onClick={(e) => e.stopPropagation()}>
+      <span class="diff-actions">
         {status !== 'D' && (
           <button class="icon-btn tiny" title={t('edit')} onClick={() => openFile(file.path)}>
             <Icon name="pencil" size={12} />

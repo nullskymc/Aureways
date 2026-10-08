@@ -507,7 +507,6 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .change-badge.r { color: var(--link); background: color-mix(in oklch, var(--link) 14%, transparent); }
 .change-badge.u { color: var(--text-3); background: var(--fill); }
 
-.untracked-head { font-size: 11px; font-weight: 600; color: var(--text-3); padding: 8px 6px 2px; }
 
 /* ---- Diff View Pane (in Inspector active tab) -------------------------------- */
 .diff-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--main-bg); }
@@ -819,78 +818,57 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
 .review-toolbar .diffstat { white-space: nowrap; font-size: 11px; }
 .review-branch { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; padding: 3px 9px; border: 1px solid var(--border); border-radius: 14px; }
 .review-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-3); font-size: 12px; padding: 20px; text-align: center; }
-.review-editor .file-head { height: 32px; padding: 0 10px; font-size: 11px; }
-.review-editor .file-path { flex: 1; }
-.review-editor .diff-pane { min-width: 0; }
-.review-files { padding-top: 2px; }
-.review-folder > summary { list-style: none; display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 11px; color: var(--text-2); }
-.review-folder > summary::-webkit-details-marker { display: none; }
-.review-folder > summary span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.review-folder[open] > summary > .icon { transform: rotate(90deg); }
-.review-file .tree-name { flex: 1; }
-.review-file .diffstat { font-size: 10px; }
-.review-editor .hunk-head { font-size: 10px; background: var(--fill-2); }
-.review-editor .dl { font-size: 11px; line-height: 21px; }
-.review-editor .dl.ins, .diff-pane .dl.ins { box-shadow: inset 3px 0 var(--green); }
-.review-editor .dl.del, .diff-pane .dl.del { box-shadow: inset 3px 0 var(--red); }
-/* A whole-file add or delete is one colour already: tint it lightly and mark the
-   edge once instead of flooding every line with saturated green or red. */
-.status-a .dl.ins { background: color-mix(in oklch, var(--green) 5%, transparent); box-shadow: none; }
-.status-d .dl.del { background: color-mix(in oklch, var(--red) 5%, transparent); box-shadow: none; }
-.diff-card.status-a .diff-card-body, .diff-pane.status-a .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
-.diff-card.status-d .diff-card-body, .diff-pane.status-d .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
-
-/* ---- Changes review: one card per file ------------------------------------- */
+.changes.review { min-width: 0; }
+.changes.review:focus { outline: none; }
 .review-count { flex: none; font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .review-toolbar .icon-btn { flex: none; }
 .review-toolbar .review-branch { flex: 0 1 auto; min-width: 0; }
 .review-branch > span { overflow: hidden; text-overflow: ellipsis; }
-.review-toolbar .diffstat .add + .del, .diffstat .add + .del { margin-left: 4px; }
-.changes.review { min-width: 0; }
-.review-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; container-type: inline-size; padding: 0 12px 28px; display: flex; flex-direction: column; gap: 12px; }
-/* No top padding: sticky headers pin to the padding edge and would leave a strip of the previous file above them. */
-.review-scroll > * { flex: none; }
-.review-scroll > :first-child { margin-top: 10px; }
-.diff-card { min-width: 0; border: 1px solid var(--border-strong); border-radius: 9px; overflow: clip; background: var(--code-bg); }
-.diff-card.selected { border-color: color-mix(in oklch, var(--accent) 60%, transparent); }
-.diff-file-head { gap: 7px; }
-.review-editor .diff-card > .diff-file-head, .review-editor .untracked-card > .diff-file-head {
-  position: sticky; top: 0; z-index: 2; height: 34px; padding: 0 6px 0 6px;
-  background: color-mix(in oklch, var(--main-bg) 95%, var(--text) 5%); border-bottom: 1px solid var(--border);
-}
-.diff-card.collapsed > .diff-file-head { border-bottom-color: transparent; }
-.diff-file-head.toggles:hover { background: color-mix(in oklch, var(--main-bg) 92%, var(--text) 8%); }
-.diff-pane > .diff-file-head { padding-left: 10px; }
-.diff-fold { flex: none; color: var(--text-3); }
-.diff-fold .icon { transition: transform 0.12s ease; }
-.diff-fold[aria-expanded="true"] .icon { transform: rotate(90deg); }
+.diffstat .add + .del { margin-left: 4px; }
+.review-filter { margin: 8px 10px 4px; height: 26px; padding: 0 8px; background: none; border: 1px solid var(--border); border-radius: 7px; }
+.review-filter input { font-size: 11.5px; }
+
+/* ---- Changes: one tree of changed files; diffs open in their own tabs ------ */
+.change-tree { flex: 1; min-height: 0; overflow: auto; padding: 2px 0 16px; }
+.change-group + .change-group { margin-top: 2px; }
+.change-dir, .change-row { display: flex; align-items: center; gap: 6px; width: calc(100% - 12px); margin: 0 6px; padding: 0 8px 0 6px; border-radius: 6px; white-space: nowrap; text-align: left; }
+.change-dir { height: 26px; font-size: 11.5px; color: var(--text-2); }
+.change-dir:not(.static):hover { background: var(--hover); }
+.change-dir .tree-chev { flex: none; transition: transform 0.12s ease; }
+.change-dir[aria-expanded="true"] .tree-chev { transform: rotate(90deg); }
+.change-dir .tree-icon { flex: none; }
+.change-dir-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.change-dir.static .change-dir-name { font-weight: 600; color: var(--text-3); }
+.change-row { height: 28px; padding-left: 22px; color: var(--text); }
+.change-row:hover { background: var(--hover); }
+.change-row.selected { background: var(--selected); }
+.changes:focus-within .change-row.selected { background: color-mix(in oklch, var(--accent) 16%, transparent); }
+.change-row .tree-icon { flex: none; }
+.change-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 600 12px var(--sans); }
+.change-from { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--text-3); }
+.change-row .diffstat { flex: none; font-size: 11px; }
+
+/* ---- Diff tab -------------------------------------------------------------- */
+.diff-pane { min-width: 0; }
+.diff-pane > .diff-file-head { gap: 7px; height: 34px; padding: 0 6px 0 10px; background: color-mix(in oklch, var(--main-bg) 95%, var(--text) 5%); }
 .diff-file-head .diffstat { font-size: 11px; flex: none; }
 .diff-actions { display: flex; align-items: center; gap: 1px; flex: none; }
+.diff-pane .hunk-head { font-size: 10px; background: var(--fill-2); }
+.diff-pane .dl { font-size: 11px; line-height: 21px; }
+.diff-pane .dl.ins { box-shadow: inset 3px 0 var(--green); }
+.diff-pane .dl.del { box-shadow: inset 3px 0 var(--red); }
+/* A whole-file add or delete is one colour already: tint it lightly and mark the
+   edge once instead of flooding every line with saturated green or red. */
+.diff-pane.status-a .dl.ins { background: color-mix(in oklch, var(--green) 5%, transparent); box-shadow: none; }
+.diff-pane.status-d .dl.del { background: color-mix(in oklch, var(--red) 5%, transparent); box-shadow: none; }
+.diff-pane.status-a .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
+.diff-pane.status-d .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
 .file-label { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .file-label .tree-icon { flex: none; }
 .file-label-name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; font: 600 12px var(--sans); color: var(--text); }
 .file-label-dir, .file-label-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--text-3); }
 .file-label-from { flex: none; max-width: 40%; }
-.diff-card-body { overflow-x: auto; font: 11px/1.55 var(--mono); }
-.diff-card-body .hunk + .hunk { border-top: 1px solid var(--border); }
 .diff-note { padding: 10px 14px; font: 11.5px var(--sans); color: var(--text-3); }
-.review-index { border: 1px solid var(--border-strong); border-radius: 9px; background: var(--main-bg); padding-bottom: 4px; }
-.review-index:not([open]) { padding-bottom: 0; }
-.review-index > summary { list-style: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; font-size: 11.5px; font-weight: 600; color: var(--text-2); }
-.review-index > summary::-webkit-details-marker { display: none; }
-.review-index > summary > .icon { color: var(--text-3); transition: transform 0.12s ease; }
-.review-index[open] > summary > .icon { transform: rotate(90deg); }
-.review-index-row, .untracked-row { display: flex; align-items: center; gap: 7px; width: calc(100% - 8px); height: 26px; margin: 0 4px; padding: 0 8px; border-radius: 6px; text-align: left; color: var(--text); }
-.review-index-row:hover, .untracked-row:hover { background: var(--hover); }
-.review-index-row .file-label, .untracked-row .file-label { flex: 1; }
-.review-index-row .diffstat { font-size: 10.5px; flex: none; }
-.untracked-card { background: var(--main-bg); padding-bottom: 4px; }
-/* Narrow workbench: keep the name readable, show per-file actions on hover. */
-@container (max-width: 380px) {
-  .diff-card .diff-actions { display: none; }
-  .diff-card > .diff-file-head:hover .diff-actions, .diff-card > .diff-file-head:focus-within .diff-actions { display: flex; }
-}
-.untracked-title { font-size: 12px; font-weight: 600; color: var(--text); }
 @container (max-width: 420px) {
   .composer-bar .chip { padding-inline: 6px; gap: 3px; font-size: 12px; max-width: 120px; }
   .composer-bar .chip-icon { display: none; }

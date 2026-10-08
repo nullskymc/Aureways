@@ -1,25 +1,29 @@
-import { useSignal } from '@preact/signals'
+import { signal, useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { t } from '../i18n'
 import { rpc, type GitDiff } from '../rpc'
 import { app, transcript } from '../store'
-import { prefs } from '../prefs'
 import type { DiffFile } from '../types'
 import { Icon, Spinner } from '../components/Icon'
-import { filesVersion, openFile } from './state'
-import { DiffFileHead, DiffHunks, DiffStat, FileLabel, StatusBadge } from './DiffPane'
-import { WorkspaceSidebar } from './WorkspaceSidebar'
-import { autoCollapsed, fileStatus, joinPath, mergeSessionEdits, parseUnifiedDiff, splitPath } from './diffModel'
+import { filesVersion, openDiff, openFile } from './state'
+import { DiffStat, StatusBadge } from './DiffPane'
+import { fileIcon, fileStatus, joinPath, mergeSessionEdits, parseUnifiedDiff, splitPath } from './diffModel'
 
 export { parseUnifiedDiff } from './diffModel'
 
-/** Collapse the jump list by default once it would push the first diff off screen. */
-const INDEX_OPEN_LIMIT = 12
+/** Folded folders, keyed by workspace + folder. Survives refreshes and reopening the tab. */
+const foldedDirs = signal<Record<string, boolean>>({})
+/** Selected row per workspace and mode, kept while the file is still changed. */
+const selections = signal<Record<string, string>>({})
+
+const typing = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+
+interface Row { path: string; file?: DiffFile }
 
 /**
- * Review every changed file in one scroll: each file is its own card with a
- * sticky header, so a long diff never runs into the next file. The navigator
- * (or the jump list when it is hidden) scrolls to a card instead of opening tabs.
+ * The Changes tab is the change list only: one tree grouped by folder.
+ * Opening a file shows its diff in that file's own diff tab, focused if open.
  */
 export function ChangesView() {
   const mode = useSignal<'session' | 'git'>('git')
@@ -27,21 +31,21 @@ export function ChangesView() {
   const error = useSignal('')
   const loading = useSignal(false)
   const refresh = useSignal(0)
-  const selected = useSignal('')
   const query = useSignal('')
-  /** Per-file fold overrides; files without one use `autoCollapsed`. */
-  const folds = useSignal<Record<string, boolean>>({})
-  const scroller = useRef<HTMLDivElement>(null)
+  const rootEl = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
   const cwd = app.value?.inspectorRoot ?? ''
+  const lastCwd = useRef(cwd)
   useEffect(() => {
     let live = true
+    if (lastCwd.current !== cwd) { lastCwd.current = cwd; data.value = null }
     loading.value = true
-    data.value = null
     error.value = ''
+    // The old list stays up while refreshing so the selection does not jump.
     void rpc<GitDiff>('git.diff', { cwd }).then((result) => {
       if (live) data.value = result
     }).catch((e: Error) => {
-      if (live) error.value = e.message
+      if (live) { data.value = null; error.value = e.message }
     }).finally(() => { if (live) loading.value = false })
     return () => { live = false }
   }, [cwd, filesVersion.value, refresh.value])
@@ -53,35 +57,74 @@ export function ChangesView() {
   const untracked = mode.value === 'git' ? data.value?.untracked ?? [] : []
   const added = files.reduce((n, file) => n + file.added, 0)
   const removed = files.reduce((n, file) => n + file.removed, 0)
-  const navigator = prefs.inspectorOpen.value
-  const needle = navigator ? query.value.toLowerCase() : ''
-  const visible = files.filter((file) => splitPath(file.path, cwd).rel.toLowerCase().includes(needle))
-  const visibleUntracked = untracked.filter((path) => path.toLowerCase().includes(needle))
-  const groups = new Map<string, DiffFile[]>()
-  for (const file of visible) {
-    const dir = splitPath(file.path, cwd).dir
-    groups.set(dir, [...groups.get(dir) ?? [], file])
+  const needle = query.value.toLowerCase()
+  const groups = new Map<string, Row[]>()
+  for (const file of files) {
+    const { rel, dir } = splitPath(file.path, cwd)
+    if (!rel.toLowerCase().includes(needle)) continue
+    groups.set(dir, [...groups.get(dir) ?? [], { path: file.path, file }])
   }
-  const collapsed = (file: DiffFile) => folds.value[file.path] ?? autoCollapsed(file)
-  const anyOpen = visible.some((file) => !collapsed(file))
-  const setFold = (paths: string[], value: boolean) => {
-    const next = { ...folds.value }
-    for (const path of paths) next[path] = value
-    folds.value = next
+  const untrackedRows: Row[] = untracked.filter((rel) => rel.toLowerCase().includes(needle)).map((rel) => ({ path: joinPath(cwd, rel) }))
+  const dirKey = (dir: string) => cwd + '\0' + dir
+  const folded = (dir: string) => !!foldedDirs.value[dirKey(dir)]
+  const setFolded = (dirs: string[], value: boolean) => {
+    const next = { ...foldedDirs.value }
+    for (const dir of dirs) next[dirKey(dir)] = value
+    foldedDirs.value = next
   }
-  const reveal = (path: string) => {
-    selected.value = path
-    setFold([path], false)
-    requestAnimationFrame(() => {
-      const card = [...scroller.current?.querySelectorAll<HTMLElement>('.diff-card[data-path]') ?? []].find((el) => el.dataset.path === path)
-      card?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-    })
+  const dirs = [...groups.keys()]
+  const anyOpen = dirs.some((dir) => !folded(dir))
+  // Rows in screen order, skipping folded folders: what ↑/↓ walk.
+  const ordered = [...[...groups].flatMap(([dir, rows]) => folded(dir) ? [] : rows), ...untrackedRows]
+  const selectionKey = mode.value + '\0' + cwd
+  const active = ordered.find((row) => row.path === selections.value[selectionKey]) ?? ordered[0]
+  const select = (path: string) => { selections.value = { ...selections.value, [selectionKey]: path } }
+  const open = (row: Row) => {
+    select(row.path)
+    if (row.file) openDiff(row.file)
+    else openFile(row.path)
   }
-  const pending = mode.value === 'git' && loading.value
+  const reveal = (path: string) => requestAnimationFrame(() => {
+    [...list.current?.querySelectorAll<HTMLElement>('.change-row[data-path]') ?? []].find((el) => el.dataset.path === path)?.scrollIntoView?.({ block: 'nearest' })
+  })
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey || !ordered.length) return
+    const step = e.key === 'ArrowDown' || e.key === 'j' ? 1 : e.key === 'ArrowUp' || e.key === 'k' ? -1 : 0
+    if (step) {
+      e.preventDefault()
+      const at = active ? ordered.indexOf(active) : -1
+      const next = ordered[Math.max(0, Math.min(ordered.length - 1, at + step))]
+      select(next.path)
+      reveal(next.path)
+    } else if (e.key === 'Enter' && active) {
+      e.preventDefault()
+      open(active)
+    }
+  }
+
+  const pending = mode.value === 'git' && loading.value && !data.value
   const empty = mode.value === 'session' ? t('noSessionEdits') : error.value || (data.value?.repo ? t('cleanTree') : t('notRepo'))
   const count = files.length + untracked.length
+  const row = (item: Row) => {
+    const { name, rel, dir } = splitPath(item.path, cwd)
+    const from = item.file?.oldPath ? splitPath(item.file.oldPath, cwd).rel : ''
+    const selected = item.path === active?.path
+    return (
+      <button key={item.path} data-path={item.path} class={'change-row' + (selected ? ' selected' : '')} aria-selected={selected} role="option"
+        title={from ? `${from} → ${rel}` : rel}
+        onClick={() => { rootEl.current?.focus({ preventScroll: true }); open(item) }}>
+        <StatusBadge status={item.file ? fileStatus(item.file) : 'U'} />
+        <Icon name={fileIcon(name)} size={13} class="tree-icon" />
+        <span class="change-name">{name}</span>
+        {from && <span class="change-from">← {from}</span>}
+        {!item.file && dir && <span class="change-from">{dir}</span>}
+        <span class="flex1" />
+        {item.file && <DiffStat file={item.file} />}
+      </button>
+    )
+  }
   return (
-    <div class="changes review">
+    <div class="changes review" ref={rootEl} tabIndex={-1} onKeyDown={onKeyDown}>
       <div class="review-toolbar">
         <div class="seg" aria-label={t('changes')}>
           <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>{t('workingTree')}</button>
@@ -91,80 +134,37 @@ export function ChangesView() {
         <span class="diffstat"><span class="add">+{added}</span> <span class="del">−{removed}</span></span>
         {mode.value === 'git' && data.value?.branch && <span class="review-branch" title={data.value.branch}><Icon name="branch" size={12} /><span>{data.value.branch}</span></span>}
         <div class="flex1" />
-        {!!visible.length && (
+        {!!dirs.length && (
           <button class="icon-btn tiny" title={t(anyOpen ? 'collapseAll' : 'expandAll')} aria-label={t(anyOpen ? 'collapseAll' : 'expandAll')}
-            onClick={() => setFold(visible.map((file) => file.path), anyOpen)}>
+            onClick={() => setFolded(dirs, anyOpen)}>
             <Icon name="chevronUpDown" size={12} />
           </button>
         )}
-        <button class="icon-btn tiny" title={t('refresh')} onClick={() => refresh.value++}>{pending ? <Spinner size={12} /> : <Icon name="refresh" size={12} />}</button>
+        <button class="icon-btn tiny" title={t('refresh')} onClick={() => refresh.value++}>{loading.value ? <Spinner size={12} /> : <Icon name="refresh" size={12} />}</button>
       </div>
-      <div class="workspace-content">
-        <div class="workspace-editor review-editor">
-          {pending ? <div class="file-empty"><Spinner size={16} /></div> : count ? (
-            <div class="review-scroll" ref={scroller}>
-              {!navigator && <FileIndex key={mode.value} files={files} untracked={untracked} root={cwd} onPick={reveal} />}
-              {visible.map((file) => (
-                <section key={file.path} data-path={file.path}
-                  class={'diff-card status-' + fileStatus(file).toLowerCase() + (collapsed(file) ? ' collapsed' : '') + (file.path === selected.value ? ' selected' : '')}>
-                  <DiffFileHead file={file} root={cwd} collapsed={collapsed(file)} onToggle={() => setFold([file.path], !collapsed(file))} />
-                  {!collapsed(file) && <div class="diff-card-body"><DiffHunks file={file} /></div>}
-                </section>
-              ))}
-              {!!visibleUntracked.length && (
-                <section class="diff-card untracked-card">
-                  <div class="file-head diff-file-head"><span class="change-badge u">U</span><span class="untracked-title">{t('untracked')}</span><span class="review-count">{visibleUntracked.length}</span></div>
-                  {visibleUntracked.map((path) => (
-                    <button key={path} class="untracked-row" onClick={() => openFile(joinPath(cwd, path))}>
-                      <FileLabel file={stub(joinPath(cwd, path))} root={cwd} />
-                    </button>
-                  ))}
-                </section>
-              )}
-              {!!needle && !visible.length && !visibleUntracked.length && <div class="tree-empty">{t('noMatches')}</div>}
+      {pending ? <div class="file-empty"><Spinner size={16} /></div> : count ? <>
+        <label class="tree-filter review-filter"><Icon name="search" size={12} /><input placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Escape') query.value = '' }} /></label>
+        <div class="change-tree" ref={list} role="listbox" aria-label={t('changes')}>
+          {[...groups].map(([dir, rows]) => (
+            <div key={dir} class={'change-group' + (folded(dir) ? ' folded' : '')}>
+              <button class="change-dir" aria-expanded={!folded(dir)} onClick={() => setFolded([dir], !folded(dir))}>
+                <Icon name="chevronRight" size={10} class="tree-chev" />
+                <Icon name="folder" size={13} class="tree-icon dir" />
+                <span class="change-dir-name" title={dir || cwd}>{dir || (cwd.split('/').pop() ?? '/')}</span>
+                <span class="review-count">{rows.length}</span>
+              </button>
+              {!folded(dir) && rows.map(row)}
             </div>
-          ) : <div class="review-empty"><Icon name="gitDiff" size={27} /><span>{empty}</span></div>}
+          ))}
+          {!!untrackedRows.length && (
+            <div class="change-group">
+              <div class="change-dir static"><span class="tree-chev-pad" /><span class="change-dir-name">{t('untracked')}</span><span class="review-count">{untrackedRows.length}</span></div>
+              {untrackedRows.map(row)}
+            </div>
+          )}
+          {!!needle && !groups.size && !untrackedRows.length && <div class="tree-empty">{t('noMatches')}</div>}
         </div>
-        {navigator && <WorkspaceSidebar>
-          <label class="tree-filter review-filter"><Icon name="search" size={12} /><input placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Escape') query.value = '' }} /></label>
-          <div class="tree-list review-files">
-            {[...groups].map(([dir, list]) => <details key={dir} open class="review-folder">
-              <summary><Icon name="chevronRight" size={10} /><span>{dir || (cwd.split('/').pop() ?? '/')}</span></summary>
-              {list.map((file) => <button key={file.path} class={'tree-row review-file' + (file.path === selected.value ? ' selected' : '')} title={splitPath(file.path, cwd).rel} aria-pressed={file.path === selected.value} onClick={() => reveal(file.path)}>
-                <StatusBadge status={fileStatus(file)} /><span class="tree-name">{splitPath(file.path, cwd).name}</span><DiffStat file={file} />
-              </button>)}
-            </details>)}
-            {!!visibleUntracked.length && <div class="untracked-head">{t('untracked')}</div>}
-            {visibleUntracked.map((path) => <button key={path} class="tree-row review-file" title={path} onClick={() => openFile(joinPath(cwd, path))}><span class="change-badge u">U</span><span class="tree-name">{path}</span></button>)}
-            {!!query.value && !groups.size && !visibleUntracked.length && <div class="tree-empty">{t('noMatches')}</div>}
-          </div>
-        </WorkspaceSidebar>}
-      </div>
+      </> : <div class="review-empty"><Icon name="gitDiff" size={27} /><span>{empty}</span></div>}
     </div>
-  )
-}
-
-const stub = (path: string): DiffFile => ({ path, added: 0, removed: 0, truncated: false, isNew: true, hunks: [] })
-
-/** Jump list shown above the cards while the navigator is hidden. */
-function FileIndex({ files, untracked, root, onPick }: { files: DiffFile[]; untracked: string[]; root: string; onPick: (path: string) => void }) {
-  if (files.length + untracked.length < 2) return null
-  return (
-    <details class="review-index" open={files.length <= INDEX_OPEN_LIMIT}>
-      <summary><Icon name="chevronRight" size={10} /><span>{t('filesChanged', files.length + untracked.length)}</span></summary>
-      {files.map((file) => (
-        <button key={file.path} class="review-index-row" onClick={() => onPick(file.path)}>
-          <StatusBadge status={fileStatus(file)} />
-          <FileLabel file={file} root={root} />
-          <DiffStat file={file} />
-        </button>
-      ))}
-      {untracked.map((path) => (
-        <button key={path} class="review-index-row" onClick={() => openFile(joinPath(root, path))}>
-          <span class="change-badge u">U</span>
-          <FileLabel file={stub(joinPath(root, path))} root={root} />
-        </button>
-      ))}
-    </details>
   )
 }
