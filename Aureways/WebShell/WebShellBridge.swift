@@ -246,7 +246,7 @@ final class WebShellBridge: NSObject {
                     Self.debugMenuBarPanel = nil
                     return
                 }
-                let size = MenuBarWebView.size
+                let size = CGSize(width: MenuBarWebView.size.width, height: MenuBarLayout.height)
                 let anchor = self.hostView?.window?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
                 let panel = NSPanel(contentRect: NSRect(x: anchor.maxX - size.width - 40, y: anchor.maxY - size.height - 60, width: size.width, height: size.height),
                                     styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
@@ -301,6 +301,12 @@ final class WebShellBridge: NSObject {
         case menuBarOpened
         /// The panel's refresh button (manual: short minimum interval, never through a 429).
         case refreshQuota
+        /// The provider picked in the panel's icon bar (remembered across launches).
+        case menuBarProvider
+        /// The page's natural content height: the panel window follows it.
+        case menuBarHeight
+
+        static let providerKey = "menuBarQuotaProvider"
 
         init?(message type: String) {
             self.init(rawValue: type == "quit" ? "quitApp" : type)
@@ -325,6 +331,12 @@ final class WebShellBridge: NSObject {
                 model.quotaStore.request([id], reason: .manual)
             } else {
                 model.quotaStore.request(reason: .manual)
+            }
+        case .menuBarProvider:
+            if let id = body["id"] as? String, !id.isEmpty { UserDefaults.standard.set(id, forKey: MenuBarCommand.providerKey) }
+        case .menuBarHeight:
+            if let height = (body["height"] as? NSNumber).map({ CGFloat($0.doubleValue) }), height > 0 {
+                (hostView as? WebShellHostView)?.applyMenuBarHeight(height)
             }
         case .newSession:
             dismiss()

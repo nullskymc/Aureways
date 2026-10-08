@@ -170,7 +170,7 @@ export function loadDemo() {
 }
 
 /** Quota fixtures. `#menubar` = all fine, `#menubar-low` = one running low,
- * `#menubar-signin` = one not signed in; `?expand=<id>` opens a row. */
+ * `#menubar-signin` = one not signed in; `?select=<id>` picks a provider. */
 function demoQuota(now: number): AppState['quota'] {
   const hash = location.hash
   const low = hash.includes('-low')
