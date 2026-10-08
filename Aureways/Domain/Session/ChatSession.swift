@@ -310,7 +310,7 @@ final class ChatSession: Identifiable {
                 visual = true
             }
         case .configOptions(let options) where !options.isEmpty:
-            configOptions = options
+            configOptions = SessionConfigOption.unioningModelChoices(options, models: models)
         case .configOption(let id, let value) where !id.isEmpty:
             applyConfigOption(id: id, value: value)
         case .modelChanged(let modelId, let effort):
@@ -598,7 +598,7 @@ final class ChatSession: Identifiable {
 
     func replaceConfigOptions(_ options: [SessionConfigOption]) {
         guard !options.isEmpty else { return }
-        configOptions = options
+        configOptions = SessionConfigOption.unioningModelChoices(options, models: models)
     }
 
     func resetTranscript() {

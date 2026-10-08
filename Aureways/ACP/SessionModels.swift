@@ -409,6 +409,28 @@ struct SessionConfigOption: Sendable, Equatable, Identifiable {
         )
     }
 
+    /// Grok now sends a `configOptions` model row whose `options` can lag the
+    /// live catalog. Fill gaps from `models` (already cache-merged) without
+    /// changing the agent's current selection.
+    mutating func unionModelChoices(from models: SessionModelState) {
+        guard isModel else { return }
+        var seen = Set(options.map(\.id))
+        for model in models.availableModels where seen.insert(model.id).inserted {
+            options.append(SessionMode(id: model.id, name: model.name, description: model.description))
+        }
+        if selectedString == nil, !models.currentModelId.isEmpty {
+            value = .string(models.currentModelId)
+        }
+    }
+
+    static func unioningModelChoices(_ options: [SessionConfigOption], models: SessionModelState?) -> [SessionConfigOption] {
+        guard let models, !models.availableModels.isEmpty else { return options }
+        var options = options
+        guard let idx = options.firstIndex(where: \.isModel) else { return options }
+        options[idx].unionModelChoices(from: models)
+        return options
+    }
+
     static func thoughtLevel(from model: SessionModelInfo, preserving effort: String? = nil) -> SessionConfigOption? {
         let choices = model.reasoningEffortChoices
         guard !choices.isEmpty else { return nil }

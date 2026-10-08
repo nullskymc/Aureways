@@ -504,6 +504,93 @@ final class ProtocolTests: XCTestCase {
                      "no picker is invented when the agent reports no models")
     }
 
+    func testGrokConfigOptionsValueShapeParsesCatalog() throws {
+        let json = try JSONValue.decode(from: """
+        {
+          "id": "model",
+          "name": "Model",
+          "category": "model",
+          "type": "select",
+          "currentValue": "grok-4.6",
+          "options": [
+            { "value": "grok-4.7", "name": "Grok 4.7" },
+            { "value": "grok-4.6", "name": "Grok 4.6" }
+          ]
+        }
+        """)
+        let option = try XCTUnwrap(SessionConfigOption(json: json))
+        XCTAssertEqual(option.selectedString, "grok-4.6")
+        XCTAssertEqual(option.options.map(\.id), ["grok-4.7", "grok-4.6"])
+    }
+
+    func testGrokFillsModelChipFromMergedCatalog() throws {
+        let agentOptions = [SessionConfigOption(
+            id: "model",
+            name: "Model",
+            category: "model",
+            value: .string("grok-4.6"),
+            options: [
+                SessionMode(id: "grok-4.6", name: "Grok 4.6"),
+                SessionMode(id: "grok-4.5", name: "Grok 4.5"),
+            ]
+        )]
+        let merged = SessionModelState(
+            currentModelId: "grok-4.6",
+            availableModels: [
+                SessionModelInfo(id: "grok-4.7", name: "Grok 4.7"),
+                SessionModelInfo(id: "grok-4.6", name: "Grok 4.6"),
+                SessionModelInfo(id: "grok-4.5", name: "Grok 4.5"),
+            ]
+        )
+        let grok = GrokBuildHarness().normalizeSessionConfig(options: agentOptions, models: merged, modes: nil)
+        let model = try XCTUnwrap(grok.first(where: \.isModel))
+        XCTAssertEqual(model.selectedString, "grok-4.6")
+        XCTAssertEqual(model.options.map(\.id), ["grok-4.6", "grok-4.5", "grok-4.7"])
+    }
+
+    @MainActor
+    func testConfigOptionUpdateKeepsMergedModels() throws {
+        let models = SessionModelState(
+            currentModelId: "grok-4.6",
+            availableModels: [
+                SessionModelInfo(id: "grok-4.7", name: "Grok 4.7"),
+                SessionModelInfo(id: "grok-4.6", name: "Grok 4.6"),
+            ]
+        )
+        let profile = AgentProfile(id: "grok-build", title: "Grok", subtitle: "", command: "grok", arguments: [], builtIn: true, notes: "")
+        let session = ChatSession(agent: profile, cwd: "/tmp", phase: .ready)
+        session.applySetup(
+            sessionId: "s1",
+            modes: nil,
+            configOptions: GrokBuildHarness().normalizeSessionConfig(options: [], models: models, modes: nil),
+            models: models,
+            advertisedConfigOptions: true
+        )
+        session.apply(SessionNotification(
+            sessionId: "s1",
+            update: .configOptions([
+                SessionConfigOption(
+                    id: "model",
+                    name: "Model",
+                    category: "model",
+                    value: .string("grok-4.6"),
+                    options: [SessionMode(id: "grok-4.6", name: "Grok 4.6")]
+                ),
+            ])
+        ))
+        XCTAssertEqual(session.modelOption?.options.map(\.id), ["grok-4.6", "grok-4.7"])
+        session.replaceConfigOptions([
+            SessionConfigOption(
+                id: "model",
+                name: "Model",
+                category: "model",
+                value: .string("grok-4.6"),
+                options: [SessionMode(id: "grok-4.6", name: "Grok 4.6")]
+            ),
+        ])
+        XCTAssertEqual(session.modelOption?.options.map(\.id), ["grok-4.6", "grok-4.7"])
+    }
+
     func testModelChangedNotificationUpdatesEffort() throws {
         let json = try JSONValue.decode(from: """
         {"sessionId":"s1","update":{"sessionUpdate":"model_changed","model_id":"grok-4.6","reasoning_effort":"low"}}

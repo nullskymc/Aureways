@@ -58,6 +58,8 @@ final class GrokBuildHarness: Harness {
         modes: SessionModeState?
     ) -> [SessionConfigOption] {
         var result = super.normalizeSessionConfig(options: options, models: models, modes: modes)
+        // Agent-supplied model chips skip `fromModels`. Fold the merged catalog in.
+        result = SessionConfigOption.unioningModelChoices(result, models: models)
         if !result.contains(where: \.isThoughtLevel),
            let model = models?.current,
            let thought = SessionConfigOption.thoughtLevel(from: model) {
