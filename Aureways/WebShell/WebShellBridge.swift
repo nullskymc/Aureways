@@ -259,7 +259,7 @@ final class WebShellBridge: NSObject {
                     Self.debugMenuBarPanel = nil
                     return
                 }
-                let size = CGSize(width: MenuBarWebView.size.width, height: MenuBarLayout.height)
+                let size = CGSize(width: MenuBarWebView.size.width, height: MenuBarLayout.shared.height)
                 let anchor = self.hostView?.window?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
                 let panel = NSPanel(contentRect: NSRect(x: anchor.maxX - size.width - 40, y: anchor.maxY - size.height - 60, width: size.width, height: size.height),
                                     styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)

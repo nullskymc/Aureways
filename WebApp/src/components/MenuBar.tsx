@@ -106,7 +106,6 @@ export function MenuBar() {
           )
           : <div class="mb-page"><div class="mb-empty">{t('sumNoData')}</div></div>}
       </div>
-      <div class="mb-spacer" />
       <section class="mb-section">
         <div class="mb-label">{t('recentChats')}</div>
         {recent.length === 0 && <div class="mb-empty">{t('noSessions')}</div>}
@@ -179,13 +178,20 @@ export function swipeTracker(onStep: (dir: number) => void, threshold = 36, quie
 }
 
 /**
- * The panel's height at its natural size: the column is laid out to the
- * window's height with the quota pager able to shrink and a spacer taking any
- * slack, so the natural height is the laid-out height minus the slack plus
- * whatever the pager has to clip.
+ * The panel's full natural height: vertical padding, every block at its own
+ * content height (the provider page, not the pager's possibly clipped box)
+ * and the gaps between them. Independent of the window's current height, so
+ * the resize itself never triggers another report.
  */
-export function naturalHeight(m: { panel: number; pager: number; page: number; spacer: number }): number {
-  return Math.ceil(m.panel - m.spacer - m.pager + m.page)
+export function naturalHeight(m: { padding: number; gap: number; blocks: number[] }): number {
+  const blocks = m.blocks.filter((h) => h > 0)
+  return Math.ceil(m.padding + blocks.reduce((sum, h) => sum + h, 0) + m.gap * Math.max(0, blocks.length - 1))
+}
+
+/** Screen space the panel may use; past it the provider page scrolls. */
+function heightCap(): number {
+  const avail = typeof screen !== 'undefined' && screen.availHeight > 0 ? screen.availHeight : Infinity
+  return avail - 12
 }
 
 /** Report the natural height to native when it changes (a content change, never per frame). */
@@ -196,14 +202,13 @@ export function observeHeight(panel: HTMLElement) {
     frame = 0
     const pager = panel.querySelector<HTMLElement>('.mb-pager')
     const page = pager?.querySelector<HTMLElement>('.mb-page:not(.leaving)')
-    const spacer = panel.querySelector<HTMLElement>('.mb-spacer')
-    if (!pager || !page) return
-    const height = naturalHeight({
-      panel: panel.getBoundingClientRect().height,
-      pager: pager.getBoundingClientRect().height,
-      page: page.getBoundingClientRect().height,
-      spacer: spacer?.getBoundingClientRect().height ?? 0,
-    })
+    // Not laid out (hidden panel): nothing to report.
+    if (!pager || !page || page.getBoundingClientRect().height <= 0) return
+    const cs = getComputedStyle(panel)
+    const num = (v: string) => parseFloat(v) || 0
+    const blocks = [...panel.children].map((el) => (el === pager ? page : el as HTMLElement).getBoundingClientRect().height)
+    const height = naturalHeight({ padding: num(cs.paddingTop) + num(cs.paddingBottom), gap: num(cs.rowGap), blocks })
+    panel.classList.toggle('capped', height > heightCap())
     if (height > 0 && Math.abs(height - last) >= 1) {
       last = height
       post('menuBarHeight', { height })
@@ -213,8 +218,8 @@ export function observeHeight(panel: HTMLElement) {
   const resize = new ResizeObserver(schedule)
   const watch = () => {
     resize.disconnect()
-    resize.observe(panel)
-    panel.querySelectorAll('.mb-page:not(.leaving), .mb-section').forEach((el) => resize.observe(el))
+    for (const el of panel.children) if (!el.classList.contains('mb-pager')) resize.observe(el)
+    panel.querySelectorAll('.mb-page:not(.leaving)').forEach((el) => resize.observe(el))
   }
   const mutations = new MutationObserver(() => { watch(); schedule() })
   mutations.observe(panel, { childList: true, subtree: true })

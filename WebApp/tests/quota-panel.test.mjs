@@ -179,34 +179,41 @@ test('stale readings keep their numbers and say why', async () => {
   assert.match(text(detail().querySelector('.mb-q-note')), /May be out of date · Rate limited/)
 })
 
-test('panel height: the natural content height goes to native only when it changes', async () => {
+test('panel height: the full natural content height goes to native only when it changes', async () => {
   const { naturalHeight, observeHeight } = await import('../src/components/MenuBar.tsx')
-  // Window taller than the content: the spacer takes the slack.
-  assert.equal(naturalHeight({ panel: 470, pager: 120, page: 120, spacer: 90 }), 380)
-  // Window shorter (mid-grow): the pager clips; the natural height is still the content's.
-  assert.equal(naturalHeight({ panel: 380, pager: 96, page: 210.4, spacer: 0 }), 495)
+  // padding + header, bar, provider page, recent chats, footer + 4 gaps.
+  assert.equal(naturalHeight({ padding: 16, gap: 8, blocks: [22, 28, 120.2, 110, 29] }), 358)
+  assert.equal(naturalHeight({ padding: 16, gap: 8, blocks: [22, 0, 120, 110, 29] }), 321, 'a missing block adds no gap')
   posted.length = 0
   const panel = document.createElement('div')
-  panel.innerHTML = '<div class="mb-pager"><div class="mb-page"></div></div><div class="mb-spacer"></div><section class="mb-section"></section>'
+  panel.innerHTML = '<div class="mb-head"></div><div class="mb-pager"><div class="mb-page"></div></div><section class="mb-section"></section><div class="mb-foot"></div>'
   const size = (el, h) => { el.getBoundingClientRect = () => ({ height: h, width: 340, top: 0, left: 0, right: 340, bottom: h }) }
-  const [pager, page, spacer] = ['.mb-pager', '.mb-page', '.mb-spacer'].map(sel => panel.querySelector(sel))
-  size(panel, 470); size(pager, 120); size(page, 120); size(spacer, 90)
+  const [head, pager, page, section, foot] = ['.mb-head', '.mb-pager', '.mb-page', '.mb-section', '.mb-foot'].map(sel => panel.querySelector(sel))
+  size(head, 22); size(pager, 60); size(page, 120); size(section, 110); size(foot, 29)
+  const style = globalThis.getComputedStyle
+  globalThis.getComputedStyle = () => ({ paddingTop: '9px', paddingBottom: '7px', rowGap: '8px' })
   const observers = []
   globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; observers.push(this) } observe() {} disconnect() {} }
   const stop = observeHeight(panel)
   await new Promise(resolve => setTimeout(resolve, 5))
-  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight'), [{ type: 'menuBarHeight', height: 380 }])
-  // Window resized to fit: same natural height, nothing re-sent.
-  size(panel, 380); size(spacer, 0)
+  // Pager clipped to 60 by a short window: the page's own 120 counts, footer included.
+  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight'), [{ type: 'menuBarHeight', height: 321 }])
+  assert.equal(panel.classList.contains('capped'), false, 'fits the screen: no inner scrolling')
+  // The window catches up: same natural height, nothing re-sent.
+  size(pager, 120)
   observers[0].cb([])
   await new Promise(resolve => setTimeout(resolve, 5))
   assert.equal(posted.filter(m => m.type === 'menuBarHeight').length, 1)
-  // A provider with more limits: one message with the new height.
-  size(page, 230); size(pager, 120)
+  // A provider with fewer limits: one message, smaller.
+  size(page, 54)
   observers[0].cb([])
   await new Promise(resolve => setTimeout(resolve, 5))
-  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight').at(-1), { type: 'menuBarHeight', height: 490 })
+  assert.deepEqual(posted.filter(m => m.type === 'menuBarHeight').at(-1), { type: 'menuBarHeight', height: 255 })
   stop()
+  globalThis.getComputedStyle = style
+  const css = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8')
+  assert.match(css.match(/\.mb-pager \{([^}]*)\}/)[1], /overflow: hidden;/, 'no inner scrollbar unless capped by the screen')
+  assert.match(css, /\.menubar\.capped \.mb-pager \{ overflow-y: auto; \}/)
 })
 
 test('swipe tracker: threshold, one step per gesture, resets when the wheel goes quiet', async () => {

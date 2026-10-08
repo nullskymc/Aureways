@@ -31,25 +31,26 @@ final class MenuBarCommandTests: XCTestCase {
         }
     }
 
-    /// The panel follows the page's content height: clamped to the screen,
-    /// top edge kept under the status item.
+    /// The panel follows the page's content height through SwiftUI state
+    /// (MenuBarExtra sizes its own window), clamped to the screen and persisted.
     @MainActor
-    func testPanelHeightFollowsContentTopAnchored() {
+    func testPanelHeightFollowsContent() throws {
         XCTAssertEqual(MenuBarLayout.clamp(150, screenHeight: 900), MenuBarLayout.minHeight)
         XCTAssertEqual(MenuBarLayout.clamp(512.3, screenHeight: 900), 513, "whole points, rounded up: never clips")
         XCTAssertEqual(MenuBarLayout.clamp(2000, screenHeight: 900), 888, "fits the screen; the page scrolls the rest")
         XCTAssertEqual(MenuBarLayout.clamp(640, screenHeight: nil), 640)
-        let top = MenuBarLayout.frame(for: CGRect(x: 900, y: 400, width: 340, height: 470), height: 560)
-        XCTAssertEqual(top, CGRect(x: 900, y: 310, width: 340, height: 560))
-        XCTAssertEqual(top.maxY, 870)
 
-        let window = NSWindow(contentRect: CGRect(x: 900, y: 400, width: 340, height: 470), styleMask: [.borderless], backing: .buffered, defer: true)
-        window.isReleasedWhenClosed = false
-        MenuBarLayout.resize(window, to: 380, animated: true)
-        XCTAssertEqual(window.frame, CGRect(x: 900, y: 490, width: 340, height: 380), "off screen: immediate, top stays at 870")
-        MenuBarLayout.resize(window, to: 600, animated: true)
-        XCTAssertEqual(window.frame.maxY, 870)
-        XCTAssertEqual(window.frame.height, 600)
+        let suite = "aureways.tests.menubar.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let layout = MenuBarLayout(defaults: defaults)
+        XCTAssertEqual(layout.height, MenuBarWebView.size.height, "first launch: default")
+        XCTAssertTrue(layout.update(377, screenHeight: 900, defaults: defaults))
+        XCTAssertEqual(layout.height, 377)
+        XCTAssertFalse(layout.update(376.6, screenHeight: 900, defaults: defaults), "same height: no SwiftUI update")
+        XCTAssertTrue(layout.update(465, screenHeight: 900, defaults: defaults), "grows")
+        XCTAssertTrue(layout.update(330, screenHeight: 900, defaults: defaults), "and shrinks")
+        XCTAssertEqual(MenuBarLayout(defaults: defaults).height, 330, "next launch opens at the last height")
     }
 
     func testQuitAliases() {

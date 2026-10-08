@@ -152,8 +152,7 @@ struct AurewaysApp: App {
         }
 
         MenuBarExtra(isInserted: $showMenuBarExtra) {
-            MenuBarWebView(model: model)
-                .frame(width: MenuBarWebView.size.width)
+            MenuBarContent(model: model)
         } label: {
             MenuBarExtraLabel()
         }

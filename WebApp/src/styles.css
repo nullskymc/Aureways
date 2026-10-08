@@ -625,8 +625,10 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .mb-tab.dim .harness-icon, .mb-tab.dim .harness-fallback { opacity: 0.4; }
 .mb-tab.on.dim .harness-icon, .mb-tab.on.dim .harness-fallback { opacity: 0.7; }
 .mb-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 45%, transparent); }
-/* Pager: shrinks (and scrolls) only while the window is shorter than the content. */
-.mb-pager { flex: 0 1 auto; min-height: 0; position: relative; overflow-x: hidden; overflow-y: auto; margin: 0 -2px; padding: 0 2px; }
+/* Pager: natural height (the window follows the content). It only scrolls
+   when the content is taller than the screen allows (.capped). */
+.mb-pager { flex: 0 1 auto; min-height: 0; position: relative; overflow: hidden; margin: 0 -2px; padding: 0 2px; }
+.menubar.capped .mb-pager { overflow-y: auto; }
 .mb-page.leaving { position: absolute; top: 0; left: 2px; right: 2px; pointer-events: none; }
 .mb-page.from-right { animation: mb-from-right 0.22s ease both; }
 .mb-page.from-left { animation: mb-from-left 0.22s ease both; }
@@ -640,7 +642,6 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
   .mb-page { animation: none !important; }
   .mb-page.leaving { display: none; }
 }
-.mb-spacer { flex: 1 1 0; min-height: 0; }
 .mb-q { display: flex; flex-direction: column; gap: 8px; padding: 9px 9px 8px; border-radius: 9px; background: var(--fill-2); }
 .mb-q-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mb-q-name { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -660,7 +661,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .mb-w-pct { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; white-space: nowrap; }
 .mb-w-sub { font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .mb-q-meta { font-size: 10px; color: var(--text-3); border-top: 1px solid var(--border); padding-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mb-section { display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: none; }
+.mb-section { margin-top: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; flex: none; }
 .mb-label { font-size: 10.5px; font-weight: 600; color: var(--text-3); padding: 0 3px 2px; letter-spacing: 0.02em; }
 .mb-row { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 7px; border-radius: 6px; color: var(--text); width: 100%; flex: none; font-size: 11.5px; }
 .mb-row:hover { background: var(--hover); }
