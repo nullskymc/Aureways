@@ -69,8 +69,9 @@ export function loadDemo() {
       reader.openDocuments([READER_GUIDE])
     })
   } else if (location.hash.includes('changes')) {
-    setOfflineRPC((method) => method === 'git.diff'
+    setOfflineRPC((method, params) => method === 'git.diff'
       ? import('./demoChanges').then((fixture) => ({ repo: true, root: '/Users/demo/Aureways', branch: 'feature/review-polish', diff: fixture.DEMO_GIT_DIFF, untracked: fixture.DEMO_UNTRACKED }))
+      : method === 'fs.list' ? import('./demoChanges').then((fixture) => fixture.demoListing(String(params.path ?? '')))
       : undefined)
     void Promise.all([import('./demoChanges'), import('./inspector/state')]).then(([fixture, files]) => {
       window.__aw.receive({ type: 'patch', sessionId: 's1', ops: [{ op: 'upsert', index: 0, item: { kind: 'tool', id: 'demo-edits', callId: 'demo-edits', title: 'Edited 3 files', fullTitle: '', toolKind: 'edit', status: 'completed', layout: 'edit', progress: false, diffs: fixture.DEMO_SESSION_EDITS } }] })

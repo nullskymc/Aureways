@@ -42,3 +42,19 @@ export const DEMO_SESSION_EDITS: DiffFile[] = [
   { path: root + 'src/inspector/index.ts', added: 1, removed: 0, truncated: false, isNew: false, hunks: [{ header: '@@ -1,2 +1,3 @@', oldStart: 1, newStart: 1, lines: [' export * from "./Changes"', ' export * from "./DiffPane"', '+export * from "./FileTree"'] }] },
   { path: root + 'src/components/Badge.tsx', added: 5, removed: 0, truncated: false, isNew: true, hunks: [{ header: '@@ -0,0 +1,5 @@', oldStart: 0, newStart: 1, lines: ['+import { h } from "preact"', '+', '+export function Badge() {', '+  return <span class="badge" />', '+}'] }] },
 ]
+
+/** A small project tree for the file navigator in #changes. */
+const TREE: Record<string, string[]> = {
+  '': ['Aureways/', 'WebApp/', 'docs/', 'Makefile', 'README.md', 'settings.yml'],
+  'Aureways': ['Views/', 'WebShell/', 'AurewaysApp.swift'],
+  'WebApp': ['src/', 'tests/', 'package.json'],
+  'docs': ['guide.md', 'web-shell.md'],
+}
+export function demoListing(path: string) {
+  const rel = path.startsWith(root) ? path.slice(root.length).replace(/\/+$/, '') : path === root.slice(0, -1) ? '' : path
+  return (TREE[rel] ?? []).map((name) => {
+    const dir = name.endsWith('/')
+    const clean = dir ? name.slice(0, -1) : name
+    return { name: clean, path: root + (rel ? rel + '/' : '') + clean, dir }
+  })
+}
