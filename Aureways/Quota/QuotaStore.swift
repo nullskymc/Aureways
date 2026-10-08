@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 // MARK: - Request control policy
@@ -6,8 +5,8 @@ import Foundation
 /// All request-rate knobs in one place. Defaults are deliberately conservative:
 /// the user asked for no frequent quota requests.
 struct QuotaRequestPolicy: Sendable, Equatable {
-    /// Automatic refreshes (launch, app activation, page/menu bar open, poll, turn end)
-    /// skip a source fetched less than this long ago.
+    /// Automatic refreshes (menu bar panel / usage page opened, turn end) skip a source
+    /// fetched less than this long ago.
     var minInterval: TimeInterval = 300
     /// Manual refresh button: still at most one request per source per this interval.
     var manualMinInterval: TimeInterval = 30
@@ -20,14 +19,19 @@ struct QuotaRequestPolicy: Sendable, Equatable {
     var notConfiguredBackoff: TimeInterval = 1800
     /// Retry-After values beyond this are clamped.
     var retryAfterMax: TimeInterval = 6 * 3600
-    /// Background poll while the app is active (each tick still obeys `minInterval`).
-    var pollInterval: TimeInterval = 600
 
     static let standard = QuotaRequestPolicy()
 }
 
+/// The only things that may trigger a quota request. There is no launch fetch and no
+/// background polling: between these, everything reads the cache.
 enum QuotaRefreshReason: String, Sendable {
-    case launch, appActivated, pageOpened, menuBarOpened, poll, sessionEvent, manual
+    /// The menu bar panel or the Usage settings page became visible (stale sources only).
+    case pageOpened, menuBarOpened
+    /// A turn of this harness finished (debounced, then TTL-gated).
+    case sessionEvent
+    /// The refresh button.
+    case manual
 
     var isManual: Bool { self == .manual }
 }
@@ -82,26 +86,23 @@ struct QuotaSourceState: Sendable, Codable, Equatable {
 
 /// The single owner of account quota. Independent from ACP: it never looks at sessions or
 /// runtimes, works with nothing connected, and every refresh goes through the per-source
-/// throttle (TTL, single-flight, debounce, backoff). The Quota page and the menu bar only
-/// read `snapshots` via the bridge state.
+/// throttle (TTL, single-flight, debounce, backoff). Requests happen only when the panel
+/// opens or right after a turn; the UI only reads `quotas` / `providers(for:)`.
 @Observable
 @MainActor
 final class QuotaStore {
-    /// Display snapshots keyed by harness id.
-    private(set) var snapshots: [String: HarnessQuotaSnapshot] = [:]
+    /// Display quota keyed by harness id.
+    private(set) var quotas: [String: ProviderQuota] = [:]
     private(set) var isRefreshing: [String: Bool] = [:]
 
     @ObservationIgnored private(set) var sourceStates: [String: QuotaSourceState] = [:]
     /// Last good reading per source id (independent of which harness asked).
-    @ObservationIgnored private var sourceCache: [String: HarnessQuotaSnapshot] = [:]
+    @ObservationIgnored private var sourceCache: [String: ProviderQuota] = [:]
     @ObservationIgnored private var supplements: [String: QuotaSessionSupplement] = [:]
-    @ObservationIgnored private var sourceInFlight: [String: Task<Result<HarnessQuotaSnapshot, QuotaFetchError>, Never>] = [:]
+    @ObservationIgnored private var sourceInFlight: [String: Task<Result<ProviderQuota, QuotaFetchError>, Never>] = [:]
     @ObservationIgnored private var harnessInFlight: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var pendingEventHarnesses: Set<String> = []
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
-    @ObservationIgnored private(set) var isAppActive = false
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     @ObservationIgnored let policy: QuotaRequestPolicy
     @ObservationIgnored var config: QuotaSourceConfig
@@ -111,6 +112,8 @@ final class QuotaStore {
     @ObservationIgnored private let sleep: @Sendable (TimeInterval) async throws -> Void
     /// Agents eligible for quota (set by AppModel). Pure data — no session state.
     @ObservationIgnored var agentsProvider: @MainActor () -> [AgentProfile] = { [] }
+    /// Called after a refresh changed readings (usage notifications).
+    @ObservationIgnored var onQuotasUpdated: (@MainActor ([ProviderQuota]) -> Void)?
     /// Count of real source fetches (diagnostics / tests).
     @ObservationIgnored private(set) var fetchCount = 0
 
@@ -119,14 +122,12 @@ final class QuotaStore {
             .appendingPathComponent("Aureways", isDirectory: true)
             .appendingPathComponent("quota-cache.json")
     }
-    private static let legacyDefaultsKey = "harnessQuotaSnapshots"
 
     init(
         policy: QuotaRequestPolicy = .standard,
         config: QuotaSourceConfig = .load(),
         sources: [String: any QuotaSource] = QuotaSourceRegistry.builtIn,
         cacheURL: URL? = QuotaStore.defaultCacheURL,
-        migrateLegacyDefaults: Bool = true,
         now: @escaping @MainActor () -> Date = { Date() },
         sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(nanoseconds: UInt64(max(0, $0) * 1_000_000_000)) }
     ) {
@@ -136,14 +137,27 @@ final class QuotaStore {
         self.cacheURL = cacheURL
         self.now = now
         self.sleep = sleep
-        loadCache(migrateLegacy: migrateLegacyDefaults)
+        loadCache()
     }
 
     // MARK: Reading
 
-    func snapshot(for harnessId: String) -> HarnessQuotaSnapshot? { snapshots[harnessId] }
+    func quota(for harnessId: String) -> ProviderQuota? { quotas[harnessId] }
 
     func supportsQuota(_ harnessId: String) -> Bool { !chain(for: harnessId).isEmpty }
+
+    /// One entry per agent, in order: the reading, or a placeholder saying why there is none
+    /// (`unsupported`, or `ok` with no windows = not fetched yet).
+    func providers(for agents: [AgentProfile]) -> [ProviderQuota] {
+        agents.map { agent in
+            guard supportsQuota(agent.id) else {
+                return .placeholder(harnessId: agent.id, title: agent.title, status: .unsupported)
+            }
+            var quota = quotas[agent.id] ?? .placeholder(harnessId: agent.id, title: agent.title, status: .ok)
+            quota.providerTitle = agent.title
+            return quota
+        }
+    }
 
     /// When the next automatic fetch for this harness's first source may happen.
     func nextAllowedFetch(for harnessId: String) -> Date? {
@@ -153,9 +167,9 @@ final class QuotaStore {
         return [ttl, state.retryNotBefore].compactMap { $0 }.max()
     }
 
-    /// Test/debug hook: put a snapshot straight into the store.
-    func updateSnapshot(_ snapshot: HarnessQuotaSnapshot) {
-        snapshots[snapshot.harnessId] = snapshot
+    /// Test/debug hook: put a reading straight into the store.
+    func updateQuota(_ quota: ProviderQuota) {
+        quotas[quota.harnessId] = quota
         persist()
     }
 
@@ -168,6 +182,7 @@ final class QuotaStore {
             Task { await self.refreshHarness(id, reason: reason) }
         }
         for task in tasks { await task.value }
+        if !tasks.isEmpty { onQuotasUpdated?(Array(quotas.values)) }
     }
 
     /// Fire-and-forget variant for UI handlers.
@@ -175,8 +190,8 @@ final class QuotaStore {
         Task { await refresh(harnessIds, reason: reason) }
     }
 
-    /// A turn ended / session event for this harness: debounced and coalesced, then an
-    /// ordinary throttled refresh (never forced).
+    /// A turn ended for this harness: debounced and coalesced, then an ordinary
+    /// throttled refresh of just the harnesses that ran (never forced).
     func noteSessionActivity(harnessId: String) {
         guard supportsQuota(harnessId) else { return }
         pendingEventHarnesses.insert(harnessId)
@@ -204,51 +219,10 @@ final class QuotaStore {
         if let old = supplements[harnessId], old.usedTokens == supplement.usedTokens,
            old.contextTokens == supplement.contextTokens, old.costAmount == supplement.costAmount { return }
         supplements[harnessId] = supplement
-        if var snapshot = snapshots[harnessId] {
-            snapshot.supplement = supplement
-            snapshots[harnessId] = snapshot
+        if var quota = quotas[harnessId] {
+            quota.supplement = supplement
+            quotas[harnessId] = quota
         }
-    }
-
-    // MARK: Lifecycle / polling
-
-    /// Poll only while the app is frontmost; a stale check runs on activation.
-    func setAppActive(_ active: Bool) {
-        guard active != isAppActive else { return }
-        isAppActive = active
-        pollTask?.cancel()
-        pollTask = nil
-        guard active else { return }
-        request(reason: .appActivated)
-        let interval = policy.pollInterval
-        let sleep = self.sleep
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                do { try await sleep(interval) } catch { return }
-                guard let self, !Task.isCancelled else { return }
-                await self.pollTick()
-            }
-        }
-    }
-
-    /// One poll tick. No-op while inactive (menu bar alone never polls).
-    func pollTick() async {
-        guard isAppActive else { return }
-        await refresh(reason: .poll)
-    }
-
-    var isPolling: Bool { pollTask != nil }
-
-    func startObservingAppActivation() {
-        guard observers.isEmpty else { return }
-        let center = NotificationCenter.default
-        observers.append(center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.setAppActive(true) }
-        })
-        observers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.setAppActive(false) }
-        })
-        if NSApp?.isActive == true { setAppActive(true) }
     }
 
     // MARK: Internals
@@ -277,10 +251,17 @@ final class QuotaStore {
         harnessInFlight[harnessId] = nil
     }
 
+    static func status(forError kind: String) -> ProviderQuota.Status {
+        kind == "notConfigured" || kind == "unauthorized" ? .notSignedIn : .error
+    }
+
     private func runChain(_ harnessId: String, reason: QuotaRefreshReason) async {
         let agent = agentProfile(for: harnessId)
-        var chosen: (HarnessQuotaSnapshot, any QuotaSource)?
+        var chosen: (ProviderQuota, any QuotaSource)?
         var lastError: QuotaFetchError?
+        /// The first source's failure says what the user can fix (e.g. "not signed in"),
+        /// even when a fallback source then fails for a less useful reason.
+        var preferredError: QuotaFetchError?
         var fetchedAny = false
         for source in chain(for: harnessId) {
             let state = sourceStates[source.id] ?? QuotaSourceState()
@@ -294,10 +275,11 @@ final class QuotaStore {
             }
             fetchedAny = true
             switch await fetchSource(source, agent: agent) {
-            case .success(let snapshot):
-                chosen = (snapshot, source)
+            case .success(let quota):
+                chosen = (quota, source)
             case .failure(let error):
                 lastError = error
+                if source.id == chain(for: harnessId).first?.id { preferredError = error }
                 continue
             }
             break
@@ -308,28 +290,32 @@ final class QuotaStore {
             chosen = sourcesInOrder.lazy.compactMap { source in self.sourceCache[source.id].map { ($0, source) } }.first
         }
         if let picked = chosen {
-            let (snapshot, source) = picked
-            var display = snapshot
+            let (reading, source) = picked
+            var display = reading
             display.harnessId = harnessId
             display.providerTitle = agent.title
             display.sourceId = source.id
             display.sourceKind = source.kind
-            // Cached data while its source (or the preferred source) is failing: keep
-            // showing it, but surface why it may be stale.
-            display.error = sourceStates[source.id]?.lastError
-                ?? (source.id != sourcesInOrder.first?.id ? lastError?.kind : nil)
-            display.supplement = supplements[harnessId]
-            snapshots[harnessId] = display
-        } else if let lastError, fetchedAny || snapshots[harnessId] == nil {
-            if var existing = snapshots[harnessId] {
-                existing.error = lastError.kind
-                snapshots[harnessId] = existing
-            } else if lastError != .notConfigured {
-                snapshots[harnessId] = HarnessQuotaSnapshot(
-                    harnessId: harnessId, providerTitle: agent.title, updatedAt: now(),
-                    error: lastError.kind, supplement: supplements[harnessId]
-                )
+            for index in display.windows.indices where source.kind.isEstimate {
+                display.windows[index].source = source.kind
             }
+            // Cached data while its source (or the preferred source) is failing: keep
+            // showing it, flagged stale with the reason.
+            let failure = sourceStates[source.id]?.lastError
+                ?? (source.id != sourcesInOrder.first?.id ? lastError?.kind : nil)
+            display.status = failure == nil ? .ok : .stale
+            display.statusDetail = failure
+            display.supplement = supplements[harnessId]
+            quotas[harnessId] = display
+        } else if let lastError, fetchedAny || quotas[harnessId] == nil {
+            var failed = quotas[harnessId]
+                ?? .placeholder(harnessId: harnessId, title: agent.title, status: .ok)
+            failed.providerTitle = agent.title
+            let cause = preferredError ?? lastError
+            failed.status = failed.hasData ? .stale : Self.status(forError: cause.kind)
+            failed.statusDetail = cause.kind
+            failed.supplement = supplements[harnessId]
+            quotas[harnessId] = failed
         }
         if fetchedAny { persist() }
     }
@@ -345,12 +331,12 @@ final class QuotaStore {
     }
 
     /// Single-flight per source id: concurrent callers share one network request.
-    private func fetchSource(_ source: any QuotaSource, agent: AgentProfile) async -> Result<HarnessQuotaSnapshot, QuotaFetchError> {
+    private func fetchSource(_ source: any QuotaSource, agent: AgentProfile) async -> Result<ProviderQuota, QuotaFetchError> {
         if let running = sourceInFlight[source.id] { return await running.value }
         let harnessId = agent.id
         isRefreshing[harnessId] = true
         fetchCount += 1
-        let task = Task<Result<HarnessQuotaSnapshot, QuotaFetchError>, Never> {
+        let task = Task<Result<ProviderQuota, QuotaFetchError>, Never> {
             do { return .success(try await source.fetch(for: agent)) }
             catch { return .failure(HarnessQuotaFetcher.transportError(error)) }
         }
@@ -360,9 +346,9 @@ final class QuotaStore {
         isRefreshing[harnessId] = false
         var state = sourceStates[source.id] ?? QuotaSourceState()
         switch result {
-        case .success(let snapshot):
+        case .success(let quota):
             state.recordSuccess(at: now())
-            sourceCache[source.id] = snapshot
+            sourceCache[source.id] = quota
         case .failure(let error):
             state.recordFailure(error, at: now(), policy: policy)
         }
@@ -373,35 +359,30 @@ final class QuotaStore {
     // MARK: Disk cache
 
     private struct CacheFile: Codable {
-        var version = 1
-        var snapshots: [String: HarnessQuotaSnapshot]
-        var sourceCache: [String: HarnessQuotaSnapshot]
+        /// 2 = unified `ProviderQuota`. Older files are ignored (next panel open refetches).
+        var version = 2
+        var quotas: [String: ProviderQuota]
+        var sourceCache: [String: ProviderQuota]
         var sourceStates: [String: QuotaSourceState]
     }
 
-    private func loadCache(migrateLegacy: Bool) {
+    private func loadCache() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
-        if let url = cacheURL, let data = try? Data(contentsOf: url),
-           let file = try? decoder.decode(CacheFile.self, from: data) {
-            snapshots = file.snapshots
-            sourceCache = file.sourceCache
-            sourceStates = file.sourceStates
-            return
-        }
-        if migrateLegacy, let data = UserDefaults.standard.data(forKey: Self.legacyDefaultsKey),
-           let legacy = try? JSONDecoder().decode([String: HarnessQuotaSnapshot].self, from: data) {
-            snapshots = legacy
-        }
+        guard let url = cacheURL, let data = try? Data(contentsOf: url),
+              let file = try? decoder.decode(CacheFile.self, from: data), file.version == 2 else { return }
+        quotas = file.quotas
+        sourceCache = file.sourceCache
+        sourceStates = file.sourceStates
     }
 
     private func persist() {
         guard let url = cacheURL else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        var stored = snapshots
+        var stored = quotas
         for key in stored.keys { stored[key]?.supplement = nil }
-        let file = CacheFile(snapshots: stored, sourceCache: sourceCache, sourceStates: sourceStates)
+        let file = CacheFile(quotas: stored, sourceCache: sourceCache, sourceStates: sourceStates)
         guard let data = try? encoder.encode(file) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)

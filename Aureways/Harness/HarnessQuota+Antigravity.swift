@@ -4,7 +4,7 @@ import Security
 // MARK: - Antigravity Quota Probing
 
 extension HarnessQuotaFetcher {
-    func fetchAntigravity(agent: AgentProfile) async throws -> HarnessQuotaSnapshot {
+    func fetchAntigravity(agent: AgentProfile) async throws -> ProviderQuota {
         guard let snapshot = await fetchAntigravityNative(agent: agent) else { throw QuotaFetchError.unavailable }
         return snapshot
     }
@@ -254,7 +254,7 @@ extension HarnessQuotaFetcher {
         return false
     }
 
-    private func probeAntigravityEndpoint(_ endpoint: AntigravityEndpoint, agent: AgentProfile) async -> (email: String?, plan: String?, models: [HarnessQuotaWindow])? {
+    private func probeAntigravityEndpoint(_ endpoint: AntigravityEndpoint, agent: AgentProfile) async -> (email: String?, plan: String?, models: [QuotaWindow])? {
         guard let userData = try? await sendAntigravityRequest(
             path: "/exa.language_server_pb.LanguageServerService/GetUserStatus",
             body: [
@@ -272,7 +272,7 @@ extension HarnessQuotaFetcher {
         return Self.parseAntigravityUserStatus(userData, agentId: agent.id)
     }
 
-    private func fetchAntigravityNative(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+    private func fetchAntigravityNative(agent: AgentProfile) async -> ProviderQuota? {
         if let snapshot = await fetchAntigravityACP(agent: agent) {
             return snapshot
         }
@@ -284,44 +284,24 @@ extension HarnessQuotaFetcher {
                 continue
             }
 
-            var primaryWindow: HarnessQuotaWindow? = nil
-            var secondaryWindow: HarnessQuotaWindow? = nil
-            var extraWindows: [HarnessQuotaWindow] = []
-
+            var windows: [QuotaWindow] = []
             if let quotaData = try? await sendAntigravityRequest(
                 path: "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary",
                 body: ["forceRefresh": true],
                 endpoint: endpoint
-            ), let (p, s, extras) = Self.parseAntigravityQuotaSummary(quotaData, agentId: agent.id) {
-                primaryWindow = p
-                secondaryWindow = s
-                extraWindows = extras
+            ), let parsed = Self.parseAntigravityQuotaSummary(quotaData, agentId: agent.id) {
+                windows = parsed
             }
+            if windows.isEmpty { windows = probed.models }
+            guard !windows.isEmpty else { continue }
 
-            if primaryWindow == nil && !probed.models.isEmpty {
-                primaryWindow = probed.models.first
-                if probed.models.count > 1 {
-                    extraWindows.append(contentsOf: probed.models.dropFirst())
-                }
-            }
-
-            guard primaryWindow != nil || secondaryWindow != nil || !extraWindows.isEmpty else {
-                continue
-            }
-
-            return HarnessQuotaSnapshot(
+            return ProviderQuota(
                 harnessId: agent.id,
                 providerTitle: agent.title,
-                planType: probed.plan,
-                accountEmail: probed.email,
-                primaryWindow: primaryWindow,
-                secondaryWindow: secondaryWindow,
-                extraWindows: extraWindows,
-                usageBreakdown: [],
-                creditsRemaining: nil,
-                creditsUnit: nil,
-                resetCreditsAvailable: nil,
-                updatedAt: Date()
+                plan: probed.plan,
+                account: probed.email,
+                windows: windows,
+                lastUpdated: Date()
             )
         }
 
@@ -401,7 +381,7 @@ extension HarnessQuotaFetcher {
     }
 
     /// ACP has its own OAuth (`acp_token.json`) and talks to CloudCode directly.
-    private func fetchAntigravityACP(agent: AgentProfile) async -> HarnessQuotaSnapshot? {
+    private func fetchAntigravityACP(agent: AgentProfile) async -> ProviderQuota? {
         guard let creds = loadAntigravityACPCredentials() else {
             NSLog("[quota] antigravity: no ACP credentials at antigravity-acp/acp_token.json")
             return nil
@@ -448,24 +428,17 @@ extension HarnessQuotaFetcher {
                 NSLog("[quota] antigravity: retrieveUserQuotaSummary HTTP %d", quota.status)
                 return nil
             }
-            guard let (primary, secondary, extras) = Self.parseAntigravityQuotaSummary(quota.data, agentId: agent.id) else {
+            guard let windows = Self.parseAntigravityQuotaSummary(quota.data, agentId: agent.id) else {
                 NSLog("[quota] antigravity: quota summary parse failed")
                 return nil
             }
 
-            return HarnessQuotaSnapshot(
+            return ProviderQuota(
                 harnessId: agent.id,
                 providerTitle: agent.title,
-                planType: loaded.plan,
-                accountEmail: nil,
-                primaryWindow: primary,
-                secondaryWindow: secondary,
-                extraWindows: extras,
-                usageBreakdown: [],
-                creditsRemaining: nil,
-                creditsUnit: nil,
-                resetCreditsAvailable: nil,
-                updatedAt: Date()
+                plan: loaded.plan,
+                windows: windows,
+                lastUpdated: Date()
             )
         } catch {
             NSLog("[quota] antigravity: ACP CloudCode error %@", error.localizedDescription)
@@ -473,7 +446,8 @@ extension HarnessQuotaFetcher {
         }
     }
 
-    static func parseAntigravityQuotaSummary(_ data: Data, agentId: String) -> (primary: HarnessQuotaWindow?, secondary: HarnessQuotaWindow?, extras: [HarnessQuotaWindow])? {
+    /// CloudCode / language-server quota summary → windows, Gemini 5h and weekly first.
+    static func parseAntigravityQuotaSummary(_ data: Data, agentId: String) -> [QuotaWindow]? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
@@ -483,9 +457,9 @@ extension HarnessQuotaFetcher {
             return nil
         }
 
-        var primary: HarnessQuotaWindow? = nil
-        var secondary: HarnessQuotaWindow? = nil
-        var extras: [HarnessQuotaWindow] = []
+        var gemini5h: QuotaWindow?
+        var geminiWeekly: QuotaWindow?
+        var others: [QuotaWindow] = []
 
         for group in groups {
             let groupName = (group["displayName"] as? String) ?? "Quota"
@@ -506,53 +480,41 @@ extension HarnessQuotaFetcher {
                 guard let remaining = remainingFraction else { continue }
 
                 let usedPercent = max(0.0, min(100.0, (1.0 - remaining) * 100.0))
-                let bucketId = (bucket["bucketId"] as? String) ?? UUID().uuidString
+                let bucketId = (bucket["bucketId"] as? String) ?? "\(groupName)-\(others.count)"
                 let bucketName = (bucket["displayName"] as? String) ?? bucketId
-                let resetTime = parseDate(bucket["resetTime"])
-                let resetDesc = bucket["description"] as? String
                 let windowKind = (bucket["window"] as? String)?.lowercased()
 
                 let is5h = windowKind == "5h" || bucketId.contains("5h") || bucketName.contains("5") || bucketName.contains("Five")
                 let isWeekly = windowKind == "weekly" || bucketId.contains("weekly") || bucketName.contains("Weekly")
                 let windowMinutes = is5h ? 300 : (isWeekly ? 10080 : nil)
+                let scope = isGeminiGroup ? "Gemini" : "Claude & GPT"
+                let label = is5h ? "\(scope) 5h" : (isWeekly ? "\(scope) Weekly" : (isGeminiGroup ? "Gemini \(bucketName)" : "\(groupName) \(bucketName)"))
 
-                let windowTitle: String
-                if isGeminiGroup {
-                    windowTitle = is5h ? "Gemini 5-hour" : (isWeekly ? "Gemini Weekly" : "Gemini \(bucketName)")
-                } else {
-                    windowTitle = is5h ? "Claude & GPT 5-hour" : (isWeekly ? "Claude & GPT Weekly" : "\(groupName) \(bucketName)")
-                }
-
-                let window = HarnessQuotaWindow(
+                let window = QuotaWindow(
                     id: "\(agentId)-\(bucketId)",
-                    title: windowTitle,
+                    label: label,
+                    kind: is5h ? .session : (isWeekly ? .weekly : .other),
                     usedPercent: usedPercent,
-                    resetsAt: resetTime,
-                    resetDescription: resetDesc,
+                    resetsAt: parseDate(bucket["resetTime"]),
+                    resetDescription: bucket["description"] as? String,
                     windowMinutes: windowMinutes
                 )
 
-                if isGeminiGroup {
-                    if is5h {
-                        primary = window
-                    } else if isWeekly {
-                        secondary = window
-                    } else {
-                        extras.append(window)
-                    }
+                if isGeminiGroup && is5h {
+                    gemini5h = window
+                } else if isGeminiGroup && isWeekly {
+                    geminiWeekly = window
                 } else {
-                    extras.append(window)
+                    others.append(window)
                 }
             }
         }
 
-        if primary != nil || secondary != nil || !extras.isEmpty {
-            return (primary, secondary, extras)
-        }
-        return nil
+        let windows = [gemini5h, geminiWeekly].compactMap { $0 } + others
+        return windows.isEmpty ? nil : windows
     }
 
-    static func parseAntigravityUserStatus(_ data: Data, agentId: String) -> (email: String?, plan: String?, models: [HarnessQuotaWindow]) {
+    static func parseAntigravityUserStatus(_ data: Data, agentId: String) -> (email: String?, plan: String?, models: [QuotaWindow]) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return (nil, nil, [])
         }
@@ -566,7 +528,7 @@ extension HarnessQuotaFetcher {
 
         let planName = (userTier?["name"] as? String) ?? (planInfo?["planDisplayName"] as? String) ?? (planInfo?["planName"] as? String)
 
-        var modelWindows: [HarnessQuotaWindow] = []
+        var modelWindows: [QuotaWindow] = []
         if let cascadeData = userStatus?["cascadeModelConfigData"] as? [String: Any],
            let configs = cascadeData["clientModelConfigs"] as? [[String: Any]] {
             for config in configs {
@@ -578,16 +540,13 @@ extension HarnessQuotaFetcher {
                 let resetDate = parseDate(quota["resetTime"])
                 let used = max(0.0, min(100.0, (1.0 - remFrac) * 100.0))
 
-                modelWindows.append(
-                    HarnessQuotaWindow(
-                        id: "\(agentId)-\(label)",
-                        title: label,
-                        usedPercent: used,
-                        resetsAt: resetDate,
-                        resetDescription: nil,
-                        windowMinutes: nil
-                    )
-                )
+                modelWindows.append(QuotaWindow(
+                    id: "\(agentId)-\(label)",
+                    label: label,
+                    kind: .model,
+                    usedPercent: used,
+                    resetsAt: resetDate
+                ))
             }
         }
 

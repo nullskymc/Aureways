@@ -53,6 +53,7 @@ final class AppModel {
 
     /// Account quota, independent of ACP sessions (see Quota/QuotaStore.swift).
     let quotaStore = QuotaStore()
+    let quotaNotifier = QuotaNotifier()
 
     var runtimes: [String: HarnessRuntime] = [:]
     let store: SessionStore?
@@ -155,9 +156,11 @@ final class AppModel {
             guard let self else { return [] }
             return self.agents.filter { self.isAgentEnabled($0) }
         }
-        // Launch: only sources whose cached reading is older than the TTL hit the network.
-        quotaStore.request(reason: .launch)
-        quotaStore.startObservingAppActivation()
+        // No launch fetch and no polling: the menu bar panel / Usage page opening and
+        // finished turns are the only triggers. Until then the disk cache is shown.
+        quotaStore.onQuotasUpdated = { [weak self] quotas in
+            self?.quotaNotifier.quotasUpdated(quotas)
+        }
         #if DEBUG
         installPerfFixtureIfRequested()
         #endif

@@ -101,6 +101,10 @@
 		B201000000000000000000D8 /* QuotaSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D8 /* QuotaSources.swift */; };
 		B101000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
 		B201000000000000000000D9 /* QuotaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F101000000000000000000D9 /* QuotaStore.swift */; };
+		B10100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
+		B20100000000000000001F02 /* QuotaAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F02 /* QuotaAlerts.swift */; };
+		B10100000000000000001F01 /* ProviderQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F01 /* ProviderQuota.swift */; };
+		B20100000000000000001F01 /* ProviderQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000001F01 /* ProviderQuota.swift */; };
 		B2010000000000000000009B /* QuotaStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2010000000000000000009B /* QuotaStoreTests.swift */; };
 		B10100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
 		B20100000000000000000054 /* ToolCallNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000054 /* ToolCallNormalization.swift */; };
@@ -189,6 +193,8 @@
 		F10100000000000000000050 /* HarnessQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuota.swift; sourceTree = "<group>"; };
 		F101000000000000000000D8 /* QuotaSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaSources.swift; sourceTree = "<group>"; };
 		F101000000000000000000D9 /* QuotaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStore.swift; sourceTree = "<group>"; };
+		F10100000000000000001F02 /* QuotaAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAlerts.swift; sourceTree = "<group>"; };
+		F10100000000000000001F01 /* ProviderQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderQuota.swift; sourceTree = "<group>"; };
 		F2010000000000000000009B /* QuotaStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaStoreTests.swift; sourceTree = "<group>"; };
 		F10100000000000000000054 /* ToolCallNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallNormalization.swift; sourceTree = "<group>"; };
 		F20100000000000000000050 /* HarnessQuotaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessQuotaTests.swift; sourceTree = "<group>"; };
@@ -258,6 +264,8 @@
 			children = (
 				F101000000000000000000D8 /* QuotaSources.swift */,
 				F101000000000000000000D9 /* QuotaStore.swift */,
+				F10100000000000000001F02 /* QuotaAlerts.swift */,
+				F10100000000000000001F01 /* ProviderQuota.swift */,
 			);
 			path = Quota;
 			sourceTree = "<group>";
@@ -537,6 +545,8 @@
 				B101000000000000000000E6 /* WebShellBridge+Handlers.swift in Sources */,
 				B101000000000000000000D8 /* QuotaSources.swift in Sources */,
 				B101000000000000000000D9 /* QuotaStore.swift in Sources */,
+				B10100000000000000001F02 /* QuotaAlerts.swift in Sources */,
+				B10100000000000000001F01 /* ProviderQuota.swift in Sources */,
 				B10100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -586,6 +596,8 @@
 				B201000000000000000000E3 /* HarnessQuota+Codex.swift in Sources */,
 				B201000000000000000000D8 /* QuotaSources.swift in Sources */,
 				B201000000000000000000D9 /* QuotaStore.swift in Sources */,
+				B20100000000000000001F02 /* QuotaAlerts.swift in Sources */,
+				B20100000000000000001F01 /* ProviderQuota.swift in Sources */,
 				B2010000000000000000009B /* QuotaStoreTests.swift in Sources */,
 				B20100000000000000000054 /* ToolCallNormalization.swift in Sources */,
 				B20100000000000000000051 /* HarnessQuotaTests.swift in Sources */,

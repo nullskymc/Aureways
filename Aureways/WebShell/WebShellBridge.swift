@@ -299,6 +299,8 @@ final class WebShellBridge: NSObject {
         case newSession, selectSession, openApp, openSettings, quitApp
         /// The panel became visible. Stale-only quota check; the menu bar never polls.
         case menuBarOpened
+        /// The panel's refresh button (manual: short minimum interval, never through a 429).
+        case refreshQuota
 
         init?(message type: String) {
             self.init(rawValue: type == "quit" ? "quitApp" : type)
@@ -318,6 +320,12 @@ final class WebShellBridge: NSObject {
         switch command {
         case .menuBarOpened:
             model.quotaStore.request(reason: .menuBarOpened)
+        case .refreshQuota:
+            if let id = body["id"] as? String {
+                model.quotaStore.request([id], reason: .manual)
+            } else {
+                model.quotaStore.request(reason: .manual)
+            }
         case .newSession:
             dismiss()
             AppActivation.revealMainWindow()
@@ -333,7 +341,11 @@ final class WebShellBridge: NSObject {
         case .openSettings:
             dismiss()
             AppActivation.revealMainWindow()
-            WebShellBridge.current?.sendCommand("openSettings")
+            if let section = body["section"] as? String {
+                WebShellBridge.current?.sendCommand("openSettings", ["section": section])
+            } else {
+                WebShellBridge.current?.sendCommand("openSettings")
+            }
         case .quitApp:
             dismiss()
             // Out of the WebKit message callback before terminating.
