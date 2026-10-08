@@ -16,9 +16,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    // ⌘Q is remapped to 关闭窗口, and Dock 退出 only hides to the menu bar. A quit
+    // Apple Event from anything else (osascript / an installer, or logout and
+    // shutdown) really quits: cancelling it is what made `tell application … to
+    // quit` fail with -128 and what made the app interrupt logout.
     nonisolated func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
-            if AppActivation.allowsTermination {
+            if AppActivation.allowsTermination
+                || AppActivation.isExternalQuitRequest(NSAppleEventManager.shared().currentAppleEvent) {
+                AppActivation.allowsTermination = true
                 return .terminateNow
             }
             AppActivation.resignToMenuBar()
@@ -149,7 +155,7 @@ struct AurewaysApp: App {
             MenuBarWebView(model: model)
                 .frame(width: MenuBarWebView.size.width, height: MenuBarWebView.size.height)
         } label: {
-            MenuBarExtraLabel()
+            MenuBarExtraLabel(model: model)
         }
         .menuBarExtraStyle(.window)
     }
