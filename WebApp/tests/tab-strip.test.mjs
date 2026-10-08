@@ -3,6 +3,8 @@ import { test } from 'node:test'
 import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const { window, document } = parseHTML('<html><body><div id="app"></div></body></html>')
 // Linkedom omits the browser's onkeydown property used by Preact's event normalization.
@@ -63,7 +65,6 @@ test('workbench tabs expose selection and support arrow/Home/End navigation', as
   await flush(() => render(null, root))
 })
 
-
 test('resizing or restoring the tab strip keeps its selection in view', async () => {
   app.value = { ...model, workspacePath: '/tabs-resize' }
   const pane = state.currentPane()
@@ -83,4 +84,29 @@ test('resizing or restoring the tab strip keeps its selection in view', async ()
   assert.equal(reveals, 2)
   await flush(() => render(null, root))
   assert.equal(observer.disconnected, true)
+})
+
+test('native title bar: the workbench strip is full width with equal-width tabs; chat has no strip or +', async () => {
+  const native = { ...model, chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, trailingInset: 126, addInset: 50 } }
+  app.value = { ...native, workspacePath: '/tabs-native' }
+  const pane = state.currentPane()
+  await flush(() => render(h(TabStrip, { state: native, sidebarOpen: true, session: null, column: pane.columns[1], index: 1 }), root))
+  const capsule = root.querySelector('.tab-capsule')
+  assert.equal(capsule.dataset.glass, 'tabs')
+  assert.equal(capsule.querySelector('.tab-add'), null, 'no + inside the strip')
+  const tabs = [...capsule.querySelectorAll('.insp-tab')]
+  assert.ok(tabs.length >= 2)
+  assert.ok(tabs.every(tab => tab.parentElement.matches('.insp-tab-strip')))
+  // Safari style: tabs share the row equally down to a minimum, then the strip scrolls.
+  const css = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8')
+  const rule = css.match(/\.glass-tabs \.tab-capsule \.insp-tab \{([^}]*)\}/)[1]
+  assert.match(rule, /flex: 1 1 0;/)
+  assert.match(rule, /min-width: \d+px;/)
+  assert.match(css.match(/\.glass-tabs \.tab-capsule \.insp-tab-strip \{([^}]*)\}/)[1], /overflow-x: auto;/)
+  assert.match(css.match(/\.glass-tabs \.tab-capsule \{([^}]*)\}/)[1], /flex: 1 1 auto;.*height: 26px;/)
+  const chat = state.currentPane().columns[0]
+  await flush(() => render(h(TabStrip, { state: native, sidebarOpen: true, session: null, column: chat, index: 0 }), root))
+  assert.equal(root.querySelector('.tab-capsule, [role="tab"], .tab-add'), null)
+  assert.equal(root.querySelector('.chat-title').textContent, 'Chat')
+  await flush(() => render(null, root))
 })

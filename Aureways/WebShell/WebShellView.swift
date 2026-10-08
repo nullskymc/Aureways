@@ -123,6 +123,9 @@ final class WebShellHostView: NSView {
                 guard let self else { return }
                 switch action {
                 case .sidebar: self.bridge.sendCommand("toggleSidebar")
+                case .addTab:
+                    let frame = self.titlebarButtons.addButtonFrame
+                    self.bridge.sendCommand("addTab", ["x": frame.minX, "y": frame.maxY + 4])
                 case .fileTree: self.bridge.sendCommand("toggleFileTree")
                 case .inspector: self.bridge.sendCommand("toggleInspector")
                 }
@@ -146,7 +149,7 @@ final class WebShellHostView: NSView {
                 // changes; a move (base/share) would mean the resize-invariant form failed.
                 let old = self.tabGlass.strips
                 let kind: String
-                if strips.count != old.count || zip(strips, old).contains(where: { abs($0.width - $1.width) >= 1 }) {
+                if strips.count != old.count || zip(strips, old).contains(where: { abs($0.widthBase - $1.widthBase) >= 1 || abs($0.widthShare - $1.widthShare) > 0.002 }) {
                     kind = "resized"
                 } else if zip(strips, old).contains(where: { abs($0.base - $1.base) >= 1 || abs($0.share - $1.share) > 0.002 }) {
                     kind = "moved"
@@ -166,7 +169,7 @@ final class WebShellHostView: NSView {
         bridge.onTitlebarState = { [weak self] state in
             guard let self else { return }
             if let open = state["sidebar"] as? Bool { self.sidebarOpen = open }
-            self.titlebarButtons.setRightVisible(state["right"] as? Bool ?? false)
+            self.titlebarButtons.setRightVisible(state["right"] as? Bool ?? false, add: state["add"] as? Bool ?? false)
             self.titlebarButtons.setState(fileTree: state["files"] as? Bool ?? false, inspector: state["inspector"] as? Bool ?? false)
         }
         bridge.onGlassRects = { [weak self] rects in
@@ -325,7 +328,8 @@ final class WebShellHostView: NSView {
             fullscreen: fullscreen,
             titlebarHeight: height,
             leadingInset: insets.leading,
-            trailingInset: insets.trailing
+            trailingInset: insets.trailing,
+            addInset: insets.addOnly
         ))
     }
 

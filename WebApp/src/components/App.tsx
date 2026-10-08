@@ -6,7 +6,7 @@ import { t } from '../i18n'
 import { app, composerH, composerTotal, route, setTicking, uiCommand } from '../store'
 import { prefs } from '../prefs'
 import { currentPane, homeIsChat, openTerminal, resizeColumns, selectTab, showInspector, splitFocused, toggleWorkbench, type Column } from '../inspector/state'
-import { ColumnBody, TabStrip } from '../inspector/Inspector'
+import { ColumnBody, TabStrip, newTabMenu } from '../inspector/Inspector'
 import '../reader/state'
 import { lazy } from './Lazy'
 import { installGlass } from '../glass'
@@ -40,6 +40,9 @@ export function App() {
         break
       case 'toggleFileTree':
         toggleFileTree()
+        break
+      case 'addTab':
+        void newTabMenu({ x: Number(c.data?.x ?? 0), y: Number(c.data?.y ?? 0) })
         break
       case 'showFiles':
         showInspector()

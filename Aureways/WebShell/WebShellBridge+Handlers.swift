@@ -191,7 +191,9 @@ func userContentController(_ userContentController: WKUserContentController, did
                 func number(_ key: String) -> CGFloat? { (rect[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
                 guard let x = number("x"), let y = number("y"), let w = number("w"), let h = number("h"), w > 0, h > 0
                 else { return nil }
-                return TabCapsule(base: x, share: number("f") ?? 0, y: y, width: w, height: h,
+                let share = number("fw") ?? 0
+                return TabCapsule(base: x, share: number("f") ?? 0, y: y, widthBase: number("wb") ?? w, widthShare: share, height: h,
+                                  activeIndex: (rect["ai"] as? NSNumber)?.intValue, count: (rect["n"] as? NSNumber)?.intValue,
                                   activeX: number("ax"), activeWidth: number("aw"))
             }
             onTabCapsules?(tabs, body["sidebar"] as? Bool ?? true)

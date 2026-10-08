@@ -31,8 +31,10 @@ globalThis.MutationObserver = class { observe() {} disconnect() {} }
 globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)' })
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 const messages = []
+let menuAnswer = null
 window.webkit = { messageHandlers: { aureways: { postMessage(m) {
   messages.push(m)
+  if (m.type === 'menu') { queueMicrotask(() => window.__aw.receive({ type: 'menuResult', token: m.token, id: menuAnswer })); return }
   if (m.type !== 'rpc') return
   const result = m.method === 'term.open' ? { id: 'collapse-term', shell: 'zsh', index: 1 }
     : m.method === 'fs.read' ? { path: m.params.path, text: 'Original', size: 8, mtime: 1 }
@@ -124,33 +126,53 @@ test('the project file tree and its toggle stay available while the Changes tab 
   await flush(() => render(null, root))
 })
 
-test('native title bar: tabs and + share one glass capsule; fixed toggles are left to native glass', async () => {
-  const native = { ...model, workspacePath: '/glass', inspectorRoot: '/glass', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, trailingInset: 88 } }
+test('native title bar: chat is a plain title; workbench tabs fill one slim strip; + and toggles are native', async () => {
+  const native = { ...model, workspacePath: '/glass', inspectorRoot: '/glass', chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, trailingInset: 126, addInset: 50 } }
   app.value = native
   route.value = { name: 'main' }
   prefs.inspectorOpen.value = true
   prefs.sidebarOpen.value = false
   state.showInspector('changes')
+  state.openFile('/glass/a.txt')
   await flush(() => render(h(EditorColumns, { state: native, session: null, sidebarOpen: false, attention: false, overlay: true, glass: true, dock: { current: null }, dockHeight: 100 }), root))
   const heads = [...root.querySelectorAll('header.tab-strip')]
   assert.equal(heads.length, 2)
   assert.ok(heads.every(head => head.classList.contains('glass-tabs')))
-  for (const head of heads) {
-    const capsule = head.querySelector('.tab-capsule')
-    assert.equal(capsule.dataset.glass, 'tabs')
-    assert.ok(capsule.querySelector('[role="tablist"]'), 'tabs inside the capsule')
-  }
-  assert.ok(heads[1].querySelector('.tab-capsule .tab-add'), '+ in the same capsule')
+  // Chat column: no capsule, no tabs, no "+": just the title.
+  assert.equal(heads[0].querySelector('.tab-capsule, [role="tablist"], [role="tab"], .tab-add'), null)
+  assert.equal(heads[0].querySelector('.chat-title').textContent, 'Chat')
+  // Workbench: one strip with every tab, no page "+" anywhere.
+  const capsule = heads[1].querySelector('.tab-capsule')
+  assert.equal(capsule.dataset.glass, 'tabs')
+  assert.deepEqual([...capsule.querySelectorAll('[role="tab"]')].map(tab => tab.textContent), ['Changes', 'a.txt', 'Open file'])
+  assert.equal(root.querySelector('.tab-add'), null, 'new tab is the native + circle')
   assert.equal(root.querySelector('[aria-label="Toggle file tree"], .workbench-toggle, [title="Toggle sidebar"]'), null, 'no web copies of the native toggles')
   assert.ok(heads[1].querySelector('[title="Split right"]'), 'split stays a page control')
   // Sidebar closed: column 0 clears the traffic lights and the native circle; only New chat stays in the page.
   assert.equal(heads[0].style.paddingLeft, '122px')
   assert.deepEqual([...heads[0].querySelectorAll('.head-tools button')].map(b => b.title), ['New chat'])
-  // The last visible column keeps clear of the native right capsule.
-  assert.equal(heads[1].style.paddingRight, '88px')
+  // The last visible column keeps clear of the native "+" and toggle capsule.
+  assert.equal(heads[1].style.paddingRight, '126px')
   assert.equal(heads[0].style.paddingRight, '')
   prefs.sidebarOpen.value = true
   await flush(() => render(null, root))
+})
+
+test('the + menu opens new tabs in the workbench, never in the chat column', async () => {
+  const { newTabMenu } = await import('../src/inspector/Inspector.tsx')
+  app.value = { ...model, workspacePath: '/plus', inspectorRoot: '/plus' }
+  route.value = { name: 'main' }
+  state.selectTab('chat')
+  assert.equal(state.currentPane().focus, 0, 'chat focused')
+  menuAnswer = 'changes'
+  await newTabMenu({ x: 900, y: 46 })
+  const menu = messages.filter(m => m.type === 'menu').at(-1)
+  assert.deepEqual({ x: menu.x, y: menu.y }, { x: 900, y: 46 }, 'menu opens under the native button')
+  const pane = state.currentPane()
+  assert.deepEqual(pane.columns[0].tabs.map(tab => tab.kind), ['chat'])
+  assert.ok(pane.columns[1].tabs.some(tab => tab.kind === 'changes'), 'opened in the workbench')
+  assert.equal(pane.columns[1].active, 'changes')
+  menuAnswer = null
 })
 
 test('native title bar state goes out only on change; the file tree toggle hides, shows or opens the navigator', async () => {
@@ -163,7 +185,7 @@ test('native title bar state goes out only on change; the file tree toggle hides
   const before = sent().length
   installTitlebar()
   assert.equal(sent().length, before + 1)
-  assert.deepEqual({ ...sent().at(-1), type: undefined }, { type: undefined, sidebar: true, right: true, files: true, inspector: true })
+  assert.deepEqual({ ...sent().at(-1), type: undefined }, { type: undefined, sidebar: true, right: true, add: true, files: true, inspector: true })
   prefs.inspectorOpen.value = true
   assert.equal(sent().length, before + 1, 'unchanged state is not re-sent')
   toggleFileTree()
@@ -179,5 +201,9 @@ test('native title bar state goes out only on change; the file tree toggle hides
   assert.equal(titlebarState().files, true)
   route.value = { name: 'settings' }
   assert.equal(sent().at(-1).right, false, 'no right capsule outside the main view')
+  assert.equal(sent().at(-1).add, false, 'no + in settings')
+  route.value = { name: 'documents' }
+  assert.equal(titlebarState().add, true, 'Documents keeps the + circle')
+  assert.equal(titlebarState().right, false)
   route.value = { name: 'main' }
 })
