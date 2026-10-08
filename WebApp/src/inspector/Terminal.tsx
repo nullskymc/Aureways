@@ -2,9 +2,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { post } from '../bridge'
 import { t } from '../i18n'
 import { subscribeTerminal } from './state'
-
-type XTerm = import('@xterm/xterm').Terminal
-type Fit = import('@xterm/addon-fit').FitAddon
+import { terminalSessions, type TerminalSession } from './terminalSessions'
 
 // xterm.js is a lazy chunk: nothing loads until the first terminal opens.
 let xtermLib: Promise<[typeof import('@xterm/xterm'), typeof import('@xterm/addon-fit')]> | null = null
@@ -12,7 +10,10 @@ const loadXterm = () => {
   if (!xtermLib) {
     xtermLib = Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/xterm/css/xterm.css')]).then(
       ([a, b]) => [a, b] as [typeof import('@xterm/xterm'), typeof import('@xterm/addon-fit')],
-    )
+    ).catch((error) => {
+      xtermLib = null
+      throw error
+    })
   }
   return xtermLib
 }
@@ -60,74 +61,86 @@ function themeFromCSS(): Record<string, string> {
 
 const decoder = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
 
+/** The xterm instance and its input/output subscriptions outlive view mounts. */
+async function createTerminal(id: string): Promise<TerminalSession> {
+  const [{ Terminal }, { FitAddon }] = await loadXterm()
+  const element = document.createElement('div')
+  element.className = 'terminal-surface'
+  const x = new Terminal({
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+    fontSize: 12,
+    lineHeight: 1.15,
+    cursorBlink: true,
+    allowProposedApi: false,
+    macOptionIsMeta: true,
+    scrollback: 5000,
+    theme: themeFromCSS(),
+  })
+  const fit = new FitAddon()
+  x.loadAddon(fit)
+  x.open(element)
+  x.onData((data) => post('term.input', { id, data }))
+  x.onResize(({ cols, rows }) => post('term.resize', { id, cols, rows }))
+  const unsub = subscribeTerminal(id, {
+    data: (b64) => x.write(decoder(b64)),
+    exit: (code) => x.write(`\r\n\x1b[2m[${t('processExited', code ?? '?')}]\x1b[0m\r\n`),
+  })
+  return { element, x, fit, dispose() { unsub(); x.dispose(); element.remove() } }
+}
+
 export function TerminalView({ id, visible, exited }: { id: string; visible: boolean; exited: boolean }) {
   const host = useRef<HTMLDivElement>(null)
-  const term = useRef<{ x: XTerm; fit: Fit } | null>(null)
+  const term = useRef<TerminalSession | null>(null)
+  const isVisible = useRef(visible)
+  isVisible.current = visible
 
   useEffect(() => {
+    const container = host.current!
     let disposed = false
-    let unsub = () => {}
+    let attached: TerminalSession | undefined
     let ro: ResizeObserver | null = null
     let mq: MediaQueryList | null = null
     let schemeObserver: MutationObserver | null = null
     const onScheme = () => term.current && (term.current.x.options.theme = themeFromCSS())
-    void loadXterm().then(([{ Terminal }, { FitAddon }]) => {
-      if (disposed || !host.current) return
-      const x = new Terminal({
-        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-        fontSize: 12,
-        lineHeight: 1.15,
-        cursorBlink: true,
-        allowProposedApi: false,
-        macOptionIsMeta: true,
-        scrollback: 5000,
-        theme: themeFromCSS(),
-      })
-      const fit = new FitAddon()
-      x.loadAddon(fit)
-      x.open(host.current)
-      term.current = { x, fit }
-      x.onData((data) => post('term.input', { id, data }))
-      x.onResize(({ cols, rows }) => post('term.resize', { id, cols, rows }))
-      unsub = subscribeTerminal(id, {
-        data: (b64) => x.write(decoder(b64)),
-        exit: (code) => x.write(`\r\n\x1b[2m[${t('processExited', code ?? '?')}]\x1b[0m\r\n`),
-      })
+    void terminalSessions.get(id, () => createTerminal(id)).then((session) => {
+      if (disposed || !session) return
+      attached = session
+      container.appendChild(session.element)
+      term.current = session
+      onScheme()
       const refit = () => {
-        if (!host.current || host.current.offsetWidth === 0) return
-        try {
-          fit.fit()
-        } catch {}
+        if (disposed || !isVisible.current || container.offsetWidth === 0) return
+        try { session.fit.fit() } catch {}
       }
       ro = new ResizeObserver(() => requestAnimationFrame(refit))
-      ro.observe(host.current)
+      ro.observe(container)
       refit()
-      post('term.resize', { id, cols: x.cols, rows: x.rows })
       mq = matchMedia('(prefers-color-scheme: dark)')
       mq.addEventListener('change', onScheme)
       schemeObserver = new MutationObserver(onScheme)
       schemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
-      x.focus()
-    })
+      if (isVisible.current) session.x.focus()
+    }).catch((error) => post('log', { message: 'terminal view failed: ' + error }))
     return () => {
       disposed = true
-      unsub()
       ro?.disconnect()
       mq?.removeEventListener('change', onScheme)
       schemeObserver?.disconnect()
-      term.current?.x.dispose()
+      // Another column may already have adopted the same element.
+      if (attached?.element.parentElement === container) attached.element.remove()
+      term.current = null
     }
   }, [id])
 
   useEffect(() => {
-    if (visible && term.current) {
-      requestAnimationFrame(() => {
-        try {
-          term.current?.fit.fit()
-        } catch {}
-        term.current?.x.focus()
-      })
-    }
+    if (!visible) return
+    let cancelled = false
+    requestAnimationFrame(() => {
+      if (cancelled || !isVisible.current) return
+      try { term.current?.fit.fit() } catch {}
+      term.current?.x.focus()
+    })
+    return () => { cancelled = true }
   }, [visible])
 
   return <div class={'terminal' + (exited ? ' exited' : '')} style={{ display: visible ? 'block' : 'none' }} ref={host} />

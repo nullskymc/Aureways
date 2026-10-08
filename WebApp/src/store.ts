@@ -4,8 +4,8 @@ import type { AppState, Item } from './types'
 
 export const app = signal<AppState | null>(null)
 
-/** Top-level route: the main chat or the settings page (⌘,). */
-export const route = signal<{ name: 'main' } | { name: 'settings'; section?: string }>({ name: 'main' })
+/** Top-level route. Workspace tabs are `main`. `documents` is the shelf for outside Markdown. */
+export const route = signal<{ name: 'main' } | { name: 'settings'; section?: string } | { name: 'documents' }>({ name: 'main' })
 
 // Debug/inspection hook (used by the Debug-build eval notification).
 ;(window as unknown as { __awState: () => unknown }).__awState = () => ({ app: app.peek(), items: transcript.items.length })

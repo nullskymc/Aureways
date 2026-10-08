@@ -2,6 +2,10 @@ import { useSignal } from '@preact/signals'
 import { nativeMenu, post } from '../bridge'
 import { relativeTime, t } from '../i18n'
 import { route } from '../store'
+
+function showChat() {
+  if (route.peek().name !== 'main') route.value = { name: 'main' }
+}
 import { prefs } from '../prefs'
 import type { AppState, Session } from '../types'
 import { HarnessIcon, Icon, Spinner } from './Icon'
@@ -28,7 +32,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
 
   const lights = state.chrome.trafficLights
   const headPad = state.chrome.fullscreen ? 12 : Math.max(76, lights.x + lights.w + 14)
-  const showNewChatSelected = !isSettings && state.selectedSessionId === null
+  const showNewChatSelected = r.name === 'main' && state.selectedSessionId === null
 
   return (
     <aside class={'sidebar' + (isSettings ? ' settings-nav' : '')} data-glass="sidebar">
@@ -43,7 +47,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
       ) : (
         <>
           <div class="sidebar-actions">
-        <button class={'nav-row' + (showNewChatSelected ? ' selected' : '')} onClick={() => post('newSession')}>
+        <button class={'nav-row' + (showNewChatSelected ? ' selected' : '')} onClick={() => { showChat(); post('newSession') }}>
           <Icon name="compose" size={15} />
           <span>{t('newChat')}</span>
           <kbd>⌘N</kbd>
@@ -79,7 +83,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
                     <button
                       class="icon-btn small"
                       title={t('newChatIn', g.name)}
-                      onClick={() => post('newSession', { workspace: g.path })}
+                      onClick={() => { showChat(); post('newSession', { workspace: g.path }) }}
                     >
                       <Icon name="plus" size={13} />
                     </button>
@@ -93,7 +97,7 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
                           ],
                           e.currentTarget as Element,
                         )
-                        if (id === 'new') post('newSession', { workspace: g.path })
+                        if (id === 'new') { showChat(); post('newSession', { workspace: g.path }) }
                         if (id === 'reveal') post('revealWorkspace', { path: g.path })
                       }}
                     >
@@ -103,11 +107,17 @@ export function Sidebar({ state, onToggle }: { state: AppState; onToggle(): void
                 )}
               </div>
               {!collapsed &&
-                g.sessions.map((s) => <SessionRow key={s.id} s={s} selected={s.id === state.selectedSessionId} />)}
+                g.sessions.map((s) => <SessionRow key={s.id} s={s} selected={r.name === 'main' && s.id === state.selectedSessionId} />)}
             </section>
           )
         })}
         {!state.sessions.length && <div class="sidebar-empty">{t('noSessions')}</div>}
+      </div>
+      <div class="sidebar-shelf">
+        <button class={'nav-row' + (r.name === 'documents' ? ' selected' : '')} onClick={() => (route.value = { name: 'documents' })}>
+          <Icon name="book" size={15} />
+          <span>{t('documents')}</span>
+        </button>
       </div>
       <div class="sidebar-foot">
         <button class="nav-row" onClick={() => (route.value = { name: 'settings' })}>
@@ -129,7 +139,7 @@ function SessionRow({ s, selected }: { s: Session; selected: boolean }) {
   return (
     <button
       class={'session-row' + (selected ? ' selected' : '')}
-      onClick={() => post('selectSession', { id: s.id })}
+      onClick={() => { showChat(); post('selectSession', { id: s.id }) }}
       onContextMenu={(e) => {
         e.preventDefault()
         post('sessionMenu', { id: s.id, x: e.clientX, y: e.clientY })

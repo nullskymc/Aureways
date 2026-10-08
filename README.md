@@ -6,7 +6,7 @@
 
 **A macOS client for agentic coding.**
 
-Built with a hybrid native shell and web architecture: the window is a seamless macOS native shell, while the interface inside (sidebar, transcript, composer, inspector, settings) is an ultra-fast Preact application hosted in a dedicated `WKWebView`. Choose a workspace and engage in real-time streaming conversations with any local CLI agent installed on your Mac.
+Built with a hybrid native shell and web architecture: the window is a seamless macOS native shell, while the interface inside (sidebar, chat and file tabs, composer, settings) is an ultra-fast Preact application hosted in a dedicated `WKWebView`. Choose a workspace and engage in real-time streaming conversations with any local CLI agent installed on your Mac.
 
 [![Release](https://github.com/nullskymc/Aureways/actions/workflows/release.yml/badge.svg)](https://github.com/nullskymc/Aureways/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -41,11 +41,12 @@ Aureways fully implements the [Agent Client Protocol (ACP)](https://agentclientp
   - `Return` to send, `Shift+Return` for a new line; fast autocompletion for `/` slash commands and `@` workspace files.
   - Drag-and-drop & clipboard support: automatic image attachment optimization and oversized text paste cards.
 
-- **Integrated Power Inspector (`⌥⌘I`)**
-  - **Workspace File Tree & Code Editor**: Instant file navigation and in-place code editing (`⌘S` save with `mtime` conflict detection).
-  - **Redesigned Changes Tab**: Compact listing of staged and working-tree changes with dedicated diff viewer tabs.
-  - **Multi-Tab Terminals (`⌃``` `)**: Interactive xterm.js terminals powered by native headless SwiftTerm PTY processes.
-  - **System Markdown Handler (`⌘O`)**: Register as macOS default Markdown application; open `.md` files directly from Finder, Dock, or `open -a`.
+- **Main-area tabs**
+  - **Chat, changes, files, and terminals share the center tabs**, up to three columns. The file tree stays on the right once a session is open; `⌥⌘I` shows or hides it. Markdown opened outside the current workspace is kept in Documents, a row under the workspace list.
+  - **Workspace file tree and editor**: browse the tree, edit in place, `⌘S` to save, with `mtime` conflict checks.
+  - **Changes**: a compact list, with diffs in their own tabs.
+  - **Terminals (`⌃``` `)**: xterm.js, driven by a native headless PTY.
+  - **Markdown (`⌘O`)**: can be the default Markdown app. A file inside the current workspace opens there. Anything outside is kept in Documents. The tab has an outline, local images, and links between documents. A window that is already visible is not moved onto the file's screen.
 
 - **Decoupled Quota Monitoring (`QuotaStore`)**
   - Independent `QuotaStore` architecture completely isolated from ACP session lifecycles.
@@ -57,15 +58,14 @@ Aureways fully implements the [Agent Client Protocol (ACP)](https://agentclientp
 ## Interface Layout
 
 ```
-┌──────────────┬────────────────────────────────────────────┬──────────────┐
-│ Sidebar      │  Header: workspace · session · agent       │ Inspector    │
-│  • New chat  │                                            │  • Files     │
-│  • Workspace ├────────────────────────────────────────────┤  • Editor    │
-│    sessions  │  Transcript (column 768px, virtual stream) │  • Changes   │
-│    ⌘1 … ⌘9   │                                            │  • Terminal  │
-│              ├────────────────────────────────────────────┤              │
-│              │  Liquid Glass Composer (Return to send, @) │              │
-└──────────────┴────────────────────────────────────────────┴──────────────┘
+┌──────────────┬──────────────────────────────────────────────────────────┐
+│ Sidebar      │  Tabs: Chat · Files · Changes · open files · Terminals   │
+│  • New chat  ├──────────────────────────────────────────────────────────┤
+│  • Workspace │  Active tab (chat column 768px, virtualized stream)      │
+│    sessions  │  Markdown tabs include an outline                        │
+│    ⌘1 … ⌘9   ├──────────────────────────────────────────────────────────┤
+│              │  Liquid Glass composer, on the Chat tab                  │
+└──────────────┴──────────────────────────────────────────────────────────┘
 ```
 
 ## Built-in Agents
@@ -133,13 +133,14 @@ To run from Xcode, run `make web` once at the repo root first, then open `Aurewa
 | Shortcut | Action |
 | :--- | :--- |
 | `⌘N` | New chat session |
-| `⌘O` | Open Markdown file in inspector |
+| `⌘O` | Open Markdown as a main-area tab |
 | `⌘1` … `⌘9` | Select recent session |
 | `⌃⌘S` | Toggle sidebar |
-| `⌥⌘I` | Toggle inspector |
-| `⇧⌘E` | Inspector: Files view |
-| `⇧⌘G` | Inspector: Changes view |
-| `⌃``` ` | Inspector: New terminal tab |
+| `⌥⌘I` | Show or hide the file tree |
+| `⌘\` | Move the current file, diff, or terminal into the column on the right |
+| `⇧⌘E` | Show the file tree and focus its filter |
+| `⇧⌘G` | Show the Changes tab |
+| `⌃``` ` | New terminal tab |
 | `⌘F` | Find in page |
 | `⌘,` | Settings |
 | `Return` | Send message |

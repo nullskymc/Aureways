@@ -117,6 +117,10 @@ struct AurewaysApp: App {
                     WebShellBridge.current?.sendCommand("newTerminal")
                 }
                 .keyboardShortcut("`", modifiers: [.control])
+                Button("向右分栏".localized) {
+                    WebShellBridge.current?.sendCommand("splitRight")
+                }
+                .keyboardShortcut("\\", modifiers: [.command])
                 Divider()
             }
             CommandMenu("会话".localized) {

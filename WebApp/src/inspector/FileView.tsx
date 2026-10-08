@@ -1,21 +1,31 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { post } from '../bridge'
 import { t } from '../i18n'
-import { MarkdownView } from '../markdown/render'
 import { canonicalLang, highlight } from '../markdown/highlight'
 import { Icon, Spinner } from '../components/Icon'
 import { mentionFile } from '../components/Composer'
 import { displayPath } from '../components/Blocks'
-import { app } from '../store'
-import { ensureBuffer, loadBuffer, saveBuffer, type Buffer } from './state'
+import { app, route } from '../store'
+import { MarkdownPane } from '../reader/MarkdownPane'
+import { isMarkdownPath } from '../reader/paths'
+import { ensureBuffer, loadBuffer, saveBuffer, selectTab, type Buffer } from './state'
 
 const HIGHLIGHT_LIMIT = 300_000
+
+/** Documents has no composer. Start a chat in the current workspace and attach this file. */
+function discuss(path: string) {
+  route.value = { name: 'main' }
+  selectTab('chat')
+  post('newSession')
+  mentionFile(path, app.peek()?.workspacePath ?? '')
+}
 
 export function FileView({ path }: { path: string }) {
   const b = ensureBuffer(path)
   const data = b.data.value
   const editing = b.draft.value !== null
-  const isMarkdown = /\.(md|markdown|mdown|mkd|mkdn|mdwn)$/i.test(path)
+  const isMarkdown = isMarkdownPath(path)
+  const showDocument = !editing && isMarkdown && b.preview.value && !!data?.text && !data.image && !data.tooLarge && !data.binary
 
   const startEdit = () => {
     if (data?.text === undefined) return
@@ -46,9 +56,13 @@ export function FileView({ path }: { path: string }) {
               <Icon name="pencil" size={12} />
             </button>
           ))}
-        <button class="icon-btn tiny" title={t('mention')} onClick={() => mentionFile(path, app.peek()?.inspectorRoot ?? '')}>
-          <Icon name="at" size={12} />
-        </button>
+        {route.value.name === 'documents' ? (
+          <button class="btn small" title={t('discussInWorkspace')} onClick={() => discuss(path)}>{t('discuss')}</button>
+        ) : (
+          <button class="icon-btn tiny" title={t('mention')} onClick={() => mentionFile(path, app.peek()?.inspectorRoot ?? '')}>
+            <Icon name="at" size={12} />
+          </button>
+        )}
         <button class="icon-btn tiny" title={t('revealInFinder')} onClick={() => post('openPath', { path })}>
           <Icon name="external" size={12} />
         </button>
@@ -61,25 +75,27 @@ export function FileView({ path }: { path: string }) {
           <button class="btn small subtle" onClick={async () => { if (await saveBuffer(b, true)) b.draft.value = null }}>{t('keepMine')}</button>
         </div>
       )}
-      <div class="file-body">
-        {b.loading.value && !data ? (
-          <div class="file-empty"><Spinner size={14} /></div>
-        ) : b.error.value && !data ? (
-          <div class="file-empty">{b.error.value}</div>
-        ) : !data ? null : data.image ? (
-          <div class="file-image"><img src={data.image} alt="" /></div>
-        ) : data.tooLarge ? (
-          <div class="file-empty">{t('fileTooLarge')}</div>
-        ) : data.binary ? (
-          <div class="file-empty">{t('binaryFile')}</div>
-        ) : editing ? (
-          <Editor b={b} onSave={save} />
-        ) : isMarkdown && b.preview.value ? (
-          <MarkdownPreview text={data.text ?? ''} />
-        ) : (
-          <CodeView text={data.text ?? ''} path={path} />
-        )}
-      </div>
+      {showDocument ? (
+        <MarkdownPane text={data?.text ?? ''} path={path} />
+      ) : (
+        <div class="file-body">
+          {b.loading.value && !data ? (
+            <div class="file-empty"><Spinner size={14} /></div>
+          ) : b.error.value && !data ? (
+            <div class="file-empty">{b.error.value}</div>
+          ) : !data ? null : data.image ? (
+            <div class="file-image"><img src={data.image} alt="" /></div>
+          ) : data.tooLarge ? (
+            <div class="file-empty">{t('fileTooLarge')}</div>
+          ) : data.binary ? (
+            <div class="file-empty">{t('binaryFile')}</div>
+          ) : editing ? (
+            <Editor b={b} onSave={save} />
+          ) : (
+            <CodeView text={data.text ?? ''} path={path} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -108,17 +124,6 @@ function Editor({ b, onSave }: { b: Buffer; onSave(): void }) {
       }}
     />
   )
-}
-
-function MarkdownPreview({ text }: { text: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const view = useRef<MarkdownView | null>(null)
-  useLayoutEffect(() => {
-    view.current = new MarkdownView(ref.current!)
-    return () => view.current?.dispose()
-  }, [])
-  useLayoutEffect(() => view.current?.set(text, false, true), [text])
-  return <div class="md-preview" ref={ref} />
 }
 
 function CodeView({ text, path }: { text: string; path: string }) {

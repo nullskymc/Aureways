@@ -6,6 +6,8 @@ import { onMessage } from './bridge'
 
 const registry = new Map<string, Signal<unknown>>()
 let loaded = false
+/** Flips after the first state snapshot applies stored preferences. */
+export const prefsReady = signal(false)
 
 function pref<T>(key: string, initial: T): Signal<T> {
   const s = signal<T>(initial)
@@ -32,6 +34,8 @@ export const prefs = {
   inspectorWidth: pref('inspectorWidth', 420),
   collapsedGroups: pref<string[]>('collapsedGroups', []),
   showHidden: pref('showHidden', false),
+  /** Markdown paths kept in the Documents shelf. Workspace tabs are not saved. */
+  documentPaths: pref<string[]>('documentPaths', []),
 }
 
 onMessage((m) => {
@@ -41,4 +45,5 @@ onMessage((m) => {
     if (key in stored && stored[key] !== null) s.value = stored[key]
   }
   loaded = true
+  prefsReady.value = true
 })

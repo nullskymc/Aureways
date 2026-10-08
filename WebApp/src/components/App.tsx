@@ -1,20 +1,23 @@
+import type { ComponentChildren } from 'preact'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
 import { app, composerH, composerTotal, route, setTicking, uiCommand } from '../store'
 import { prefs } from '../prefs'
-import { openTerminal, showInspector } from '../inspector/state'
+import { currentPane, homeIsChat, openTerminal, resizeColumns, selectTab, showInspector, splitFocused, type Column } from '../inspector/state'
+import { ColumnBody, TabStrip } from '../inspector/Inspector'
+import { FileTree } from '../inspector/FileTree'
+import '../reader/state'
 import { lazy } from './Lazy'
 import { installGlass } from '../glass'
 
-const Inspector = lazy(() => import('../inspector/Inspector').then((m) => m.Inspector))
 const SettingsContent = lazy(() => import('../settings/Settings').then((m) => m.SettingsContent))
 import { BackgroundRequests } from './Cards'
 import type { AppState, Session } from '../types'
 import { PermissionCard, PlanApprovalCard, QuestionCard } from './Cards'
 import { Composer } from './Composer'
-import { HarnessIcon, Icon, Spinner } from './Icon'
+import { HarnessIcon, Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { Transcript } from './Transcript'
 
@@ -34,13 +37,20 @@ export function App() {
         sidebarOpen.value = !sidebarOpen.value
         break
       case 'toggleInspector':
+        if (route.peek().name === 'documents' || !app.peek()?.selectedSessionId) break
         prefs.inspectorOpen.value = !prefs.inspectorOpen.value
         break
       case 'showFiles':
-        showInspector('files')
+        if (route.peek().name === 'documents' || !app.peek()?.selectedSessionId) break
+        prefs.inspectorOpen.value = true
+        queueMicrotask(() => document.getElementById('file-tree-filter')?.focus())
         break
       case 'showChanges':
+        route.value = { name: 'main' }
         showInspector('changes')
+        break
+      case 'splitRight':
+        splitFocused()
         break
       case 'newTerminal':
         void openTerminal()
@@ -53,13 +63,34 @@ export function App() {
         break
       case 'newChat':
         route.value = { name: 'main' }
+        selectTab('chat')
         break
     }
   }, [uiCommand.value])
 
   const r = route.value
   const isSettings = r.name === 'settings'
+  const documents = r.name === 'documents'
   const settingsSection = r.name === 'settings' ? r.section : undefined
+  const onChat = !isSettings && homeIsChat()
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const field = e.target instanceof HTMLElement && !!e.target.closest('textarea, input')
+      if (e.key === '\\' && e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+        if (field) return
+        e.preventDefault()
+        splitFocused()
+        return
+      }
+      if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (field) return
+      if (route.peek().name !== 'main') return
+      selectTab('chat')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     const el = dock.current
@@ -72,7 +103,7 @@ export function App() {
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [state?.selectedSessionId == null, isSettings])
+  }, [state?.selectedSessionId == null, isSettings, onChat])
 
   const glass = !!state?.chrome.glass
   useEffect(() => {
@@ -80,7 +111,7 @@ export function App() {
   }, [glass])
   // With a session open the composer is a native overlay (its own web view on
   // glass) and the transcript scrolls underneath it to the window bottom.
-  const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId && route.value.name === 'main'
+  const overlay = !!state?.chrome.composerOverlay && !!state?.selectedSessionId && onChat
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('composer-overlay', overlay)
   }, [overlay])
@@ -100,20 +131,20 @@ export function App() {
 
   if (!state) return <div class="boot" />
   const session = state.sessions.find((s) => s.id === state.selectedSessionId) ?? null
-  const inspectorOpen = prefs.inspectorOpen.value
+  const attention =
+    !!state.error ||
+    session?.phase === 'failed' ||
+    !!state.permission ||
+    !!state.planApproval ||
+    !!state.question ||
+    state.sessions.some((s) => s.id !== state.selectedSessionId && (s.permission || s.pendingKind))
 
   return (
     <div
-      class={
-        'app' +
-        (isSettings ? ' settings-mode' : '') +
-        (sidebarOpen.value ? '' : ' no-sidebar') +
-        (inspectorOpen && !isSettings ? ' with-inspector' : '')
-      }
+      class={'app' + (isSettings ? ' settings-mode' : '') + (sidebarOpen.value ? '' : ' no-sidebar')}
       style={{
         '--sidebar-w': `${sidebarWidth.value}px`,
         '--head-h': `${headH}px`,
-        '--insp-w': inspectorOpen && !isSettings ? `${prefs.inspectorWidth.value}px` : '0px',
       }}
     >
       {sidebarOpen.value && (
@@ -122,6 +153,7 @@ export function App() {
           <SidebarResizer width={sidebarWidth} />
         </>
       )}
+      <div class="stage">
       <main class={'main' + (isSettings ? ' settings-main' : '')} style={{ '--dock-h': `${dockHeight.value}px` }}>
         {isSettings ? (
           <>
@@ -148,100 +180,175 @@ export function App() {
             <SettingsContent state={state} section={settingsSection} />
           </>
         ) : (
-          <>
-            <MainHeader state={state} session={session} sidebarOpen={sidebarOpen.value} onToggle={() => (sidebarOpen.value = !sidebarOpen.value)} />
-            {session ? (
-              <Transcript streaming={session.streaming} padBottom={dockHeight.value + 24} jumpBottom={overlay ? dockHeight.value + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
-            ) : (
-              <Landing state={state} />
-            )}
-            <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
-              {state.error && (
-                <div class="banner error">
-                  <Icon name="alert" size={14} />
-                  <span class="flex1">{state.error}</span>
-                  <button class="btn subtle small" onClick={() => post('dismissError')}>
-                    {t('dismiss')}
-                  </button>
-                </div>
-              )}
-              {session?.phase === 'failed' && (
-                <div class="banner error">
-                  <Icon name="alert" size={14} />
-                  <span class="flex1">
-                    <b>{t('failed')}</b> {session.error}
-                  </span>
-                  <button class="btn small" onClick={() => post('retry', { id: session.id })}>
-                    {t('retry')}
-                  </button>
-                </div>
-              )}
-              <BackgroundRequests state={state} />
-              {state.permission && <PermissionCard p={state.permission} />}
-              {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
-              {state.question && <QuestionCard q={state.question} />}
-              {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
-            </div>
-          </>
+          <EditorColumns
+            state={state}
+            session={session}
+            sidebarOpen={sidebarOpen.value}
+            attention={attention}
+            overlay={overlay}
+            glass={glass}
+            dock={dock}
+            dockHeight={dockHeight.value}
+          />
         )}
       </main>
-      {inspectorOpen && !isSettings && <Inspector />}
+      {!isSettings && !documents && !!state.selectedSessionId && prefs.inspectorOpen.value && (
+        <aside class="inspector" style={{ width: prefs.inspectorWidth.value }}>
+          <InspectorResizer width={prefs.inspectorWidth} />
+          <FileTree root={state.inspectorRoot} onHide={() => (prefs.inspectorOpen.value = false)} />
+        </aside>
+      )}
+      </div>
     </div>
   )
 }
 
-function MainHeader({ state, session, sidebarOpen, onToggle }: { state: AppState; session: Session | null; sidebarOpen: boolean; onToggle(): void }) {
-  const lights = state.chrome.trafficLights
-  const pad = sidebarOpen || state.chrome.fullscreen ? 16 : Math.max(76, lights.x + lights.w + 14)
-  const ws = session ? session.cwd.split('/').filter(Boolean).pop() ?? session.cwd : state.workspaceName
+function EditorColumns({ state, session, sidebarOpen, attention, overlay, glass, dock, dockHeight }: {
+  state: AppState
+  session: Session | null
+  sidebarOpen: boolean
+  attention: boolean
+  overlay: boolean
+  glass: boolean
+  dock: { current: HTMLDivElement | null }
+  dockHeight: number
+}) {
+  const pane = currentPane()
+  const documents = route.value.name === 'documents'
+  const treeOpen = prefs.inspectorOpen.value
   return (
-    <header class="main-head" style={{ paddingLeft: pad }}>
-      {!sidebarOpen && (
-        <span class="head-tools" data-glass="control">
-          <button class="icon-btn" title={t('toggleSidebar')} onClick={onToggle}>
-            <Icon name="sidebar" size={15} />
-          </button>
-          <button class="icon-btn" title={t('newChat')} onClick={() => post('newSession')}>
-            <Icon name="compose" size={15} />
-          </button>
-        </span>
+    <div class="editors">
+      {pane.columns.map((column, index) => (
+        <ColumnFrame key={column.id} column={column} index={index}>
+          <TabStrip
+            state={state}
+            sidebarOpen={sidebarOpen}
+            session={session}
+            column={column}
+            index={index}
+            treeToggle={!!session && !documents && !treeOpen && index === pane.columns.length - 1}
+            documents={documents}
+          />
+          {index === 0 && column.active === 'chat' && (session ? (
+            <Transcript streaming={session.streaming} padBottom={dockHeight + 24} jumpBottom={overlay ? dockHeight + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
+          ) : index === 0 && column.active === 'chat' ? (
+            <Landing state={state} />
+          ) : null)}
+          {index === 0 && column.active === 'chat' && (
+            <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
+              {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
+            </div>
+          )}
+          <ColumnBody column={column} hidden={column.active === 'chat'} />
+        </ColumnFrame>
+      ))}
+      {attention && (
+        <div class="dock editors-alerts">
+          <Alerts state={state} session={session} />
+        </div>
       )}
-      <div class="head-titles">
-        <span class="head-title">{session ? session.title : t('newChat')}</span>
-        <span class="head-sub">
-          {ws}
-          {!session && state.branch ? ` · ${state.branch}` : ''}
-        </span>
-      </div>
-      <div class="flex1" />
-      {session && (
-        <span class="head-status">
-          {session.phase === 'connecting' && (
-            <span class="pill">
-              <Spinner size={10} /> {t('connecting', session.agentTitle)}
-            </span>
-          )}
-          {session.phase === 'idle' && (
-            <button class="btn small" onClick={() => post('selectSession', { id: session.id })}>
-              <Icon name="refresh" size={12} /> {t('open')}
-            </button>
-          )}
-          <span class="pill subtle" title={session.agentTitle}>
-            <HarnessIcon id={session.agentId} size={12} /> {session.agentTitle}
+    </div>
+  )
+}
+
+function ColumnFrame({ column, index, children }: { column: Column; index: number; children: ComponentChildren }) {
+  const pane = currentPane()
+  return (
+    <>
+      {index > 0 && <ColumnResizer index={index - 1} />}
+      <section
+        class={'column' + (pane.focus === index ? ' focused' : '')}
+        style={{ flex: `${column.size} 1 0` }}
+        onMouseDown={() => {
+          if (currentPane().focus !== index) selectTab(column.active)
+        }}
+      >
+        {children}
+      </section>
+    </>
+  )
+}
+
+function ColumnResizer({ index }: { index: number }) {
+  return (
+    <div
+      class="col-resizer"
+      onMouseDown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const parent = (e.currentTarget as HTMLElement).parentElement
+        const cols = parent ? [...parent.querySelectorAll(':scope > .column')] : []
+        const left = cols[index]?.getBoundingClientRect().width ?? 0
+        const right = cols[index + 1]?.getBoundingClientRect().width ?? 0
+        const startX = e.clientX
+        const move = (ev: MouseEvent) => {
+          const width = left + right
+          const nextLeft = Math.min(width - 160, Math.max(160, left + ev.clientX - startX))
+          resizeColumns(index, nextLeft, width - nextLeft)
+        }
+        const up = () => {
+          window.removeEventListener('mousemove', move)
+          window.removeEventListener('mouseup', up)
+          document.body.classList.remove('resizing')
+        }
+        document.body.classList.add('resizing')
+        window.addEventListener('mousemove', move)
+        window.addEventListener('mouseup', up)
+      }}
+    />
+  )
+}
+
+function InspectorResizer({ width }: { width: { value: number } }) {
+  return (
+    <div
+      class="insp-resizer"
+      onMouseDown={(e) => {
+        e.preventDefault()
+        const startX = e.clientX
+        const start = width.value
+        const move = (ev: MouseEvent) => (width.value = Math.round(Math.max(240, Math.min(640, start + startX - ev.clientX))))
+        const up = () => {
+          window.removeEventListener('mousemove', move)
+          window.removeEventListener('mouseup', up)
+          document.body.classList.remove('resizing')
+        }
+        document.body.classList.add('resizing')
+        window.addEventListener('mousemove', move)
+        window.addEventListener('mouseup', up)
+      }}
+    />
+  )
+}
+
+function Alerts({ state, session }: { state: AppState; session: Session | null }) {
+  return (
+    <>
+      {state.error && (
+        <div class="banner error">
+          <Icon name="alert" size={14} />
+          <span class="flex1">{state.error}</span>
+          <button class="btn subtle small" onClick={() => post('dismissError')}>
+            {t('dismiss')}
+          </button>
+        </div>
+      )}
+      {session?.phase === 'failed' && (
+        <div class="banner error">
+          <Icon name="alert" size={14} />
+          <span class="flex1">
+            <b>{t('failed')}</b> {session.error}
           </span>
-        </span>
-      )}
-      {!prefs.inspectorOpen.value && (
-        <span class="head-tools right" data-glass="control">
-          <button class="icon-btn" title={t('terminal')} onClick={() => void openTerminal()}>
-            <Icon name="terminal" size={15} />
+          <button class="btn small" onClick={() => post('retry', { id: session.id })}>
+            {t('retry')}
           </button>
-          <button class="icon-btn" title={t('toggleInspector') + ' (⌥⌘I)'} onClick={() => (prefs.inspectorOpen.value = true)}>
-            <Icon name="panelRight" size={15} />
-          </button>
-        </span>
+        </div>
       )}
-    </header>
+      <BackgroundRequests state={state} />
+      {state.permission && <PermissionCard p={state.permission} />}
+      {state.planApproval && <PlanApprovalCard plan={state.planApproval} />}
+      {state.question && <QuestionCard q={state.question} />}
+    </>
   )
 }
 
@@ -314,13 +421,10 @@ function reportDragRegions(height: number) {
       rects.push({ x: Math.floor(r.left) - 2, y: Math.floor(r.top) - 2, w: Math.ceil(r.width) + 4, h: Math.ceil(r.height) + 4 })
     })
     // Resizers must stay grabbable all the way up.
-    document.querySelectorAll('.sidebar-resizer, .insp-resizer').forEach((el) => {
+    document.querySelectorAll('.sidebar-resizer, .col-resizer, .insp-resizer').forEach((el) => {
       const r = el.getBoundingClientRect()
       rects.push({ x: r.left, y: 0, w: r.width, h: height })
     })
-    // The inspector tab strip is interactive across its whole height.
-    const tabs = document.querySelector('.insp-tabs')?.getBoundingClientRect()
-    if (tabs && tabs.top < height) rects.push({ x: tabs.left, y: tabs.top, w: tabs.width, h: tabs.height })
     const json = JSON.stringify(rects)
     if (json !== lastRegions) {
       lastRegions = json

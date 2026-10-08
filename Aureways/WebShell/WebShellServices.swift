@@ -75,7 +75,9 @@ enum WebShellServices {
            abs(current - baseMtime) > 0.001 {
             throw RPCError(message: "conflict")
         }
-        try Data(text.utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
+        let url = URL(fileURLWithPath: path)
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url, options: .atomic)
         let mtime = ((try? fm.attributesOfItem(atPath: path))?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         return ["mtime": mtime]
     }
@@ -250,7 +252,7 @@ extension WebShellBridge {
         runPanel(panel) { urls in reply(.success(urls.map(\.path))) }
     }
 
-    /// Native entry points (⌘O, Finder "Open With", Dock drop) land here.
+    /// Pasted-text drafts and other in-app file opens. Markdown from Finder uses `openReader`.
     func openFiles(_ paths: [String]) {
         guard !paths.isEmpty else { return }
         if role != .main, let main = WebShellBridge.current, main !== self {
@@ -258,6 +260,16 @@ extension WebShellBridge {
             return
         }
         sendCommand("openFiles", ["paths": paths])
+    }
+
+    /// Finder, Dock drop and the Markdown open panel. The page switches to the reader route.
+    func openReader(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        if role != .main, let main = WebShellBridge.current, main !== self {
+            main.openReader(paths)
+            return
+        }
+        sendCommand("openReader", ["paths": paths])
     }
 
     func notifyFileChanged(_ path: String) {

@@ -391,13 +391,29 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toggle Inspector"
+            "value": "Toggle File Tree"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "切换检查器"
+            "value": "文件树"
+          }
+        }
+      }
+    },
+    "向右分栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Right"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向右分栏"
           }
         }
       }

@@ -32,6 +32,28 @@ marked.use({
 const purify = (html: string) =>
   DOMPurify.sanitize(html, { ADD_ATTR: ['target'], FORBID_TAGS: ['style', 'form', 'input'] })
 
+// Documents keep GFM checkboxes. They are forced disabled so a file cannot
+// embed a working form control. Chat blocks still strip <input> entirely.
+const purifyDocument = (html: string) =>
+  DOMPurify.sanitize(html, {
+    ADD_TAGS: ['input'],
+    ADD_ATTR: ['target', 'type', 'checked', 'disabled'],
+    FORBID_TAGS: ['style', 'form'],
+  })
+
+function lockInputs(root: HTMLElement) {
+  root.querySelectorAll('input').forEach((el) => {
+    if ((el.getAttribute('type') || '').toLowerCase() !== 'checkbox') {
+      el.remove()
+      return
+    }
+    el.disabled = true
+    el.removeAttribute('formaction')
+    el.removeAttribute('form')
+    el.removeAttribute('name')
+  })
+}
+
 interface Block {
   raw: string
   el: HTMLElement | null
@@ -55,7 +77,10 @@ export class MarkdownView {
   private stableLen = 0
   private disposed = false
 
-  constructor(readonly root: HTMLElement) {
+  constructor(
+    readonly root: HTMLElement,
+    private readonly mode: 'stream' | 'document' = 'stream',
+  ) {
     root.classList.add('md')
   }
 
@@ -94,7 +119,7 @@ export class MarkdownView {
     tokens.forEach((token, i) => {
       const prev = this.blocks[this.stableCount + i]
       if (prev && prev.raw === token.raw) next.push(prev)
-      else next.push({ raw: token.raw, el: renderToken(token, links), highlighted: false })
+      else next.push({ raw: token.raw, el: renderToken(token, links, this.mode), highlighted: false })
     })
 
     const keep = new Set(next.map((b) => b.el).filter(Boolean))
@@ -125,13 +150,15 @@ export class MarkdownView {
   }
 }
 
-function renderToken(token: Token, links: Tokens.Generic['links']): HTMLElement | null {
+function renderToken(token: Token, links: Tokens.Generic['links'], mode: 'stream' | 'document'): HTMLElement | null {
   if (token.type === 'space') return null
   const list = [token] as Token[] & { links: unknown }
   list.links = links ?? {}
   const div = document.createElement('div')
   div.className = 'blk'
-  div.innerHTML = purify(marked.parser(list as never))
+  const html = marked.parser(list as never)
+  div.innerHTML = mode === 'document' ? purifyDocument(html) : purify(html)
+  if (mode === 'document') lockInputs(div)
   return div
 }
 

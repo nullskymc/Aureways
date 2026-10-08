@@ -39,7 +39,7 @@ extension AppModel {
         }
     }
 
-    /// Finder "Open With", ⌘O and drops: Markdown files open in the web inspector.
+    /// Finder "Open With", ⌘O and drops: Markdown opens in the reader, not the inspector.
     func openMarkdownDocuments(urls: [URL]) {
         let markdown = urls.filter { MarkdownFile.matches(url: $0) }
         if markdown.isEmpty {
@@ -48,7 +48,7 @@ extension AppModel {
             }
             return
         }
-        WebShellBridge.current?.openFiles(markdown.map { $0.standardizedFileURL.path })
+        WebShellBridge.current?.openReader(markdown.map { $0.standardizedFileURL.path })
     }
 
     // MARK: - Agent-driven file changes

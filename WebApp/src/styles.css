@@ -145,6 +145,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .search-row input { flex: 1; min-width: 0; background: none; border: 0; outline: none; padding: 0; font-size: 13px; color: var(--text); }
 .search-row input::placeholder { color: var(--text-3); }
 .sidebar-list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 0 12px; }
+.sidebar-shelf { flex: none; padding: 6px 0 2px; border-top: 1px solid var(--border); }
 .sidebar-empty { padding: 16px 18px; color: var(--text-3); font-size: 12.5px; }
 .ws-group + .ws-group { margin-top: 8px; }
 .ws-head { display: flex; align-items: center; height: 28px; margin: 0 8px; padding: 0 4px 0 0; border-radius: 8px; }
@@ -172,11 +173,19 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .sidebar-foot .nav-row { flex: 1; width: auto; margin-right: 0; }
 .sidebar-resizer { flex: none; width: 7px; margin: 0 -4px 0 -3px; cursor: col-resize; z-index: 5; position: relative; }
 
+.stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .main {
   flex: 1; min-width: 0; position: relative; overflow: hidden;
   background: var(--main-bg);
   border-left: 1px solid var(--border);
 }
+.editors { position: absolute; inset: 0; display: flex; min-width: 0; }
+.column { position: relative; min-width: 160px; min-height: 0; overflow: hidden; }
+.column ~ .column { box-shadow: inset 1px 0 var(--border); }
+.col-resizer { flex: none; width: 7px; margin: 0 -3px; cursor: col-resize; z-index: 6; position: relative; }
+.col-resizer:hover { background: linear-gradient(90deg, transparent 3px, color-mix(in oklch, var(--accent) 55%, transparent) 3px 4px, transparent 4px); }
+.editors-alerts { z-index: 6; }
+.insp-tab.dim { background: var(--hover); }
 .no-sidebar .main { border-left: 0; }
 .main-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 4; height: var(--head-h);
@@ -412,6 +421,13 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 }
 .insp-resizer { position: absolute; left: -4px; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 6; }
 .insp-resizer.active, .insp-resizer:hover { background: linear-gradient(90deg, transparent 3px, color-mix(in oklch, var(--accent) 55%, transparent) 3px 4px, transparent 4px); }
+.tab-strip { gap: 6px; padding-right: 8px; }
+.tab-strip .insp-tab-strip { flex: 1; min-width: 0; }
+.workbench {
+  position: absolute; top: var(--head-h); right: 0; bottom: 0; left: 0;
+  display: flex; flex-direction: column; min-height: 0;
+  container-type: inline-size;
+}
 .insp-tabs { flex: none; height: var(--head-h); display: flex; align-items: center; gap: 2px; padding: 0 8px 0 6px; border-bottom: 1px solid var(--border); }
 .insp-tab-strip { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .insp-tab-strip::-webkit-scrollbar { display: none; }
@@ -471,8 +487,8 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 .banner.slim { border-radius: 0; border-width: 0 0 1px; padding: 6px 10px; font-size: 12.5px; }
 
 .terminal { flex: 1; min-height: 0; padding: 6px 4px 4px 10px; background: var(--term-bg); }
-.inspector .terminal { position: absolute; inset: 0; }
-.terminal .xterm { height: 100%; }
+.workbench .terminal { position: absolute; inset: 0; }
+.terminal-surface, .terminal .xterm { height: 100%; }
 .terminal .xterm-viewport { background: transparent !important; }
 :root { --term-bg: light-dark(oklch(0.99 0 0), oklch(0.185 0.004 286)); --term-fg: light-dark(oklch(0.25 0.005 286), oklch(0.92 0 0)); }
 
@@ -688,3 +704,53 @@ html.in-composer, html.in-composer body, html.in-composer #app { background: tra
 html.in-composer .slash-menu { box-shadow: none; }
 /* The viewport follows the content here, so a vh cap would pin it small. */
 html.in-composer .composer textarea { max-height: 300px; }
+
+/* ---- Markdown reader ------------------------------------------------------- */
+.reader {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  min-width: 0; container-type: inline-size;
+}
+.reader > .main-head { position: relative; flex: none; }
+.reader-tabs {
+  flex: none; display: flex; align-items: center; gap: 2px;
+  padding: 0 12px 8px; overflow-x: auto; scrollbar-width: none;
+}
+.reader-tabs::-webkit-scrollbar { display: none; }
+.reader-body { flex: 1; min-height: 0; display: flex; }
+.reader-scroll { flex: 1; min-width: 0; overflow: auto; }
+/* Tail is one viewport so a heading near the end can sit at the top of the scrollport. */
+.reader-column { max-width: 720px; margin: 0 auto; padding: 12px 36px 100vh; }
+.reader-column .md { font-size: 16.5px; line-height: 1.7; -webkit-user-select: text; user-select: text; cursor: text; }
+.reader-column .md h1, .reader-column .md h2, .reader-column .md h3, .reader-column .md h4, .reader-column .md h5, .reader-column .md h6 { scroll-margin-top: 18px; }
+.reader-column .md h1 { font-size: 1.85em; letter-spacing: -0.02em; }
+.reader-column .md h2 { font-size: 1.4em; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.reader-column .md p, .reader-column .md ul, .reader-column .md ol, .reader-column .md blockquote, .reader-column .md .table-wrap, .reader-column .md .code-block { margin-bottom: 14px; }
+.reader-column img.broken { outline: 1px dashed var(--border-strong); }
+.reader-source {
+  max-width: 820px; margin: 0 auto; padding: 12px 36px 88px;
+  font: 13px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  -webkit-user-select: text; user-select: text; cursor: text;
+}
+.reader-edit { position: relative; height: 100%; }
+.reader-outline {
+  flex: none; width: 200px; overflow: auto;
+  padding: 18px 16px 48px 8px; border-left: 1px solid var(--border);
+}
+.reader-outline a {
+  display: block; color: var(--text-3); text-decoration: none;
+  font-size: 12px; line-height: 1.35; padding: 3px 6px; border-radius: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reader-outline a[data-level='1'] { color: var(--text-2); font-weight: 600; }
+.reader-outline a[data-level='3'] { padding-left: 16px; }
+.reader-outline a[data-level='4'],
+.reader-outline a[data-level='5'],
+.reader-outline a[data-level='6'] { padding-left: 26px; }
+.reader-outline a:hover { background: var(--hover); color: var(--text); }
+.reader-outline a.on { color: var(--text); background: var(--fill); }
+@container (max-width: 860px) {
+  .reader-outline { display: none; }
+}
+@container (max-width: 640px) {
+  .reader-column, .reader-source { padding-left: 18px; padding-right: 18px; }
+}

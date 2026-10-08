@@ -1,9 +1,73 @@
 // Loaded only outside the app (vite dev / headless checks): fake state + a
 // streaming transcript so the UI can be styled without the Swift side.
 import type { AppState, Item } from './types'
+import { seedDemoText } from './inspector/state'
+
+const READER_GUIDE = `/Users/demo/Aureways/docs/guide.md`
+const READER_NOTES = `/Users/demo/Aureways/docs/notes.md`
+
+const GUIDE_MD = `# Guide
+
+A short document for the reader. It uses the same Markdown engine as the chat.
+
+${Array.from({ length: 24 }, (_, i) => `Paragraph ${i + 1}. The reader keeps a narrow column so a long page can scroll to a heading.`).join('\n\n')}
+
+## Install
+
+Run \`make web\`, then open a \`.md\` file.
+
+- [x] Rendering engine
+- [ ] Read it without the chat in the way
+
+See [notes](notes.md) or jump to [Install](#install).
+
+| Layer | Owner |
+| --- | --- |
+| Chrome | AppKit |
+| Page | Preact |
+
+> The column stays narrow so lines stay readable.
+
+\`\`\`swift
+WebShellRoot(model: model)
+\`\`\`
+
+![dot](data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7)
+
+![missing](./missing.png)
+`
+
+const NOTES_MD = `# Notes
+
+Hello from the other file.
+
+## Back
+
+The toolbar returns to the chat and leaves this tab open.
+`
+
+const KEPT = '/Users/demo/kept.md'
+const KEPT_MD = `# Kept
+
+A note that lives outside the workspace.
+
+See [other](/Users/demo/other.md).
+`
 
 export function loadDemo() {
-  if (location.hash.includes('settings')) void import('./store').then((m) => (m.route.value = { name: 'settings', section: location.hash.split('settings-')[1] }))
+  // Restore runs while the first state message is applied, so the text has to
+  // be seeded before that message. A dynamic import afterwards is too late.
+  if (location.hash.includes('kept')) {
+    seedDemoText(KEPT, KEPT_MD)
+    seedDemoText('/Users/demo/other.md', '# Other\n\nStill in Documents.\n')
+  }
+  if (location.hash.includes('reader')) {
+    void Promise.all([import('./inspector/state'), import('./reader/state')]).then(([files, reader]) => {
+      files.seedDemoText(READER_GUIDE, GUIDE_MD)
+      files.seedDemoText(READER_NOTES, NOTES_MD)
+      reader.openDocuments([READER_GUIDE])
+    })
+  } else if (location.hash.includes('settings')) void import('./store').then((m) => (m.route.value = { name: 'settings', section: location.hash.split('settings-')[1] }))
   const now = Date.now()
   const state: AppState = {
     locale: 'en',
@@ -39,7 +103,10 @@ export function loadDemo() {
     },
     usage: { used: 42000, size: 200000 },
     inspectorRoot: '/Users/demo/Aureways',
-    uiPrefs: { inspectorOpen: location.hash.includes('insp') },
+    uiPrefs: {
+      inspectorOpen: location.hash.includes('insp'),
+      ...(location.hash.includes('kept') ? { documentPaths: [KEPT] } : {}),
+    },
     settings: {
       appearance: 'system', language: 'en', systemLanguage: 'system', showMenuBar: true, markdownDefault: false,
       autoApprove: false, defaultAgentId: 'codex', version: '0.3.2',

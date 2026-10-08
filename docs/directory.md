@@ -63,12 +63,13 @@ Aureways/                              # 仓库根
 | 路径 | 职责 |
 | --- | --- |
 | `main.tsx` | 启动。`#menubar` 走菜单栏页，否则走主窗口 |
-| `components/App.tsx` | 侧栏、顶栏、对话、停靠区、检查器、设置路由 |
+| `components/App.tsx` | 侧栏、标签条、对话、停靠区、设置路由 |
 | `components/VirtualList.tsx` | 窗口化列表与底部钉住 |
 | `components/Composer.tsx` | 输入框。会话打开且原生浮层开启时，主页面只留一个等高的槽 |
 | `components/ComposerOverlay.tsx` | 浮层 WebView 里的输入框，并回报卡片高度 |
 | `components/MenuBar.tsx` | 菜单栏：额度、最近会话、打开主窗口、退出 |
-| `inspector/` | 文件树、编辑器、变更、xterm 终端 |
+| `inspector/` | 主区域分栏标签、文稿，以及可收起的右侧文件树 |
+| `reader/` | Markdown 标签的大纲、本地图片与文内链接 |
 | `settings/` | 通用、Agent、用量、工作区、权限、MCP |
 | `markdown/` | marked 分块、DOMPurify、按需 Shiki |
 | `glass.ts` | 把 `data-glass` 矩形发给原生玻璃层 |

@@ -1,6 +1,6 @@
 # Web shell
 
-主窗口是一层原生壳。里面画出来的侧栏、对话、输入框、权限卡、检查器、设置，都是 `WebApp/` 这一个 Preact 应用。SwiftUI 只保留 `App`、窗口场景、菜单栏场景和菜单命令。
+主窗口是一层原生壳。里面画出来的侧栏、主区域标签、输入框、权限卡、设置，都是 `WebApp/` 这一个 Preact 应用。SwiftUI 只保留 `App`、窗口场景、菜单栏场景和菜单命令。
 
 以前用 `NavigationSplitView` 时，跨屏幕拖窗口会在 `SplitViewChildController` 里把约束更新打满并崩溃。窗口里不再做 SwiftUI 分栏。客户区是一个 `NSView`（`WebShellHostView`），子视图只有玻璃层、WebView 和标题栏拖拽条，尺寸用 frame 和 autoresizing，不向 SwiftUI 回传最小/最大尺寸。`WebShellHostView.isFlipped = true`（y 向下）。
 
@@ -9,7 +9,7 @@
 | 原生壳 | Web 应用 |
 | --- | --- |
 | 窗口样式、红绿灯位置、全尺寸内容 | 侧栏：工作区、会话、搜索、新对话 |
-| `NSGlassEffectView`。页面把对应区域做成透明 | 顶栏、对话、检查器、设置 |
+| `NSGlassEffectView`。页面把对应区域做成透明 | 顶栏、对话与文件标签、设置 |
 | 标题栏拖拽条。WKWebView 不支持 `-webkit-app-region`，页面上报不可拖的矩形 | 对话列表、Markdown、工具行、思考、计划 |
 | 菜单命令转发成 `command` | 输入框：发送/停止、模型与模式、附件、`/` 与 `@` |
 | `NSMenu`、`NSOpenPanel`、粘贴板、用系统打开链接 | 权限卡、计划卡、选择题、错误条 |
@@ -50,8 +50,8 @@
     { "op": "append", "id": "…", "delta": "more tokens" },
     { "op": "remove", "id": "…" } ] }
 { "type": "command", "name": "find" | "toggleSidebar" | "focusComposer" | "newChat"
-    | "toggleInspector" | "showFiles" | "showChanges" | "newTerminal"
-    | "openMarkdown" | "openSettings" | "openFiles" | "composerHeight" | "escape" }
+    | "toggleInspector" | "showFiles" | "showChanges" | "newTerminal" | "splitRight"
+    | "openMarkdown" | "openReader" | "openSettings" | "openFiles" | "composerHeight" | "escape" }
 { "type": "rpcResult", "id": 7, "result": "…" }
 { "type": "termData", "id": "…", "data": "<base64>" }
 { "type": "termExit", "id": "…", "code": 0 }

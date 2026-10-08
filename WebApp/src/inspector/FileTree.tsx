@@ -11,7 +11,7 @@ import { filesVersion, openFile } from './state'
 const expanded = new Set<string>()
 const cache = new Map<string, DirEntry[]>()
 
-export function FileTree({ root }: { root: string }) {
+export function FileTree({ root, onHide }: { root: string; onHide?: () => void }) {
   const version = useSignal(0)
   const query = useSignal('')
   const hits = useSignal<SearchHit[] | null>(null)
@@ -88,10 +88,15 @@ export function FileTree({ root }: { root: string }) {
   const name = root.split('/').filter(Boolean).pop() ?? root
   return (
     <div class="tree">
-      <div class="tree-head">
+      <div class="tree-head" style={onHide ? { height: 'var(--head-h)' } : undefined}>
         <Icon name="folderOpen" size={13} />
         <span class="tree-root" title={root}>{name}</span>
         <div class="flex1" />
+        {onHide && (
+          <button class="icon-btn tiny" title={t('closeInspector')} onClick={onHide}>
+            <Icon name="panelRight" size={13} />
+          </button>
+        )}
         <button class={'icon-btn tiny' + (hidden ? ' on' : '')} title={t('showHidden')} onClick={() => (prefs.showHidden.value = !hidden)}>
           <Icon name="eye" size={12} />
         </button>
@@ -104,7 +109,7 @@ export function FileTree({ root }: { root: string }) {
       </div>
       <label class="tree-filter">
         <Icon name="search" size={12} />
-        <input placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Escape' && (query.value = '')} />
+        <input id="file-tree-filter" placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Escape' && (query.value = '')} />
       </label>
       <div class="tree-list">
         {hits.value

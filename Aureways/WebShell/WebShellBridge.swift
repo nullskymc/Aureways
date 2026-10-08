@@ -372,7 +372,7 @@ final class WebShellBridge: NSObject {
                 composerPeer?.sendCommand(name, extra)
             case "dropHover", "dropEnd":
                 composerPeer?.sendCommand(name, extra)
-            case "find", "openSettings", "openMarkdown":
+            case "find", "openSettings", "openMarkdown", "openReader":
                 onFocusMain?()
             default:
                 break
