@@ -34,7 +34,7 @@ document.addEventListener('contextmenu', (e) => {
   e.preventDefault()
 })
 
-const isMenuBar = location.hash === '#menubar'
+const isMenuBar = location.hash.startsWith('#menubar')
 const isComposer = location.hash === '#composer'
 if (isMenuBar) document.documentElement.classList.add('in-menubar')
 if (isComposer) document.documentElement.classList.add('in-composer', 'glass')

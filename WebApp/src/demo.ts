@@ -1,6 +1,6 @@
 // Loaded only outside the app (vite dev / headless checks): fake state + a
 // streaming transcript so the UI can be styled without the Swift side.
-import type { AppState, Item } from './types'
+import type { AppState, Item, ProviderQuota, QuotaWindow } from './types'
 import { seedDemoText } from './inspector/state'
 import { setOfflineRPC } from './rpc'
 
@@ -80,7 +80,7 @@ export function loadDemo() {
   } else if (location.hash.includes('settings')) void import('./store').then((m) => (m.route.value = { name: 'settings', section: location.hash.split('settings-')[1] }))
   const now = Date.now()
   const state: AppState = {
-    locale: 'en',
+    locale: location.hash.includes('lang=zh') ? 'zh' : 'en',
     appearance: 'system',
     selectedSessionId: location.hash.includes('landing') ? null : 's1',
     selectedAgentId: 'codex',
@@ -121,10 +121,11 @@ export function loadDemo() {
       appearance: 'system', language: 'en', systemLanguage: 'system', showMenuBar: true, markdownDefault: false,
       autoApprove: false, defaultAgentId: 'codex', version: '0.3.3',
       agents: [
-        { id: 'grok-build', title: 'Grok Build', subtitle: '', builtIn: true, launchLine: 'grok agent stdio', notes: '', enabled: true, available: true, quotaRefreshing: false },
-        { id: 'codex', title: 'Codex', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/codex-acp', notes: '', enabled: true, available: true, quotaRefreshing: false },
-        { id: 'claude', title: 'Claude Code', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/claude-code-acp', notes: '', enabled: true, available: true, quotaRefreshing: false },
-        { id: 'cursor', title: 'Cursor', subtitle: '', builtIn: true, launchLine: 'cursor-agent acp', notes: '', enabled: false, available: false, quotaRefreshing: false },
+        { id: 'grok-build', title: 'Grok Build', subtitle: '', builtIn: true, launchLine: 'grok agent stdio', notes: '', enabled: true, available: true, quotaSupported: true },
+        { id: 'codex', title: 'Codex', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/codex-acp', notes: '', enabled: true, available: true, quotaSupported: true },
+        { id: 'claude', title: 'Claude Code', subtitle: '', builtIn: true, launchLine: 'npx @zed-industries/claude-code-acp', notes: '', enabled: true, available: true, quotaSupported: true },
+        { id: 'antigravity', title: 'Antigravity', subtitle: '', builtIn: true, launchLine: 'agy_acp_server', notes: '', enabled: true, available: true, quotaSupported: true },
+        { id: 'cursor', title: 'Cursor', subtitle: '', builtIn: true, launchLine: 'cursor-agent acp', notes: '', enabled: true, available: true, quotaSupported: false },
       ],
       workspaces: [{ path: '/Users/demo/Aureways', name: 'Aureways' }, { path: '/Users/demo/site', name: 'site' }],
       defaultWorkspace: '/Users/demo/Aureways',
@@ -132,13 +133,7 @@ export function loadDemo() {
       reportedMcp: [],
       mcpCaps: { http: true, sse: false },
     },
-    quota: {
-      codex: {
-        harnessId: 'codex', providerTitle: 'OpenAI', planType: 'Plus', updatedAt: now - 120e3, severity: 'warning', summary: '5h 38%',
-        primaryWindow: { id: 'p', title: '5 hours', usedPercent: 62, resetsAt: now + 2.4 * 3600e3 },
-        secondaryWindow: { id: 's', title: 'Weekly', usedPercent: 21, resetsAt: now + 4 * 86400e3 },
-      },
-    },
+    quota: demoQuota(now),
   }
   if (location.hash.includes('perm')) {
     state.permission = {
@@ -172,4 +167,47 @@ export function loadDemo() {
     setTimeout(tick, 30)
   }
   tick()
+}
+
+/** Quota fixtures. `#menubar` = all fine, `#menubar-low` = one running low,
+ * `#menubar-signin` = one not signed in; `?expand=<id>` opens a row. */
+function demoQuota(now: number): AppState['quota'] {
+  const hash = location.hash
+  const low = hash.includes('-low')
+  const signin = hash.includes('-signin')
+  const w = (id: string, label: string, kind: QuotaWindow['kind'], used: number, resetIn: number, extra: Partial<QuotaWindow> = {}): QuotaWindow => {
+    const remainingPercent = Math.max(0, 100 - used)
+    return { id, label, kind, usedPercent: used, remainingPercent, level: remainingPercent > 50 ? 'ample' : remainingPercent >= 20 ? 'moderate' : 'low', resetsAt: now + resetIn, source: 'officialAPI', estimated: false, ...extra }
+  }
+  const provider = (harnessId: string, providerTitle: string, plan: string | undefined, windows: QuotaWindow[], extra: Partial<ProviderQuota> = {}): ProviderQuota => {
+    const rated = windows.filter((x) => x.remainingPercent != null)
+    const tight = rated.reduce<QuotaWindow | undefined>((m, x) => (!m || x.remainingPercent! < m.remainingPercent! ? x : m), undefined)
+    return {
+      harnessId, providerTitle, plan, windows, status: 'ok', lastUpdated: now - 3 * 60e3, sourceKind: 'officialAPI',
+      tightestId: tight?.id, remainingPercent: tight?.remainingPercent, level: tight?.level ?? 'unknown', estimated: tight?.estimated ?? false, refreshing: false, ...extra,
+    }
+  }
+  const h = 3600e3
+  return {
+    'grok-build': provider('grok-build', 'Grok Build', 'SuperGrok', [
+      w('grok-weekly-window', 'Weekly', 'weekly', low ? 88 : 30, 2.6 * 24 * h, { shares: [{ id: 'b', title: 'Grok Build', usedPercent: low ? 80 : 26 }, { id: 'c', title: 'Grok Chat', usedPercent: low ? 8 : 4 }] }),
+    ], { account: 'demo@x.ai' }),
+    codex: provider('codex', 'Codex', 'Plus', [
+      w('codex-primary', '5h', 'session', 38, 2.4 * h),
+      w('codex-secondary', 'Weekly', 'weekly', 21, 4 * 24 * h),
+      { id: 'codex-credits', label: 'Credits', kind: 'credits', balance: 12.5, unit: 'credits', level: 'unknown', source: 'officialAPI', estimated: false },
+    ], { account: 'demo@openai.com' }),
+    claude: signin
+      ? { harnessId: 'claude', providerTitle: 'Claude Code', windows: [], status: 'notSignedIn', statusDetail: 'notConfigured', level: 'unknown', estimated: false, refreshing: false }
+      : provider('claude', 'Claude Code', 'Max', [
+        w('claude-5h', '5h', 'session', 12, 3.1 * h, { source: 'localEstimate', estimated: true }),
+        w('claude-7d', 'Weekly', 'weekly', 46, 5 * 24 * h, { source: 'localEstimate', estimated: true }),
+      ], { sourceKind: 'localEstimate' }),
+    antigravity: provider('antigravity', 'Antigravity', 'Google AI Pro', [
+      w('ag-g5', 'Gemini 5h', 'session', 22, 1.5 * h),
+      w('ag-gw', 'Gemini Weekly', 'weekly', 9, 6 * 24 * h),
+      w('ag-c5', 'Claude & GPT 5h', 'session', 0, 4 * h),
+    ]),
+    cursor: { harnessId: 'cursor', providerTitle: 'Cursor', windows: [], status: 'unsupported', level: 'unknown', estimated: false, refreshing: false },
+  }
 }

@@ -65,12 +65,13 @@ export interface AppState {
   uiPrefs?: Record<string, unknown>
   inspectorRoot: string
   settings: Settings
-  quota: Record<string, QuotaSnapshot>
+  /** Every enabled agent, keyed by harness id (placeholders included). */
+  quota: Record<string, ProviderQuota>
 }
 
 export interface SettingsAgent {
   id: string; title: string; subtitle: string; builtIn: boolean; launchLine: string; notes: string
-  enabled: boolean; available: boolean; quotaRefreshing: boolean; quotaSupported?: boolean
+  enabled: boolean; available: boolean; quotaSupported?: boolean
 }
 
 export interface Settings {
@@ -78,6 +79,10 @@ export interface Settings {
   language: string
   systemLanguage: string
   showMenuBar: boolean
+  /** Remaining quota next to the menu bar icon. */
+  menuBarQuota?: 'always' | 'whenLow' | 'never'
+  /** Notify at 20% and 5% remaining, once per reset window. */
+  quotaNotifications?: boolean
   markdownDefault: boolean
   autoApprove: boolean
   defaultAgentId: string
@@ -90,36 +95,62 @@ export interface Settings {
   mcpCaps?: { http: boolean; sse: boolean }
 }
 
+/** One limit, as the native quota store reports it (Quota/ProviderQuota.swift). */
 export interface QuotaWindow {
-  id: string; title: string; usedPercent: number; resetsAt?: number; resetDescription?: string; windowMinutes?: number; used?: number; limit?: number
+  id: string
+  /** Short English token from the adapter ("5h", "Weekly", "Gemini 5h", "Code review"); localized by `windowLabel`. */
+  label: string
+  kind: 'session' | 'daily' | 'weekly' | 'monthly' | 'credits' | 'model' | 'other'
+  usedPercent?: number
+  used?: number
+  limit?: number
+  /** A credit balance with no limit: no percentage. */
+  balance?: number
+  unit?: string
+  /** What the UI shows: how much is LEFT, 0–100. Missing for a bare balance. */
+  remainingPercent?: number
+  level: QuotaLevel
+  resetsAt?: number
+  resetDescription?: string
+  windowMinutes?: number
+  source: QuotaSourceKind
+  /** Not read from the provider's account API: show 约 / ~. */
+  estimated: boolean
+  /** The window rolled over since the reading. */
+  reset?: boolean
+  /** Products drawing on this one pooled limit (Grok Chat + Grok Build). */
+  shares?: { id: string; title: string; usedPercent: number }[]
 }
 
-export interface QuotaSnapshot {
+export type QuotaLevel = 'ample' | 'moderate' | 'low' | 'unknown'
+export type QuotaSourceKind = 'officialAPI' | 'localEstimate' | 'manual'
+export type QuotaStatus = 'ok' | 'notSignedIn' | 'unsupported' | 'error' | 'stale'
+
+/** Unified per-provider quota. The panel, settings and menu bar read only this. */
+export interface ProviderQuota {
   harnessId: string
   providerTitle: string
-  planType?: string
-  accountEmail?: string
-  primaryWindow?: QuotaWindow
-  secondaryWindow?: QuotaWindow
-  extraWindows?: QuotaWindow[]
-  /** `pooled` items are shares of one limit (they add up to the window), not each a 100% remainder. */
-  usageBreakdown?: { id: string; title: string; usedPercent: number; pooled?: boolean }[]
-  creditsRemaining?: number
-  creditsUnit?: string
+  plan?: string
+  account?: string
+  windows: QuotaWindow[]
+  status: QuotaStatus
+  /** Error kind (rateLimited, unauthorized, notConfigured, network, http 500, …). */
+  statusDetail?: string
+  /** When the source produced the reading (ms). Missing = never fetched. */
+  lastUpdated?: number
+  sourceId?: string
+  sourceKind?: QuotaSourceKind
   resetCreditsAvailable?: number
-  updatedAt: number
-  /** When the source produced this reading (ms). */
-  fetchedAt?: number
+  /** The window that runs out first; the panel row shows only this one. */
+  tightestId?: string
+  remainingPercent?: number | null
+  level: QuotaLevel
+  estimated: boolean
+  refreshing: boolean
   /** Earliest time the store will hit the network again for this harness (ms). */
   nextRefreshAt?: number
-  /** Error kind from the native quota store (rateLimited, unauthorized, notConfigured, network, …). */
-  error?: string
-  sourceId?: string
-  sourceKind?: 'officialAPI' | 'localCache'
   /** ACP-reported session usage — supplementary only. */
   supplement?: { usedTokens: number; contextTokens: number; costAmount?: number; costCurrency?: string; reportedAt: number }
-  severity: 'healthy' | 'warning' | 'critical' | 'unknown'
-  summary: string
 }
 
 export interface Run { s: number; e: number | null }

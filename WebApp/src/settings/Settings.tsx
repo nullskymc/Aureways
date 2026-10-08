@@ -4,7 +4,8 @@ import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
 import { rpc } from '../rpc'
 import { route } from '../store'
-import type { AppState, QuotaSnapshot, Settings as S } from '../types'
+import type { AppState, ProviderQuota, Settings as S } from '../types'
+import { hasReading, percentText } from '../quota'
 import { HarnessIcon, Icon, Spinner } from '../components/Icon'
 import { QuotaCard } from './Quota'
 
@@ -206,7 +207,7 @@ function General({ s }: { s: S }) {
   )
 }
 
-function Agents({ s, quota }: { s: S; quota: Record<string, QuotaSnapshot> }) {
+function Agents({ s, quota }: { s: S; quota: Record<string, ProviderQuota> }) {
   const adding = useSignal(false)
   const title = useSignal('')
   const command = useSignal('')
@@ -242,7 +243,9 @@ function Agents({ s, quota }: { s: S; quota: Record<string, QuotaSnapshot> }) {
         </div>
         <div class="agent-launch mono" title={a.notes}>{a.launchLine}</div>
       </div>
-      {quota[a.id] && <span class={'quota-badge ' + quota[a.id].severity} title={quota[a.id].summary}>{quota[a.id].summary}</span>}
+      {quota[a.id] && hasReading(quota[a.id]) && quota[a.id].remainingPercent != null && (
+        <span class={'quota-badge ' + quota[a.id].level} title={t('quotaLeft')}>{percentText(quota[a.id].remainingPercent!, quota[a.id].estimated)}</span>
+      )}
       <Switch on={a.enabled} onChange={(v) => rpc('agent.enable', { id: a.id, enabled: v })} />
     </div>
   )
@@ -283,8 +286,9 @@ function Agents({ s, quota }: { s: S; quota: Record<string, QuotaSnapshot> }) {
   )
 }
 
-function Usage({ s, quota }: { s: S; quota: Record<string, QuotaSnapshot> }) {
+function Usage({ s, quota }: { s: S; quota: Record<string, ProviderQuota> }) {
   const agents = s.agents.filter((a) => a.enabled)
+  const mode = s.menuBarQuota ?? 'whenLow'
   return (
     <>
       <div class="usage-head">
@@ -293,9 +297,23 @@ function Usage({ s, quota }: { s: S; quota: Record<string, QuotaSnapshot> }) {
       </div>
       <div class="quota-grid">
         {agents.map((a) => (
-          <QuotaCard key={a.id} agent={a} snapshot={quota[a.id]} />
+          <QuotaCard key={a.id} agent={a} quota={quota[a.id]} />
         ))}
       </div>
+      <Group footer={t('quotaDisplayFooter')}>
+        <Row label={t('menuBarQuota')}>
+          <div class="seg">
+            {(['always', 'whenLow', 'never'] as const).map((v) => (
+              <button key={v} class={mode === v ? 'on' : ''} onClick={() => set('menuBarQuota', v)}>
+                {t('menuBarQuota_' + v)}
+              </button>
+            ))}
+          </div>
+        </Row>
+        <Row label={t('quotaNotify')}>
+          <Switch on={!!s.quotaNotifications} onChange={(v) => set('quotaNotifications', v)} />
+        </Row>
+      </Group>
     </>
   )
 }
