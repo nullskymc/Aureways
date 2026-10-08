@@ -29,8 +29,40 @@ test('a workspace starts with pinned chat and a wider, tabbed workbench', () => 
   assert.deepEqual(tabIds(pane.columns[0]), ['chat'])
   assert.deepEqual(tabIds(pane.columns[1]), ['changes', 'explorer'])
   assert.equal(pane.columns[1].active, 'explorer')
-  assert.equal(pane.focus, 1)
   assert.ok(pane.columns[1].size > pane.columns[0].size)
+  // Closed until asked for; the toggle opens it focused on the workbench.
+  assert.equal(pane.workbenchCollapsed, true)
+  assert.equal(pane.focus, 0)
+  state.toggleWorkbench()
+  assert.equal(pane.workbenchCollapsed, false)
+  assert.equal(pane.focus, 1)
+})
+
+test('opening or switching to a session starts with the workbench closed; the toggle still works within it', async () => {
+  workspace()
+  const path = app.peek().workspacePath
+  app.value = { workspacePath: path, selectedSessionId: 's1' }
+  const pane = state.currentPane()
+  assert.equal(pane.workbenchCollapsed, true)
+  state.toggleWorkbench()
+  assert.equal(pane.workbenchCollapsed, false, 'manual toggle opens it')
+  // Further state pushes for the same session leave it alone.
+  app.value = { workspacePath: path, selectedSessionId: 's1', streaming: true }
+  assert.equal(pane.workbenchCollapsed, false)
+  const id = file('notes.md')
+  assert.equal(pane.workbenchCollapsed, false, 'opening a file keeps it open')
+  // Another session: closed again, tabs kept.
+  app.value = { workspacePath: path, selectedSessionId: 's2' }
+  assert.equal(pane.workbenchCollapsed, true)
+  assert.ok(pane.columns.slice(1).some(col => col.tabs.some(tab => tab.id === id)), 'tabs stay alive')
+  // New chat (no session) does not touch it; reopening restores the workbench focus.
+  state.toggleWorkbench()
+  app.value = { workspacePath: path, selectedSessionId: null }
+  assert.equal(pane.workbenchCollapsed, false)
+  app.value = { workspacePath: path, selectedSessionId: 's1' }
+  assert.equal(pane.workbenchCollapsed, true)
+  state.toggleWorkbench()
+  assert.ok(pane.focus >= 1)
 })
 
 test('opening files or changes from chat never replaces the chat pane', () => {
@@ -186,10 +218,11 @@ test('collapse is workspace-local, never hides Documents, and can reopen an empt
   const path = app.peek().workspacePath
   const first = state.currentPane()
   state.toggleWorkbench()
+  assert.equal(first.workbenchCollapsed, false)
   workspace()
-  assert.equal(state.currentPane().workbenchCollapsed, false)
+  assert.equal(state.currentPane().workbenchCollapsed, true, 'a new workspace starts closed')
   app.value = { workspacePath: path }
-  assert.equal(state.currentPane().workbenchCollapsed, true)
+  assert.equal(state.currentPane().workbenchCollapsed, false, 'the first one kept its own state')
   route.value = { name: 'documents' }
   const docs = state.currentPane()
   state.toggleWorkbench()
