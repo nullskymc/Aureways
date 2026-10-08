@@ -72,3 +72,22 @@ test('real view remounts preserve terminal history, DOM, scroll and subscription
   assert.equal(element.isConnected, false)
   assert.equal(messages.filter(m => m.type === 'term.close').length, 1)
 })
+
+test('a pending terminal stays in its originating workspace', async () => {
+  app.value = { workspacePath: '/origin', inspectorRoot: '/origin' }
+  route.value = { name: 'main' }
+  state.selectTab('chat')
+  const origin = state.currentPane()
+  const opened = state.openTerminal()
+  const request = messages.findLast(m => m.method === 'term.open')
+  app.value = { workspacePath: '/other', inspectorRoot: '/other' }
+  const other = state.currentPane()
+  window.__aw.receive({ type: 'rpcResult', id: request.id, result: { id: 't2', shell: 'zsh', index: 2 } })
+  await opened
+  assert.equal(origin.columns[0].active, 'chat')
+  assert.equal(origin.columns[1].active, 'term:t2')
+  assert.equal(origin.columns[1].tabs.find(t => t.id === 'term:t2').title, 'origin')
+  assert.equal(other.columns.some(c => c.tabs.some(t => t.id === 'term:t2')), false)
+  app.value = { workspacePath: '/origin', inspectorRoot: '/origin' }
+  await state.closeTab('term:t2')
+})

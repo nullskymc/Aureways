@@ -2,7 +2,7 @@
 
 主窗口是一层原生壳。里面画出来的侧栏、主区域标签、输入框、权限卡、设置，都是 `WebApp/` 这一个 Preact 应用。SwiftUI 只保留 `App`、窗口场景、菜单栏场景和菜单命令。
 
-以前用 `NavigationSplitView` 时，跨屏幕拖窗口会在 `SplitViewChildController` 里把约束更新打满并崩溃。窗口里不再做 SwiftUI 分栏。客户区是一个 `NSView`（`WebShellHostView`），子视图只有玻璃层、WebView 和标题栏拖拽条，尺寸用 frame 和 autoresizing，不向 SwiftUI 回传最小/最大尺寸。`WebShellHostView.isFlipped = true`（y 向下）。
+以前用 `NavigationSplitView` 时，跨屏幕拖窗口会在 `SplitViewChildController` 里把约束更新打满并崩溃。窗口里不再做 SwiftUI 分栏。客户区是一个 `NSView`（`WebShellHostView`），子视图按玻璃层、原生标题栏底色、主 WebView、输入框浮层和标题栏拖拽条叠放，尺寸用 frame 和 autoresizing，不向 SwiftUI 回传最小/最大尺寸。`WebShellHostView.isFlipped = true`（y 向下）。
 
 ## 谁负责什么
 
@@ -17,13 +17,23 @@
 
 菜单栏额外窗口加载同一份包，地址是 `#menubar`，固定 340×470。它看额度和最近会话，可以新建对话、打开主窗口、打开设置、退出进程。
 
+## 标题栏的原生边界
+
+标题栏是 Swift/AppKit 壳的一部分，不是普通网页工具栏。`WebShellHostView` 统一提供普通窗口 52pt、全屏 44pt 的 `chrome.titlebarHeight`；红绿灯、原生拖拽层与所有 Web 顶栏共享这个值。不要再从红绿灯坐标反推高度。
+
+`TitlebarBackdropView` 在原生底层与透明 WKWebView 之间铺一整条底色，覆盖红绿灯下方。侧栏使用相同动态颜色的原生平面底板，贴边铺满，不再使用内缩玻璃卡片，避免标题栏截断圆角与高光。`chrome.nativeTitlebar` 为真时 Web 顶栏不再自行铺底；聊天滚动区从标题栏下方开始并裁剪。圆角交给 NSWindow，不在页面仿造 macOS 窗口。
+
+`chrome.ts` 观察顶栏 DOM、尺寸和标签横向滚动，合并上报可见控件的 `dragRegions`。只在 App render 时上报是不够的：标签的 signals 会局部更新。拖拽层高度始终由 Swift 决定，页面只提供避让矩形。
+
+验证需要 `TitlebarTests` 的 AppKit 命中测试和真实 WKWebView 布局测试，不能只用 Chromium 预览代替。改动 Swift 壳后必须重新构建并重新启动应用才能生效。
+
 ## 玻璃与输入框浮层
 
-`glass.ts` 测量 `[data-glass]` 的矩形，有变化才 `post('glass')`。原生在同样的位置放 `NSGlassEffectView`。种类：
+`glass.ts` 测量 `[data-glass]` 的矩形，有变化才 `post('glass')`。原生按种类放置平面底板或 `NSGlassEffectView`。种类：
 
 | `data-glass` | 作用 |
 | --- | --- |
-| `sidebar` | 侧栏玻璃，四周收 8px，圆角 16 |
+| `sidebar` | 贴边侧栏底板，圆角 0，与标题栏同色；不生成玻璃视图 |
 | `control` | 胶囊控件，圆角为高度的一半 |
 | `composer` | 主页面里的输入卡（空白页） |
 | `slot` | 不铺玻璃。告诉浮层输入卡该坐在哪，并带上栏的左右内边距和 `max-width`（768） |

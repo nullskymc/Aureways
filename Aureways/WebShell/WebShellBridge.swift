@@ -45,7 +45,7 @@ final class WebShellBridge: NSObject {
     private static let minFlushInterval: CFTimeInterval = 1.0 / 45.0
     private var lastStateJSON = ""
     private var lastAppearance: String?
-    var chrome = Chrome(trafficLights: .zero, fullscreen: false, titlebarHeight: 46)
+    var chrome = Chrome(trafficLights: .zero, fullscreen: false, titlebarHeight: WebShellHostView.titlebarHeight)
 
     private var transcriptSessionID: UUID?
     private var sentOrder: [UUID] = []
@@ -372,7 +372,7 @@ final class WebShellBridge: NSObject {
                 composerPeer?.sendCommand(name, extra)
             case "dropHover", "dropEnd":
                 composerPeer?.sendCommand(name, extra)
-            case "find", "openSettings", "openMarkdown", "openReader":
+            case "find", "openSettings", "openMarkdown", "openReader", "toggleInspector":
                 onFocusMain?()
             default:
                 break

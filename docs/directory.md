@@ -86,7 +86,7 @@ Aureways/                              # 仓库根
 构建设置（`project.pbxproj`）：
 
 - `MACOSX_DEPLOYMENT_TARGET = 26.0`
-- `MARKETING_VERSION = 0.3.2`，`CURRENT_PROJECT_VERSION = 20`
+- `MARKETING_VERSION = 0.3.3`，`CURRENT_PROJECT_VERSION = 21`
 - `PRODUCT_BUNDLE_IDENTIFIER = ai.aureways.client`
 - App Sandbox 未开启（要拉起 CLI、读写工作区）
 - Debug：`CODE_SIGN_IDENTITY = "-"`，`ENABLE_DEBUG_DYLIB = NO`，`ENABLE_PREVIEWS = NO`

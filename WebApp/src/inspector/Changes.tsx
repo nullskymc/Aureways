@@ -3,135 +3,96 @@ import { useEffect } from 'preact/hooks'
 import { t } from '../i18n'
 import { rpc, type GitDiff } from '../rpc'
 import { app, transcript } from '../store'
+import { prefs } from '../prefs'
 import type { DiffFile } from '../types'
 import { Icon, Spinner } from '../components/Icon'
-import { filesVersion, openDiff, openFile } from './state'
+import { filesVersion, openFile } from './state'
+import { DiffPane } from './DiffPane'
+import { WorkspaceSidebar } from './WorkspaceSidebar'
 
-/** Review: edits made in this session (from tool calls) and the working tree vs HEAD. */
+/** Keep review inside its tab: selecting a changed file does not open another tab. */
 export function ChangesView() {
-  const mode = useSignal<'session' | 'git'>('session')
-  return (
-    <div class="changes">
-      <div class="seg" data-no-drag>
-        <button class={mode.value === 'session' ? 'on' : ''} onClick={() => (mode.value = 'session')}>
-          {t('sessionEdits')}
-        </button>
-        <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>
-          {t('workingTree')}
-        </button>
-      </div>
-      {mode.value === 'session' ? <SessionEdits /> : <GitChanges />}
-    </div>
-  )
-}
+  const mode = useSignal<'session' | 'git'>('git')
+  const data = useSignal<GitDiff | null>(null)
+  const error = useSignal('')
+  const loading = useSignal(false)
+  const refresh = useSignal(0)
+  const selected = useSignal('')
+  const query = useSignal('')
+  const cwd = app.value?.inspectorRoot ?? ''
+  useEffect(() => {
+    let live = true
+    loading.value = true
+    data.value = null
+    error.value = ''
+    void rpc<GitDiff>('git.diff', { cwd }).then((result) => {
+      if (live) data.value = result
+    }).catch((e: Error) => {
+      if (live) error.value = e.message
+    }).finally(() => { if (live) loading.value = false })
+    return () => { live = false }
+  }, [cwd, filesVersion.value, refresh.value])
 
-function SessionEdits() {
   void transcript.version.value
-  const files = new Map<string, DiffFile & { edits: number }>()
-  for (const it of transcript.items) {
-    if (it.kind !== 'tool' || !it.diffs) continue
-    for (const d of it.diffs) {
-      const prev = files.get(d.path)
-      if (prev) {
-        files.set(d.path, {
-          ...d,
-          isNew: prev.isNew || d.isNew,
-          added: prev.added + d.added,
-          removed: prev.removed + d.removed,
-          hunks: d.hunks.length > 0 ? d.hunks : prev.hunks,
-          edits: prev.edits + 1,
-        })
-      } else {
-        files.set(d.path, { ...d, edits: 1 })
-      }
+  const sessionFiles = new Map<string, DiffFile>()
+  for (const item of transcript.items) {
+    if (item.kind !== 'tool') continue
+    for (const file of item.diffs ?? []) {
+      const prev = sessionFiles.get(file.path)
+      sessionFiles.set(file.path, prev ? {
+        ...file, isNew: prev.isNew || file.isNew,
+        added: prev.added + file.added, removed: prev.removed + file.removed,
+        hunks: file.hunks.length ? file.hunks : prev.hunks,
+      } : file)
     }
   }
-  const list = [...files.values()]
-  if (!list.length) return <div class="changes-empty">{t('noSessionEdits')}</div>
-  const added = list.reduce((n, f) => n + f.added, 0)
-  const removed = list.reduce((n, f) => n + f.removed, 0)
-  return (
-    <div class="changes-list">
-      <div class="changes-summary">
-        {t('filesChanged', list.length)}{' '}
-        <span class="diffstat">
-          <span class="add">+{added}</span> <span class="del">−{removed}</span>
-        </span>
-      </div>
-      <div class="changes-files">
-        {list.map((f) => (
-          <ChangeRow key={f.path} file={f} onClick={() => openDiff(f)} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function GitChanges() {
-  const data = useSignal<GitDiff | null>(null)
-  const loading = useSignal(false)
-  const cwd = app.value?.inspectorRoot ?? ''
-  const load = async () => {
-    loading.value = true
-    data.value = await rpc<GitDiff>('git.diff', { cwd }).catch(() => ({ repo: false }))
-    loading.value = false
+  const files = mode.value === 'git' ? parseUnifiedDiff(data.value?.diff ?? '', cwd) : [...sessionFiles.values()]
+  const untracked = mode.value === 'git' ? data.value?.untracked ?? [] : []
+  const active = files.find((file) => file.path === selected.value) ?? files[0]
+  const added = files.reduce((n, file) => n + file.added, 0)
+  const removed = files.reduce((n, file) => n + file.removed, 0)
+  const groups = new Map<string, DiffFile[]>()
+  for (const file of files) {
+    const relative = file.path.startsWith(cwd + '/') ? file.path.slice(cwd.length + 1) : file.path
+    if (!relative.toLowerCase().includes(query.value.toLowerCase())) continue
+    const dir = relative.split('/').slice(0, -1).join('/')
+    groups.set(dir, [...groups.get(dir) ?? [], file])
   }
-  useEffect(() => void load(), [cwd, filesVersion.value])
-  const d = data.value
-  if (!d) return <div class="changes-empty"><Spinner size={13} /></div>
-  if (!d.repo) return <div class="changes-empty">{t('notRepo')}</div>
-  const files = parseUnifiedDiff(d.diff ?? '', cwd)
+  const visibleUntracked = untracked.filter((path) => path.toLowerCase().includes(query.value.toLowerCase()))
+  const pending = mode.value === 'git' && loading.value
+  const empty = mode.value === 'session' ? t('noSessionEdits') : error.value || (data.value?.repo ? t('cleanTree') : t('notRepo'))
   return (
-    <div class="changes-list">
-      <div class="changes-summary">
-        <Icon name="gitDiff" size={12} /> {d.branch} · {t('filesChanged', files.length + (d.untracked?.length ?? 0))}
-        <div class="flex1" />
-        <button class="icon-btn tiny" title={t('refresh')} onClick={load}>
-          {loading.value ? <Spinner size={10} /> : <Icon name="refresh" size={12} />}
-        </button>
-      </div>
-      <div class="changes-files">
-        {files.map((f) => (
-          <ChangeRow key={f.path} file={f} onClick={() => openDiff(f)} />
-        ))}
-      </div>
-      {!!d.untracked?.length && (
-        <div class="untracked">
-          <div class="untracked-head">{t('untracked')}</div>
-          {d.untracked.map((rel) => {
-            const abs = joinPath(cwd, rel)
-            return (
-              <button key={rel} class="change-row" onClick={() => openFile(abs)}>
-                <span class="change-badge untracked">U</span>
-                <span class="change-name">{rel.split('/').pop()}</span>
-                <span class="change-dir">{rel.split('/').slice(0, -1).join('/')}</span>
-              </button>
-            )
-          })}
+    <div class="changes review">
+      <div class="review-toolbar">
+        <div class="seg" aria-label={t('changes')}>
+          <button class={mode.value === 'git' ? 'on' : ''} onClick={() => (mode.value = 'git')}>{t('workingTree')}</button>
+          <button class={mode.value === 'session' ? 'on' : ''} onClick={() => (mode.value = 'session')}>{t('sessionEdits')}</button>
         </div>
-      )}
-      {!files.length && !d.untracked?.length && <div class="changes-empty">{t('cleanTree')}</div>}
+        <span class="diffstat"><span class="add">+{added}</span> <span class="del">−{removed}</span></span>
+        {mode.value === 'git' && data.value?.branch && <span class="review-branch"><Icon name="branch" size={12} />{data.value.branch}</span>}
+        <div class="flex1" />
+        <button class="icon-btn tiny" title={t('refresh')} onClick={() => refresh.value++}>{pending ? <Spinner size={12} /> : <Icon name="refresh" size={12} />}</button>
+      </div>
+      <div class="workspace-content">
+        <div class="workspace-editor review-editor">
+          {pending ? <div class="file-empty"><Spinner size={16} /></div> : active ? <DiffPane key={active.path} file={active} /> : <div class="review-empty"><Icon name="gitDiff" size={27} /><span>{empty}</span>{!!untracked.length && <span>{t('untracked')} · {untracked.length}</span>}</div>}
+        </div>
+        {prefs.inspectorOpen.value && <WorkspaceSidebar>
+          <label class="tree-filter review-filter"><Icon name="search" size={12} /><input placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Escape') query.value = '' }} /></label>
+          <div class="tree-list review-files">
+            {[...groups].map(([dir, list]) => <details key={dir} open class="review-folder">
+              <summary><Icon name="chevronRight" size={10} /><span>{dir || (cwd.split('/').pop() ?? '/')}</span></summary>
+              {list.map((file) => <button key={file.path} class={'tree-row review-file' + (file.path === active?.path ? ' selected' : '')} title={file.path} aria-pressed={file.path === active?.path} onClick={() => (selected.value = file.path)}>
+                <Icon name="gitDiff" size={12} /><span class="tree-name">{file.path.split('/').pop()}</span><span class="diffstat"><span class="add">{file.added > 0 ? '+' + file.added : ''}</span> <span class="del">{file.removed > 0 ? '−' + file.removed : ''}</span></span>
+              </button>)}
+            </details>)}
+            {!!visibleUntracked.length && <div class="untracked-head">{t('untracked')}</div>}
+            {visibleUntracked.map((path) => <button key={path} class="tree-row" title={path} onClick={() => openFile(joinPath(cwd, path))}><Icon name="file" size={12} /><span class="tree-name">{path}</span><span class="change-badge untracked">U</span></button>)}
+            {!!query.value && !groups.size && !visibleUntracked.length && <div class="tree-empty">{t('noMatches')}</div>}
+          </div>
+        </WorkspaceSidebar>}
+      </div>
     </div>
-  )
-}
-
-function ChangeRow({ file, onClick }: { file: DiffFile; onClick: () => void }) {
-  const parts = file.path.split('/')
-  const name = parts.pop() ?? file.path
-  const dir = parts.slice(-2).join('/')
-  const status = file.isNew ? 'A' : file.added > 0 && file.removed === 0 ? 'A' : 'M'
-  return (
-    <button class="change-row" onClick={onClick} title={file.path}>
-      <span class={`change-badge ${status.toLowerCase()}`}>{status}</span>
-      <span class="change-name">{name}</span>
-      {dir && <span class="change-dir">{dir}</span>}
-      <div class="flex1" />
-      <span class="diffstat">
-        {file.added > 0 && <span class="add">+{file.added}</span>}
-        {file.added > 0 && file.removed > 0 && ' '}
-        {file.removed > 0 && <span class="del">−{file.removed}</span>}
-      </span>
-    </button>
   )
 }
 

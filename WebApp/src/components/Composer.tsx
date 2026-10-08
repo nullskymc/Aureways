@@ -264,17 +264,18 @@ export function Composer({ state, session }: { state: AppState; session: Session
           {composer.model && <PickerChip picker={composer.model} icon="cpu" onPick={(v) => post('setConfig', { configId: composer.model!.configId, value: v })} />}
           {composer.effort && <PickerChip picker={composer.effort} icon="gauge" onPick={(v) => post('setConfig', { configId: composer.effort!.configId, value: v })} />}
           {composer.mode && <PickerChip picker={composer.mode} icon="layers" onPick={(v) => (composer.mode!.configId ? post('setConfig', { configId: composer.mode!.configId, value: v }) : post('setMode', { modeId: v }))} />}
-          <div class="flex1" />
-          {state.usage && state.usage.size > 0 && <ContextRing used={state.usage.used} size={state.usage.size} />}
-          {streaming ? (
-            <button class="send-btn stop" title={t('stop') + ' (⌘.)'} onClick={() => post('cancel')}>
-              <Icon name="stop" size={12} />
-            </button>
-          ) : (
-            <button class="send-btn" title={t('send') + ' (↩)'} disabled={!canSend} onClick={send}>
-              <Icon name="arrowUp" size={15} />
-            </button>
-          )}
+          <div class="composer-actions">
+            {state.usage && state.usage.size > 0 && <ContextRing used={state.usage.used} size={state.usage.size} />}
+            {streaming ? (
+              <button class="send-btn stop" title={t('stop') + ' (⌘.)'} onClick={() => post('cancel')}>
+                <Icon name="stop" size={12} />
+              </button>
+            ) : (
+              <button class="send-btn" title={t('send') + ' (↩)'} disabled={!canSend} onClick={send}>
+                <Icon name="arrowUp" size={15} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

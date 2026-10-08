@@ -1,6 +1,5 @@
-// Workspace shelves hold chat, changes, files, diffs, and terminals. Chat and
-// changes stay in the leftmost column and follow the selected session; the
-// other tabs stay with the workspace. Documents is a separate shelf for
+// The leftmost workspace column is reserved for chat. Changes, the file
+// browser, files, diffs, and terminals share the workbench to its right. Documents is a separate shelf for
 // Markdown opened outside the current workspace. File buffers are global.
 import { batch, effect, signal, type Signal } from '@preact/signals'
 import { inApp, onMessage, post } from '../bridge'
@@ -15,6 +14,7 @@ import { terminalSessions } from './terminalSessions'
 export type Tab =
   | { kind: 'chat'; id: 'chat' }
   | { kind: 'changes'; id: 'changes' }
+  | { kind: 'explorer'; id: 'explorer' }
   | { kind: 'file'; id: string; path: string }
   | { kind: 'diff'; id: string; file: DiffFile }
   | { kind: 'term'; id: string; termId: string; title: string; exited?: boolean }
@@ -30,12 +30,10 @@ export interface Column {
 interface PaneState {
   columns: Column[]
   focus: number
+  workbenchCollapsed: boolean
+  /** Restore the previously focused column without changing tabs or widths. */
+  workbenchFocus?: string
 }
-
-const HOME: Tab[] = [
-  { kind: 'chat', id: 'chat' },
-  { kind: 'changes', id: 'changes' },
-]
 
 /** Shelf key that cannot collide with a workspace path. */
 const DOCUMENTS = '\0documents'
@@ -54,7 +52,10 @@ function newColumn(tabs: Tab[], active: string): Column {
 }
 
 function freshWorkspace(): PaneState {
-  return { columns: [newColumn(HOME.map((tab) => ({ ...tab })), 'chat')], focus: 0 }
+  const chat = newColumn([{ kind: 'chat', id: 'chat' }], 'chat')
+  const workbench = newColumn([{ kind: 'changes', id: 'changes' }, { kind: 'explorer', id: 'explorer' }], 'explorer')
+  workbench.size = 1.9
+  return { columns: [chat, workbench], focus: 1, workbenchCollapsed: false }
 }
 
 function workspaceKey() {
@@ -80,16 +81,12 @@ export function currentPane(): PaneState {
 function ensurePane(key: string): PaneState {
   let pane = panes.get(key)
   if (!pane?.columns?.length) {
-    pane = key === DOCUMENTS ? { columns: [newColumn([], '')], focus: 0 } : freshWorkspace()
+    pane = key === DOCUMENTS ? { columns: [newColumn([], '')], focus: 0, workbenchCollapsed: false } : freshWorkspace()
     panes.set(key, pane)
   }
   if (key !== DOCUMENTS) {
     const home = pane.columns[0]
     if (!home.tabs.some((t) => t.id === 'chat')) home.tabs.unshift({ kind: 'chat', id: 'chat' })
-    if (!home.tabs.some((t) => t.id === 'changes')) {
-      const at = home.tabs.findIndex((t) => t.id === 'chat')
-      home.tabs.splice(at + 1, 0, { kind: 'changes', id: 'changes' })
-    }
     if (!home.tabs.some((t) => t.id === home.active)) home.active = home.tabs[0]?.id ?? 'chat'
   }
   if (pane.focus >= pane.columns.length) pane.focus = pane.columns.length - 1
@@ -103,10 +100,6 @@ export function homeIsChat() {
 
 function activateAfterRemoval(col: Column, at: number) {
   const prev = col.tabs[at - 1]
-  if (prev?.id === 'changes' && col.tabs.some((t) => t.id === 'chat')) {
-    col.active = 'chat'
-    return
-  }
   col.active = prev?.id ?? col.tabs.find((t) => t.id === 'chat')?.id ?? col.tabs[0]?.id ?? ''
 }
 
@@ -118,13 +111,40 @@ export function selectTab(id: string) {
   const pane = currentPane()
   const index = columnOf(pane, id)
   if (index < 0) return
+  if (index > 0) pane.workbenchCollapsed = false
   pane.columns[index].active = id
   pane.focus = index
   bump()
 }
 
-export function showInspector(tabId?: string) {
-  if (tabId) selectTab(tabId)
+/** Hide the workbench, not its tabs: buffers, terminals and scroll state stay alive. */
+export function toggleWorkbench() {
+  if (route.peek().name === 'documents') return
+  route.value = { name: 'main' }
+  const pane = currentPane()
+  if (pane.columns.length === 1) { openExplorer(); return }
+  pane.workbenchCollapsed = !pane.workbenchCollapsed
+  if (pane.workbenchCollapsed) {
+    pane.workbenchFocus = pane.columns[Math.max(1, pane.focus)]?.id
+    pane.focus = 0
+    // Native keyboard focus must not remain inside a now-hidden terminal/editor.
+    post('focusComposer')
+  } else {
+    pane.focus = Math.max(1, pane.columns.findIndex((col) => col.id === pane.workbenchFocus))
+  }
+  bump()
+}
+
+export function showInspector(tabId = 'explorer') {
+  route.value = { name: 'main' }
+  if (tabId === 'changes') placeOn(workspaceKey(), { kind: 'changes', id: 'changes' })
+  else openExplorer()
+}
+
+export function openExplorer() {
+  route.value = { name: 'main' }
+  prefs.inspectorOpen.value = true
+  placeOn(workspaceKey(), { kind: 'explorer', id: 'explorer' })
 }
 
 function detachTab(pane: PaneState, id: string) {
@@ -140,8 +160,11 @@ function detachTab(pane: PaneState, id: string) {
 
 /** One tab per file across shelves. An open copy is moved, not duplicated. */
 function placeOn(key: string, tab: Tab) {
-  for (const [other, pane] of panes) if (other !== key) detachTab(pane, tab.id)
+  if (tab.kind === 'file') {
+    for (const [other, pane] of panes) if (other !== key) detachTab(pane, tab.id)
+  }
   const pane = ensurePane(key)
+  if (key !== DOCUMENTS) pane.workbenchCollapsed = false
   const existing = columnOf(pane, tab.id)
   if (existing >= 0) {
     const col = pane.columns[existing]
@@ -152,8 +175,17 @@ function placeOn(key: string, tab: Tab) {
     bump()
     return
   }
-  const col = pane.columns[Math.min(pane.focus, pane.columns.length - 1)] ?? pane.columns[0]
-  col.tabs.push(tab)
+  // Opening from chat (including an agent's file link) never replaces chat.
+  if (key !== DOCUMENTS && pane.columns.length === 1) {
+    const workbench = newColumn([], '')
+    workbench.size = 1.9
+    pane.columns.push(workbench)
+  }
+  const index = Math.max(key === DOCUMENTS ? 0 : 1, Math.min(pane.focus, pane.columns.length - 1))
+  const col = pane.columns[index]
+  const picker = col.tabs.findIndex((item) => item.kind === 'explorer')
+  if (picker < 0) col.tabs.push(tab)
+  else col.tabs.splice(picker, 0, tab)
   col.active = tab.id
   pane.focus = pane.columns.indexOf(col)
   bump()
@@ -189,9 +221,10 @@ export function openDiff(file: DiffFile) {
 export async function openTerminal(cwd?: string) {
   if (route.peek().name !== 'main') route.value = { name: 'main' }
   const root = cwd ?? app.peek()?.inspectorRoot
+  const shelf = workspaceKey()
   try {
     const res = await rpc<{ id: string; index: number; shell: string }>('term.open', { cwd: root, cols: 80, rows: 24 })
-    placeOn(workspaceKey(), { kind: 'term', id: 'term:' + res.id, termId: res.id, title: `${res.shell} ${res.index}` })
+    placeOn(shelf, { kind: 'term', id: 'term:' + res.id, termId: res.id, title: root?.split('/').filter(Boolean).pop() || res.shell })
   } catch (e) {
     post('log', { message: 'term.open failed: ' + e })
   }
@@ -284,12 +317,12 @@ export async function closeTab(id: string) {
   const col = pane.columns[index]
   const tabAt = col.tabs.findIndex((tab) => tab.id === id)
   const tab = col.tabs[tabAt]
-  if (!tab || tab.kind === 'chat' || tab.kind === 'changes') return
+  if (!tab || tab.kind === 'chat') return
   if (tab.kind === 'file') {
     const buffer = buffers.get(tab.path)
     if (buffer?.dirty.value) {
       const name = tab.path.split('/').pop() ?? tab.path
-      const ok = await rpc<boolean>('ui.confirm', { message: t('unsavedClose', name), ok: t('discard'), cancel: t('cancel') }).catch(() => true)
+      const ok = await rpc<boolean>('ui.confirm', { message: t('unsavedClose', name), ok: t('discard'), cancel: t('cancel') }).catch(() => false)
       if (!ok) return
     }
     if (!tabLiveElsewhere(id, col)) buffers.delete(tab.path)
@@ -304,15 +337,16 @@ export async function closeTab(id: string) {
   bump()
 }
 
-/** Move a file, diff, or terminal into the column on its right. At most three columns. */
+/** Move a workbench tab into the column on its right. At most three columns. */
 export function moveTabRight(id: string) {
   const pane = currentPane()
   const from = columnOf(pane, id)
   if (from < 0) return
   const src = pane.columns[from]
   const tab = src.tabs.find((t) => t.id === id)
-  if (!tab || tab.kind === 'chat' || tab.kind === 'changes') return
+  if (!tab || tab.kind === 'chat') return
   if (from === pane.columns.length - 1 && pane.columns.length >= 3) return
+  pane.workbenchCollapsed = false
   const at = src.tabs.findIndex((t) => t.id === id)
   src.tabs.splice(at, 1)
   if (src.active === id) activateAfterRemoval(src, at)
@@ -331,6 +365,7 @@ export function splitFocused() {
   const pane = currentPane()
   const col = pane.columns[pane.focus]
   if (!col) return
+  if (col.active === 'chat') { openExplorer(); return }
   moveTabRight(col.active)
 }
 

@@ -1,11 +1,10 @@
-// Native Liquid Glass under the web view (WebShellView.swift → GlassLayerView).
-// Elements marked `data-glass="sidebar|control|composer"` get an
-// NSGlassEffectView at the same rect; the page keeps those areas transparent.
+// Native surfaces under WKWebView (WebShellView.swift → GlassLayerView).
+// Sidebar uses flat window chrome; floating controls keep NSGlassEffectView.
+// The page keeps both transparent and reports their exact, edge-to-edge rects.
 // Rects go out only when they change, coalesced to one per frame; a short
 // burst of frames after each trigger follows CSS transitions.
 import { post } from './bridge'
 
-const INSET: Record<string, number> = { sidebar: 8 }
 let last = ''
 let frames = 0
 let scheduled = false
@@ -17,9 +16,8 @@ function measure() {
     const kind = el.dataset.glass!
     const b = el.getBoundingClientRect()
     if (b.width < 1 || b.height < 1) return
-    const inset = INSET[kind] ?? 0
-    const radius = kind === 'sidebar' ? 16 : kind === 'control' ? b.height / 2 : parseFloat(getComputedStyle(el).borderTopLeftRadius) || 12
-    const rect: Record<string, number | string> = { k: kind, x: Math.round(b.left + inset), y: Math.round(b.top + inset), w: Math.round(b.width - inset * 2), h: Math.round(b.height - inset * 2), r: radius }
+    const radius = kind === 'sidebar' ? 0 : kind === 'control' ? b.height / 2 : parseFloat(getComputedStyle(el).borderTopLeftRadius) || 12
+    const rect: Record<string, number | string> = { k: kind, x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height), r: radius }
     if (kind === 'slot' && el.parentElement) {
       // Anchor for native layout: the dock's content box insets and the
       // column's max width, so the overlay can follow live resize itself.

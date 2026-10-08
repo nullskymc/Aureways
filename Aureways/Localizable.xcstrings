@@ -386,18 +386,18 @@
         }
       }
     },
-    "切换检查器": {
+    "切换右侧标签区": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toggle File Tree"
+            "value": "Toggle Workspace Tabs"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "文件树"
+            "value": "切换右侧标签区"
           }
         }
       }

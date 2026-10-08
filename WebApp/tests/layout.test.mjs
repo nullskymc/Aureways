@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-// State tests need only the bridge's browser globals, not a native application.
 globalThis.window = { addEventListener() {}, setTimeout, setInterval }
 globalThis.document = { documentElement: { style: {} } }
 const state = await import('../src/inspector/state.ts')
@@ -19,53 +18,189 @@ function file(name) {
 }
 function threeColumns() {
   workspace()
-  const first = file('a.md')
-  state.moveTabRight(first)
-  const second = file('b.md')
-  state.moveTabRight(second)
+  state.moveTabRight(file('a.md'))
   return state.currentPane()
 }
+const tabIds = (column) => column.tabs.map(t => t.id)
 
-test('resizing one divider preserves the pair total and unrelated column weight', () => {
+test('a workspace starts with pinned chat and a wider, tabbed workbench', () => {
+  workspace()
+  const pane = state.currentPane()
+  assert.deepEqual(tabIds(pane.columns[0]), ['chat'])
+  assert.deepEqual(tabIds(pane.columns[1]), ['changes', 'explorer'])
+  assert.equal(pane.columns[1].active, 'explorer')
+  assert.equal(pane.focus, 1)
+  assert.ok(pane.columns[1].size > pane.columns[0].size)
+})
+
+test('opening files or changes from chat never replaces the chat pane', () => {
+  workspace()
+  state.selectTab('chat')
+  const id = file('a.md')
+  const pane = state.currentPane()
+  assert.equal(pane.columns[0].active, 'chat')
+  assert.equal(pane.columns[1].active, id)
+  state.showInspector('changes')
+  assert.equal(pane.columns[1].active, 'changes')
+  assert.equal(state.homeIsChat(), true)
+  state.openFile(id.slice(5))
+  assert.equal(tabIds(pane.columns[1]).filter(tab => tab === id).length, 1)
+})
+
+test('resizing preserves the pair total and unrelated column weight', () => {
   const pane = threeColumns()
+  const before = pane.columns.map(c => c.size)
   state.resizeColumns(0, 320, 280)
   const sizes = pane.columns.map(c => c.size)
-  assert.equal(sizes[2], 1)
-  assert.ok(Math.abs(sizes[0] + sizes[1] - 2) < 1e-10)
+  assert.equal(sizes[2], before[2])
+  assert.ok(Math.abs(sizes[0] + sizes[1] - before[0] - before[1]) < 1e-10)
   assert.ok(Math.abs(sizes[0] / sizes[1] - 320 / 280) < 1e-10)
   state.resizeColumns(1, 200, 400)
   assert.equal(pane.columns[0].size, sizes[0])
-  assert.ok(Math.abs(pane.columns.reduce((sum, c) => sum + c.size, 0) - 3) < 1e-10)
+  assert.ok(Math.abs(pane.columns.reduce((sum, c) => sum + c.size, 0) - before.reduce((sum, size) => sum + size, 0)) < 1e-10)
 })
 
-test('splitting after a resize does not create a nearly zero-width column', () => {
+test('splitting after resizing creates a usable column, and never a fourth', () => {
   workspace()
-  const first = file('a.md')
-  state.moveTabRight(first)
+  const id = file('a.md')
   state.resizeColumns(0, 500, 300)
-  const second = file('b.md')
-  state.moveTabRight(second)
-  assert.equal(state.currentPane().columns.length, 3)
-  assert.ok(state.currentPane().columns.every(c => c.size >= 0.5 && c.size <= 1.5))
+  state.moveTabRight(id)
+  const pane = state.currentPane()
+  assert.equal(pane.columns.length, 3)
+  assert.ok(pane.columns.every(c => c.size >= 0.5 && c.size <= 2))
+  state.moveTabRight(id)
+  assert.equal(pane.columns.length, 3)
+  assert.equal(pane.columns[2].active, id)
 })
 
 test('invalid drag measurements leave the layout untouched', () => {
   const pane = threeColumns()
+  const before = pane.columns.map(c => c.size)
   for (const [left, right] of [[0, 0], [-1, 10], [NaN, 10], [10, Infinity]]) {
     state.resizeColumns(0, left, right)
-    assert.deepEqual(pane.columns.map(c => c.size), [1, 1, 1])
+    assert.deepEqual(pane.columns.map(c => c.size), before)
   }
 })
 
-test('moving and closing the last side tab removes only that column', async () => {
+test('closing the last split tab removes only that column', async () => {
   workspace()
   const id = file('a.md')
   state.moveTabRight(id)
   const pane = state.currentPane()
-  assert.equal(pane.columns.length, 2)
-  assert.equal(pane.columns[0].active, 'chat')
+  assert.equal(pane.columns.length, 3)
   await state.closeTab(id)
+  assert.equal(pane.columns.length, 2)
+  assert.equal(pane.focus, 1)
+  assert.deepEqual(tabIds(pane.columns[0]), ['chat'])
+  assert.deepEqual(tabIds(pane.columns[1]), ['changes', 'explorer'])
+})
+
+test('all workbench tabs can close and reopen without closing chat', async () => {
+  workspace()
+  const pane = state.currentPane()
+  await state.closeTab('changes')
+  await state.closeTab('explorer')
+  await state.closeTab('chat')
+  state.moveTabRight('chat')
   assert.equal(pane.columns.length, 1)
+  assert.deepEqual(tabIds(pane.columns[0]), ['chat'])
+  state.showInspector('changes')
+  assert.equal(pane.columns[1].active, 'changes')
+  state.openExplorer()
+  assert.equal(pane.columns[1].active, 'explorer')
+})
+
+test('changes and explorer tabs belong independently to each workspace', () => {
+  workspace()
+  const first = state.currentPane()
+  workspace()
+  state.openExplorer()
+  state.showInspector('changes')
+  assert.deepEqual(tabIds(first.columns[1]), ['changes', 'explorer'])
+})
+
+test('a failed discard confirmation keeps unsaved buffers and tabs', async () => {
+  workspace()
+  const id = file('draft.md')
+  const buffer = state.buffers.get(id.slice(5))
+  buffer.draft.value = '# Unsaved'
+  buffer.dirty.value = true
+  await state.closeTab(id)
+  assert.ok(tabIds(state.currentPane().columns[1]).includes(id))
+  assert.equal(buffer.draft.value, '# Unsaved')
+  state.selectTab('changes')
+  state.selectTab(id)
+  assert.equal(buffer.dirty.value, true)
+})
+
+test('Documents remains a standalone shelf rather than gaining chat', () => {
+  workspace()
+  const workspacePane = state.currentPane()
+  state.seedDemoText('/outside/guide.md', '# Guide')
+  state.openExternal('/outside/guide.md')
+  assert.equal(route.value.name, 'documents')
+  assert.equal(state.currentPane().columns.length, 1)
+  assert.deepEqual(tabIds(state.currentPane().columns[0]), ['file:/outside/guide.md'])
+  route.value = { name: 'main' }
+  assert.equal(state.currentPane(), workspacePane)
+  assert.equal(state.homeIsChat(), true)
+})
+
+test('collapsing keeps every tab, dirty buffer, active selection and split width', () => {
+  const pane = threeColumns()
+  const tab = pane.columns[2].tabs[0]
+  const buffer = state.buffers.get(tab.path)
+  buffer.draft.value = '# Unsubmitted edits'
+  buffer.dirty.value = true
+  state.resizeColumns(0, 420, 280)
+  const columns = JSON.stringify(pane.columns)
+  state.toggleWorkbench()
+  assert.equal(pane.workbenchCollapsed, true)
   assert.equal(pane.focus, 0)
-  assert.deepEqual(pane.columns[0].tabs.map(t => t.id), ['chat', 'changes'])
+  assert.equal(JSON.stringify(pane.columns), columns)
+  state.selectTab('chat')
+  assert.equal(pane.workbenchCollapsed, true)
+  state.toggleWorkbench()
+  assert.equal(pane.workbenchCollapsed, false)
+  assert.equal(pane.focus, 2)
+  assert.equal(JSON.stringify(pane.columns), columns)
+  assert.equal(buffer.draft.value, '# Unsubmitted edits')
+  assert.equal(buffer.dirty.value, true)
+})
+
+test('hidden workspace reopens for selected tabs, file links, changes and split commands', () => {
+  workspace()
+  const id = file('open.txt')
+  const pane = state.currentPane()
+  for (const show of [() => state.selectTab(id), () => state.openFile(id.slice(5)), () => state.showInspector('changes'), () => state.openExplorer(), () => state.splitFocused()]) {
+    state.toggleWorkbench()
+    assert.equal(pane.workbenchCollapsed, true)
+    show()
+    assert.equal(pane.workbenchCollapsed, false)
+    assert.equal(pane.columns[0].active, 'chat')
+  }
+})
+
+test('collapse is workspace-local, never hides Documents, and can reopen an empty workbench', async () => {
+  workspace()
+  const path = app.peek().workspacePath
+  const first = state.currentPane()
+  state.toggleWorkbench()
+  workspace()
+  assert.equal(state.currentPane().workbenchCollapsed, false)
+  app.value = { workspacePath: path }
+  assert.equal(state.currentPane().workbenchCollapsed, true)
+  route.value = { name: 'documents' }
+  const docs = state.currentPane()
+  state.toggleWorkbench()
+  assert.equal(route.value.name, 'documents')
+  assert.equal(docs.workbenchCollapsed, false)
+  route.value = { name: 'main' }
+  await state.closeTab('changes')
+  await state.closeTab('explorer')
+  assert.equal(first.columns.length, 1)
+  state.toggleWorkbench()
+  assert.equal(first.columns.length, 2)
+  assert.equal(first.workbenchCollapsed, false)
+  assert.equal(first.columns[1].active, 'explorer')
 })

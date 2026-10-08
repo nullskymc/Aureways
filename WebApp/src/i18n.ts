@@ -1,6 +1,15 @@
 import { app } from './store'
 
 const zh: Record<string, string> = {
+  chat: '聊天',
+  workspaceTabs: '工作区标签页',
+  hideWorkbench: '收起右侧标签区',
+  showWorkbench: '展开右侧标签区',
+  toggleFileTree: '切换文件树',
+  addTab: '新建标签页',
+  openFileTab: '打开文件',
+  openFileHint: '从工作区目录树中选择文件',
+  splitRight: '向右分栏',
   newChat: '新对话',
   search: '搜索会话',
   settings: '设置',
@@ -184,6 +193,15 @@ const zh: Record<string, string> = {
   quitApp: '退出',
 }
 const en: Record<string, string> = {
+  chat: 'Chat',
+  workspaceTabs: 'Workspace tabs',
+  hideWorkbench: 'Hide workspace tabs',
+  showWorkbench: 'Show workspace tabs',
+  toggleFileTree: 'Toggle file tree',
+  addTab: 'New tab',
+  openFileTab: 'Open file',
+  openFileHint: 'Select a file from the workspace tree',
+  splitRight: 'Split right',
   newChat: 'New chat',
   search: 'Search chats',
   settings: 'Settings',

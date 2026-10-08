@@ -334,7 +334,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 }
 .dock > * { width: 100%; max-width: var(--col); pointer-events: auto; }
 .landing-dock { bottom: auto; top: 44%; background: none; padding-top: 0; }
-.composer-wrap { position: relative; }
+.composer-wrap { position: relative; container-type: inline-size; }
 .composer {
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 22px;
   box-shadow: var(--shadow); padding: 12px 10px 8px 16px; transition: border-color 0.15s;
@@ -346,7 +346,9 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
   -webkit-user-select: text; user-select: text;
 }
 .composer textarea::placeholder { color: var(--text-3); }
-.composer-bar { display: flex; align-items: center; gap: 2px; margin: 8px 0 0 -8px; }
+.composer-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 8px 0 0 -8px; }
+.composer-bar .chip { min-width: 0; max-width: min(220px, 100%); }
+.composer-actions { display: flex; flex: none; align-items: center; margin-left: auto; }
 .chip {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border-radius: 14px;
   font-size: 12.5px; color: var(--text-2); white-space: nowrap; max-width: 220px;
@@ -678,7 +680,7 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 /* The native layer paints --main-bg edge to edge and floats glass under
    [data-glass] elements, so those (and the main column) stay transparent. */
 html.glass .main { background: transparent; border-left: 0; }
-html.glass .sidebar { padding: 0 8px 8px; }
+html.glass .sidebar { padding: 0; }
 html.glass .sidebar-resizer { margin: 0 -4px; }
 /* Header and dock float over nothing: the transcript scrolls between them
    (fading at both ends) so glass under the controls/composer stays clean. */
@@ -753,4 +755,107 @@ html.in-composer .composer textarea { max-height: 300px; }
 }
 @container (max-width: 640px) {
   .reader-column, .reader-source { padding-left: 18px; padding-right: 18px; }
+}
+
+/* ---- Workspace tabs: fixed chat + a shared right-hand workbench ----------- */
+/* Browser fallback only. In WKWebView a single AppKit backdrop owns this
+   entire band, including the native traffic lights and sidebar gutters. */
+:root { --tab-bar-bg: light-dark(#f0f0f0, #202022); }
+.app::before { content: ''; position: absolute; inset: 0 0 auto; height: var(--head-h); background: var(--tab-bar-bg); pointer-events: none; }
+.native-titlebar::before { display: none; }
+/* One edge-to-edge chrome column; no floating-card gutter under the titlebar. */
+.sidebar { position: relative; background: var(--tab-bar-bg); box-shadow: inset -1px 0 var(--border); }
+html.glass .native-titlebar .sidebar { background: transparent; }
+.sidebar-actions { padding-top: 8px; }
+.sidebar-head { padding-right: 12px; }
+.column[hidden] { display: none !important; }
+.workbench-toggle { flex: none; margin-left: 4px; }
+.workbench-toggle[aria-expanded='false'] { color: var(--text-2); }
+.native-titlebar .sidebar-head, .native-titlebar .main-head,
+html.glass .native-titlebar .tab-strip { background: transparent; }
+.native-titlebar .main-head { overflow: hidden; }
+.native-titlebar .chat-panel { top: var(--head-h); overflow: hidden; }
+.native-titlebar .chat-panel .transcript { top: 0; }
+.native-titlebar .chat-column .landing { top: 0; height: 54%; }
+.sidebar-head { background: var(--tab-bar-bg); }
+.tab-strip { background: var(--tab-bar-bg); gap: 4px; padding-right: 8px; }
+.tab-strip::after { display: none; }
+.tab-strip .insp-tab-strip { flex: 0 1 auto; gap: 4px; height: 30px; align-items: center; }
+.insp-tab { position: relative; flex: 0 0 180px; width: 180px; min-width: 92px; max-width: 210px; height: 28px; border-radius: 6px; color: var(--text-3); }
+.insp-tab::after { content: ''; position: absolute; right: -3px; top: 8px; bottom: 8px; width: 1px; background: var(--border); }
+.insp-tab.active::after, .insp-tab:has(+ .active)::after { display: none; }
+.insp-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px light-dark(#00000005, #00000018); }
+.insp-tab-main { flex: 1; min-width: 0; height: 28px; padding: 0 9px; gap: 6px; font-size: 12px; }
+.insp-tab-main:focus-visible { outline-offset: -2px; border-radius: 6px; }
+.insp-tab-x { flex: none; width: 18px; margin: 0 4px 0 0; }
+.insp-tab:focus-within .insp-tab-x { opacity: 1; }
+.tab-head-spacer { flex: 1; min-width: 12px; }
+.tab-head-actions { display: flex; flex: none; gap: 5px; }
+.tab-head-actions button:disabled { opacity: .3; }
+.tab-add { margin-left: 3px; }
+.chat-head .insp-tab-strip { flex: 1; }
+.chat-tab, .chat-tab.active, .chat-tab:hover { min-width: 0; flex: 1; max-width: none; background: none; box-shadow: none; color: var(--text); }
+.chat-tab::after { display: none; }
+.chat-tab .insp-tab-main { font-weight: 600; }
+.column { min-width: 200px; }
+.chat-column { min-width: 260px; container-type: inline-size; }
+.chat-panel { position: absolute; inset: 0; }
+.chat-column .landing { top: var(--head-h); height: calc(54% - var(--head-h)); padding: 0 22px 32px; }
+.chat-column .landing-mark { background: none; box-shadow: none; border: 0; color: var(--text-3); margin-bottom: 16px; }
+.chat-column .landing h1 { font-size: clamp(19px, 4.5cqw, 26px); font-weight: 500; line-height: 1.5; }
+.chat-column .ws-picker { color: inherit; font-weight: inherit; padding: 0; border-radius: 0; border-bottom: 1px solid var(--border-strong); }
+.chat-column .ws-picker .icon, .chat-column .landing-hint { display: none; }
+.chat-column .dock { padding: 14px 14px 14px; }
+.chat-column .landing-dock { top: auto; bottom: 0; }
+.workspace-content { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.workspace-tab-content { flex: 1; min-width: 0; min-height: 0; }
+.workspace-editor { display: flex; flex: 1; flex-direction: column; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.workspace-sidebar { flex: none; position: relative; display: flex; flex-direction: column; min-width: 130px; max-width: 38%; border-left: 1px solid var(--border); background: var(--main-bg); }
+.workspace-sidebar .tree-head { height: 38px; padding: 0 8px; gap: 4px; }
+.workspace-sidebar .tree-root { font-weight: 400; color: var(--text-3); font-size: 11px; }
+.workspace-sidebar .tree-filter { height: 26px; margin: 4px 7px; padding: 0 7px; background: none; border: 1px solid var(--border); border-radius: 7px; }
+.workspace-sidebar .tree-filter input { font-size: 11px; }
+.workspace-sidebar .tree-row { font-size: 11.5px; height: 26px; gap: 5px; }
+.workspace-sidebar .tree-icon.dir { color: var(--text-3); }
+.workspace-sidebar .tree-row.selected { background: var(--fill); }
+.file-explorer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.explorer-head { height: 38px; }
+.explorer-root { padding: 2px 9px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.explorer-empty { flex: 1; display: grid; place-items: center; padding: 16px 16px 54px; }
+.explorer-open { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.explorer-open > .icon { color: var(--text-3); margin-bottom: 3px; }
+.explorer-open strong { font-size: 14px; font-weight: 500; }
+.explorer-open > span { font-size: 11.5px; color: var(--text-3); }
+.review-toolbar { display: flex; align-items: center; flex: none; min-height: 38px; padding: 4px 9px; gap: 9px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.review-toolbar .seg { margin: 0; flex: none; padding: 2px; border: 1px solid var(--border); border-radius: 14px; background: none; }
+.review-toolbar .seg button { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.review-toolbar .diffstat { white-space: nowrap; font-size: 11px; }
+.review-branch { display: flex; align-items: center; gap: 5px; font-size: 11px; white-space: nowrap; padding: 3px 9px; border: 1px solid var(--border); border-radius: 14px; }
+.review-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-3); font-size: 12px; padding: 20px; text-align: center; }
+.review-editor .file-head { height: 32px; padding: 0 10px; font-size: 11px; }
+.review-editor .file-path { flex: 1; }
+.review-editor .diff-pane { min-width: 0; }
+.review-files { padding-top: 2px; }
+.review-folder > summary { list-style: none; display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 11px; color: var(--text-2); }
+.review-folder > summary::-webkit-details-marker { display: none; }
+.review-folder > summary span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.review-folder[open] > summary > .icon { transform: rotate(90deg); }
+.review-file > .icon { color: var(--red); }
+.review-file .tree-name { flex: 1; }
+.review-file .diffstat { font-size: 10px; }
+.review-editor .hunk-head { font-size: 10px; background: var(--fill-2); }
+.review-editor .dl { font-size: 11px; line-height: 21px; }
+.review-editor .dl.ins { box-shadow: inset 3px 0 var(--green); }
+.review-editor .dl.del { box-shadow: inset 3px 0 var(--red); }
+@container (max-width: 420px) {
+  .composer-bar .chip { padding-inline: 6px; gap: 3px; font-size: 12px; max-width: 120px; }
+  .composer-bar .chip-icon { display: none; }
+  .workspace-sidebar { max-width: 42%; min-width: 110px; }
+  .workspace-sidebar .tree-head > .icon, .workspace-sidebar .tree-root { display: none; }
+  .review-branch { display: none; }
+}
+@container (max-width: 340px) {
+  .chat-column .dock { padding: 10px; }
+  .chat-column .landing { padding-inline: 12px; }
+  .head-tools { gap: 0; margin-right: 0; }
 }

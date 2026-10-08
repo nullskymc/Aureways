@@ -46,6 +46,8 @@ func userContentController(_ userContentController: WKUserContentController, did
             let attachments = pendingAttachments
             model.sendFromComposer(text: text, attachments: attachments)
             pendingAttachments = []
+        case "focusComposer":
+            if role == .main { sendCommand("focusComposer") }
         case "cancel":
             model.cancel()
         case "newSession":

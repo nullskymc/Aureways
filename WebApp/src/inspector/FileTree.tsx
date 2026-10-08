@@ -11,7 +11,7 @@ import { filesVersion, openFile } from './state'
 const expanded = new Set<string>()
 const cache = new Map<string, DirEntry[]>()
 
-export function FileTree({ root, onHide }: { root: string; onHide?: () => void }) {
+export function FileTree({ root, onHide, filterId = 'file-tree-filter' }: { root: string; onHide?: () => void; filterId?: string }) {
   const version = useSignal(0)
   const query = useSignal('')
   const hits = useSignal<SearchHit[] | null>(null)
@@ -109,7 +109,7 @@ export function FileTree({ root, onHide }: { root: string; onHide?: () => void }
       </div>
       <label class="tree-filter">
         <Icon name="search" size={12} />
-        <input id="file-tree-filter" placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Escape' && (query.value = '')} />
+        <input id={filterId} placeholder={t('filterFiles')} value={query.value} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.key === 'Escape' && (query.value = '')} />
       </label>
       <div class="tree-list">
         {hits.value

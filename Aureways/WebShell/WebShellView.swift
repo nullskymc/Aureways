@@ -54,16 +54,18 @@ struct WebShellRepresentable: NSViewRepresentable {
     }
 }
 
-/// Window content: content background + Liquid Glass layer, transparent web view, titlebar drag strip.
+/// Window content: flat chrome + Liquid Glass controls, transparent web view, titlebar drag strip.
 /// Frames only (autoresizing masks), no Auto Layout constraints.
 @MainActor
 final class WebShellHostView: NSView {
-    static let titlebarHeight: CGFloat = 46
+    static let titlebarHeight: CGFloat = 52
+    static let fullscreenTitlebarHeight: CGFloat = 44
 
     let bridge: WebShellBridge
     let webView: WKWebView
     let role: WebShellBridge.Role
     private let glassLayer = GlassLayerView()
+    private let titlebarBackdrop = TitlebarBackdropView()
     private let dragStrip = TitlebarDragStrip()
     private let navigationGuard = WebShellNavigationGuard()
     private var windowObservers: [NSObjectProtocol] = []
@@ -84,6 +86,11 @@ final class WebShellHostView: NSView {
             glassLayer.frame = bounds
             glassLayer.autoresizingMask = [.width, .height]
             addSubview(glassLayer)
+            // One native surface for traffic lights + all web headers. Above
+            // the matching sidebar surface, below transparent WKWebView.
+            titlebarBackdrop.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Self.titlebarHeight)
+            titlebarBackdrop.autoresizingMask = [.width, .maxYMargin]
+            addSubview(titlebarBackdrop)
         }
 
         webView.frame = bounds
@@ -106,12 +113,10 @@ final class WebShellHostView: NSView {
         bridge.webView = webView
         bridge.hostView = self
         shellWebView.bridge = bridge
-        bridge.onDragRegions = { [weak self] rects, height in
+        bridge.onDragRegions = { [weak self] rects, _ in
             guard let self else { return }
             self.dragStrip.exclusions = rects
-            if let height, height > 0, abs(self.dragStrip.frame.height - height) > 0.5 {
-                self.dragStrip.frame = NSRect(x: 0, y: 0, width: self.bounds.width, height: height)
-            }
+            // Geometry comes from AppKit, not a delayed page measurement.
         }
         bridge.onAppearance = { [weak self] value in self?.applyAppearance(value) }
         bridge.onGlassRects = { [weak self] rects in
@@ -255,10 +260,14 @@ final class WebShellHostView: NSView {
             union = union.union(button.convert(button.bounds, to: self))
         }
         let fullscreen = window.styleMask.contains(.fullScreen)
+        let height = fullscreen ? Self.fullscreenTitlebarHeight : Self.titlebarHeight
+        let headerFrame = NSRect(x: 0, y: 0, width: bounds.width, height: height)
+        if titlebarBackdrop.frame != headerFrame { titlebarBackdrop.frame = headerFrame }
+        if dragStrip.frame != headerFrame { dragStrip.frame = headerFrame }
         bridge.updateChrome(WebShellBridge.Chrome(
             trafficLights: union.isNull ? .zero : union,
             fullscreen: fullscreen,
-            titlebarHeight: Self.titlebarHeight
+            titlebarHeight: height
         ))
     }
 
@@ -336,6 +345,36 @@ final class ShellWebView: WKWebView {
     }
 }
 
+/// Shared chrome surface for the titlebar and edge-to-edge sidebar. Keeping
+/// both on the same native color avoids a glass bevel cut off by the header.
+/// Only NSWindow clips the outer corners; this view never intercepts input.
+final class TitlebarBackdropView: NSView {
+    override var isFlipped: Bool { true }
+    override var wantsUpdateLayer: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = (dark
+            ? NSColor(srgbRed: 32 / 255.0, green: 32 / 255.0, blue: 34 / 255.0, alpha: 1)
+            : NSColor(srgbRed: 240 / 255.0, green: 240 / 255.0, blue: 240 / 255.0, alpha: 1)).cgColor
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 /// `-webkit-app-region` does not exist in WKWebView. This strip sits over the
 /// header and drags the window; the web app reports rects of its header
 /// controls so clicks there fall through to the page.
@@ -402,9 +441,9 @@ final class WebShellNavigationGuard: NSObject, WKNavigationDelegate {
 }
 
 /// Native layer under the transparent web view: the main content background
-/// (matches `--main-bg` in styles.css) and `NSGlassEffectView`s at rects the
-/// page reports for elements marked `data-glass` (sidebar panel, header
-/// control groups, composer). Frames only; it never affects web or SwiftUI
+/// (matches `--main-bg` in styles.css), flat sidebar chrome, and floating
+/// `NSGlassEffectView`s for header controls and the composer. All use rects
+/// reported by `data-glass` elements. Frames only; it never affects web or SwiftUI
 /// layout, and it never takes mouse events.
 @MainActor
 final class GlassLayerView: NSView {
@@ -423,6 +462,7 @@ final class GlassLayerView: NSView {
             : NSColor(srgbRed: 0xfd / 255.0, green: 0xfd / 255.0, blue: 0xfd / 255.0, alpha: 1)
     }
 
+    private let sidebarBackdrop = TitlebarBackdropView()
     private let container = NSGlassEffectContainerView()
     private let content = FlippedView()
     private var views: [NSGlassEffectView] = []
@@ -434,6 +474,9 @@ final class GlassLayerView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        sidebarBackdrop.isHidden = true
+        sidebarBackdrop.autoresizingMask = [.height]
+        addSubview(sidebarBackdrop)
         container.frame = bounds
         container.autoresizingMask = [.width, .height]
         content.frame = container.bounds
@@ -459,22 +502,28 @@ final class GlassLayerView: NSView {
     func apply(_ next: [Panel]) {
         guard next != panels else { return }
         panels = next
-        while views.count < next.count {
+        if let sidebar = next.first(where: { $0.kind == "sidebar" }) {
+            sidebarBackdrop.frame = sidebar.frame
+            sidebarBackdrop.isHidden = false
+        } else {
+            sidebarBackdrop.isHidden = true
+        }
+        // Sidebar is part of the window chrome, not a floating glass card.
+        // Glass remains for floating controls and the composer overlay.
+        let floating = next.filter { $0.kind != "sidebar" }
+        while views.count < floating.count {
             let glass = NSGlassEffectView()
             glass.contentView = NSView()
             content.addSubview(glass)
             views.append(glass)
         }
-        while views.count > next.count {
+        while views.count > floating.count {
             views.removeLast().removeFromSuperview()
         }
-        for (glass, panel) in zip(views, next) {
+        for (glass, panel) in zip(views, floating) {
             if glass.frame != panel.frame { glass.frame = panel.frame }
-            // Follow live resize until the page reports again: the sidebar
-            // panel stretches with the window height, right-hand controls
-            // keep their distance from the right edge.
-            glass.autoresizingMask = panel.kind == "sidebar" ? [.height]
-                : panel.frame.midX > bounds.midX ? [.minXMargin] : []
+            // Right-hand floating controls keep their distance from the edge.
+            glass.autoresizingMask = panel.frame.midX > bounds.midX ? [.minXMargin] : []
             if glass.cornerRadius != panel.radius { glass.cornerRadius = panel.radius }
         }
     }
@@ -493,17 +542,15 @@ private extension NSColor {
     }
 }
 
-/// Insets the traffic lights inside the floating sidebar glass panel
-/// (`glass.ts` insets the panel 8 pt): first button 12 pt from the panel's
-/// left edge, vertically centred on a 52 pt header row (the web header
-/// follows via `chrome.trafficLights`). The titlebar container is grown to
+/// Positions traffic lights 20 pt from the window edge, vertically centred
+/// on the shared 52 pt chrome row (the web header follows native geometry). The titlebar container is grown to
 /// that height so the moved buttons stay inside it and clickable. Re-applied
 /// on resize / fullscreen exit / key / appearance changes and whenever AppKit
 /// re-lays out the titlebar (frame-change notifications). Fullscreen is left
 /// to AppKit.
 @MainActor
 final class TrafficLightLayout {
-    static let headerHeight: CGFloat = 52
+    static let headerHeight = WebShellHostView.titlebarHeight
     static let leading: CGFloat = 20
 
     private weak var window: NSWindow?

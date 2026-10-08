@@ -30,8 +30,8 @@ function pref<T>(key: string, initial: T): Signal<T> {
 export const prefs = {
   sidebarOpen: pref('sidebarOpen', true),
   sidebarWidth: pref('sidebarWidth', 272),
-  inspectorOpen: pref('inspectorOpen', false),
-  inspectorWidth: pref('inspectorWidth', 420),
+  inspectorOpen: pref('inspectorOpen', true),
+  inspectorWidth: pref('inspectorWidth', 240),
   collapsedGroups: pref<string[]>('collapsedGroups', []),
   showHidden: pref('showHidden', false),
   /** Markdown paths kept in the Documents shelf. Workspace tabs are not saved. */

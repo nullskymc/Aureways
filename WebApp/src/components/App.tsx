@@ -5,12 +5,12 @@ import { nativeMenu, post, type MenuItem } from '../bridge'
 import { t } from '../i18n'
 import { app, composerH, composerTotal, route, setTicking, uiCommand } from '../store'
 import { prefs } from '../prefs'
-import { currentPane, homeIsChat, openTerminal, resizeColumns, selectTab, showInspector, splitFocused, type Column } from '../inspector/state'
+import { currentPane, homeIsChat, openTerminal, resizeColumns, selectTab, showInspector, splitFocused, toggleWorkbench, type Column } from '../inspector/state'
 import { ColumnBody, TabStrip } from '../inspector/Inspector'
-import { FileTree } from '../inspector/FileTree'
 import '../reader/state'
 import { lazy } from './Lazy'
 import { installGlass } from '../glass'
+import { headerHeight, observeTitlebar } from '../chrome'
 
 const SettingsContent = lazy(() => import('../settings/Settings').then((m) => m.SettingsContent))
 import { BackgroundRequests } from './Cards'
@@ -20,8 +20,6 @@ import { Composer } from './Composer'
 import { HarnessIcon, Icon } from './Icon'
 import { Sidebar } from './Sidebar'
 import { Transcript } from './Transcript'
-
-const DRAG_SELECTOR = 'button, input, textarea, a, select, [data-no-drag]'
 
 export function App() {
   const state = app.value
@@ -37,13 +35,11 @@ export function App() {
         sidebarOpen.value = !sidebarOpen.value
         break
       case 'toggleInspector':
-        if (route.peek().name === 'documents' || !app.peek()?.selectedSessionId) break
-        prefs.inspectorOpen.value = !prefs.inspectorOpen.value
+        toggleWorkbench()
         break
       case 'showFiles':
-        if (route.peek().name === 'documents' || !app.peek()?.selectedSessionId) break
-        prefs.inspectorOpen.value = true
-        queueMicrotask(() => document.getElementById('file-tree-filter')?.focus())
+        showInspector()
+        queueMicrotask(() => document.querySelector<HTMLInputElement>('.focused .tree-filter input')?.focus())
         break
       case 'showChanges':
         route.value = { name: 'main' }
@@ -70,7 +66,6 @@ export function App() {
 
   const r = route.value
   const isSettings = r.name === 'settings'
-  const documents = r.name === 'documents'
   const settingsSection = r.name === 'settings' ? r.section : undefined
   const onChat = !isSettings && homeIsChat()
 
@@ -118,13 +113,9 @@ export function App() {
 
   const headH = headerHeight(state)
   useLayoutEffect(() => {
-    reportDragRegions(headH)
-  })
-  useEffect(() => {
-    const onResize = () => reportDragRegions(headerHeight(app.peek()))
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+    const root = document.querySelector<HTMLElement>('.app')
+    if (root) return observeTitlebar(root, headH)
+  }, [headH, !!state])
 
   const anyLive = !!state?.sessions.some((s) => s.streaming)
   useEffect(() => setTicking(anyLive), [anyLive])
@@ -141,7 +132,7 @@ export function App() {
 
   return (
     <div
-      class={'app' + (isSettings ? ' settings-mode' : '') + (sidebarOpen.value ? '' : ' no-sidebar')}
+      class={'app' + (state.chrome.nativeTitlebar ? ' native-titlebar' : '') + (isSettings ? ' settings-mode' : '') + (sidebarOpen.value ? '' : ' no-sidebar')}
       style={{
         '--sidebar-w': `${sidebarWidth.value}px`,
         '--head-h': `${headH}px`,
@@ -192,18 +183,12 @@ export function App() {
           />
         )}
       </main>
-      {!isSettings && !documents && !!state.selectedSessionId && prefs.inspectorOpen.value && (
-        <aside class="inspector" style={{ width: prefs.inspectorWidth.value }}>
-          <InspectorResizer width={prefs.inspectorWidth} />
-          <FileTree root={state.inspectorRoot} onHide={() => (prefs.inspectorOpen.value = false)} />
-        </aside>
-      )}
       </div>
     </div>
   )
 }
 
-function EditorColumns({ state, session, sidebarOpen, attention, overlay, glass, dock, dockHeight }: {
+export function EditorColumns({ state, session, sidebarOpen, attention, overlay, glass, dock, dockHeight }: {
   state: AppState
   session: Session | null
   sidebarOpen: boolean
@@ -215,31 +200,29 @@ function EditorColumns({ state, session, sidebarOpen, attention, overlay, glass,
 }) {
   const pane = currentPane()
   const documents = route.value.name === 'documents'
-  const treeOpen = prefs.inspectorOpen.value
   return (
-    <div class="editors">
+    <div class={'editors' + (!documents && pane.workbenchCollapsed ? ' workbench-collapsed' : '')}>
       {pane.columns.map((column, index) => (
-        <ColumnFrame key={column.id} column={column} index={index}>
+        <ColumnFrame key={column.id} column={column} index={index} concealed={!documents && pane.workbenchCollapsed && index > 0}>
           <TabStrip
             state={state}
             sidebarOpen={sidebarOpen}
             session={session}
             column={column}
             index={index}
-            treeToggle={!!session && !documents && !treeOpen && index === pane.columns.length - 1}
             documents={documents}
           />
-          {index === 0 && column.active === 'chat' && (session ? (
-            <Transcript streaming={session.streaming} padBottom={dockHeight + 24} jumpBottom={overlay ? dockHeight + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
-          ) : index === 0 && column.active === 'chat' ? (
-            <Landing state={state} />
-          ) : null)}
           {index === 0 && column.active === 'chat' && (
-            <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
-              {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
+            <div class="chat-panel" id={'panel-' + column.id} role="tabpanel" aria-label={t('chat')}>
+              {session ? (
+                <Transcript streaming={session.streaming} padBottom={dockHeight + 24} jumpBottom={overlay ? dockHeight + 12 + Math.max(0, composerTotal.value - composerH.value) : undefined} padTop={glass ? 12 : 64} />
+              ) : <Landing state={state} />}
+              <div ref={dock} class={'dock' + (session ? '' : ' landing-dock')}>
+                {overlay ? <div class="composer-slot" data-glass="slot" style={{ height: composerH.value }} /> : <Composer state={state} session={session} />}
+              </div>
             </div>
           )}
-          <ColumnBody column={column} hidden={column.active === 'chat'} />
+          <ColumnBody column={column} hidden={column.active === 'chat'} visible={documents || !pane.workbenchCollapsed || index === 0} />
         </ColumnFrame>
       ))}
       {attention && (
@@ -251,13 +234,15 @@ function EditorColumns({ state, session, sidebarOpen, attention, overlay, glass,
   )
 }
 
-function ColumnFrame({ column, index, children }: { column: Column; index: number; children: ComponentChildren }) {
+function ColumnFrame({ column, index, concealed, children }: { column: Column; index: number; concealed: boolean; children: ComponentChildren }) {
   const pane = currentPane()
   return (
     <>
-      {index > 0 && <ColumnResizer index={index - 1} />}
+      {index > 0 && !concealed && <ColumnResizer index={index - 1} />}
       <section
-        class={'column' + (pane.focus === index ? ' focused' : '')}
+        id={'column-' + column.id}
+        hidden={concealed}
+        class={'column' + (pane.focus === index ? ' focused' : '') + (column.active === 'chat' ? ' chat-column' : '')}
         style={{ flex: `${column.size} 1 0` }}
         onMouseDown={() => {
           if (currentPane().focus !== index) selectTab(column.active)
@@ -283,31 +268,10 @@ function ColumnResizer({ index }: { index: number }) {
         const startX = e.clientX
         const move = (ev: MouseEvent) => {
           const width = left + right
-          const nextLeft = Math.min(width - 160, Math.max(160, left + ev.clientX - startX))
+          const minLeft = cols[index]?.classList.contains('chat-column') ? 260 : 200
+          const nextLeft = Math.min(width - 200, Math.max(minLeft, left + ev.clientX - startX))
           resizeColumns(index, nextLeft, width - nextLeft)
         }
-        const up = () => {
-          window.removeEventListener('mousemove', move)
-          window.removeEventListener('mouseup', up)
-          document.body.classList.remove('resizing')
-        }
-        document.body.classList.add('resizing')
-        window.addEventListener('mousemove', move)
-        window.addEventListener('mouseup', up)
-      }}
-    />
-  )
-}
-
-function InspectorResizer({ width }: { width: { value: number } }) {
-  return (
-    <div
-      class="insp-resizer"
-      onMouseDown={(e) => {
-        e.preventDefault()
-        const startX = e.clientX
-        const start = width.value
-        const move = (ev: MouseEvent) => (width.value = Math.round(Math.max(240, Math.min(640, start + startX - ev.clientX))))
         const up = () => {
           window.removeEventListener('mousemove', move)
           window.removeEventListener('mouseup', up)
@@ -402,33 +366,4 @@ function SidebarResizer({ width }: { width: { value: number } }) {
       }}
     />
   )
-}
-
-/** Header rows are vertically centred on the traffic lights, like native toolbars. */
-function headerHeight(state: AppState | null): number {
-  const l = state?.chrome.trafficLights
-  if (!l || !l.h || state?.chrome.fullscreen) return 44
-  return Math.round(Math.max(34, (l.y + l.h / 2) * 2))
-}
-
-let lastRegions = ''
-function reportDragRegions(height: number) {
-  requestAnimationFrame(() => {
-    const rects: { x: number; y: number; w: number; h: number }[] = []
-    document.querySelectorAll(DRAG_SELECTOR).forEach((el) => {
-      const r = el.getBoundingClientRect()
-      if (r.width === 0 || r.top >= height || r.bottom <= 0) return
-      rects.push({ x: Math.floor(r.left) - 2, y: Math.floor(r.top) - 2, w: Math.ceil(r.width) + 4, h: Math.ceil(r.height) + 4 })
-    })
-    // Resizers must stay grabbable all the way up.
-    document.querySelectorAll('.sidebar-resizer, .col-resizer, .insp-resizer').forEach((el) => {
-      const r = el.getBoundingClientRect()
-      rects.push({ x: r.left, y: 0, w: r.width, h: height })
-    })
-    const json = JSON.stringify(rects)
-    if (json !== lastRegions) {
-      lastRegions = json
-      post('dragRegions', { rects, height })
-    }
-  })
 }

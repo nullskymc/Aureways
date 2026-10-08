@@ -101,7 +101,7 @@ struct AurewaysApp: App {
                     WebShellBridge.current?.sendCommand("toggleSidebar")
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
-                Button("切换检查器".localized) {
+                Button("切换右侧标签区".localized) {
                     WebShellBridge.current?.sendCommand("toggleInspector")
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
