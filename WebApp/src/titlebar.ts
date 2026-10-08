@@ -14,7 +14,7 @@ export interface TitlebarState {
   sidebar: boolean
   /** The right capsule (file tree + inspector) is shown. */
   right: boolean
-  /** The "+" circle (new workbench / Documents tab) is shown. */
+  /** The "+" circle (new workbench / Documents tab) is shown: not while the workbench is closed. */
   add: boolean
   files: boolean
   inspector: boolean
@@ -34,7 +34,7 @@ export function titlebarState(): TitlebarState {
   return {
     sidebar: prefs.sidebarOpen.value,
     right: main,
-    add: main || route.value.name === 'documents',
+    add: inspector || route.value.name === 'documents',
     files: inspector && treeTabShown() && prefs.inspectorOpen.value,
     inspector,
   }

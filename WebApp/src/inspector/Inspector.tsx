@@ -27,7 +27,10 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
   const workbenchVisible = pane.columns.length > 1 && !pane.workbenchCollapsed
   const navigatorVisible = prefs.inspectorOpen.value && column.tabs.find((tab) => tab.id === column.active)?.kind !== 'term'
   const strip = useRef<HTMLDivElement>(null)
-  const pad = index > 0 || sidebarOpen ? 6 : leadingPad(state, 6)
+  const chatTitle = !documents && index === 0 && column.tabs.length === 1 && chat
+  // The chat title lines up with the content inset (16); with the sidebar
+  // closed it follows the native sidebar circle and New chat.
+  const pad = chatTitle ? (sidebarOpen ? 16 : leadingPad(state, 16)) : index > 0 || sidebarOpen ? 6 : leadingPad(state, 6)
   useEffect(() => {
     const element = strip.current
     if (!element) return
@@ -46,10 +49,11 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
   // and active-tab platter are drawn natively underneath (data-glass="tabs").
   // The chat column has no tabs to manage: just its title.
   const native = nativeTitlebarControls(state)
-  const chatTitle = !documents && index === 0 && column.tabs.length === 1 && chat
   const lastVisible = pane.workbenchCollapsed ? index === 0 : index === pane.columns.length - 1
+  // Clear the native right group: one circle in Documents ("+") or with the
+  // workbench closed (inspector toggle); otherwise "+" and the two toggles.
   const padRight = native && lastVisible && (route.value.name === 'main' || documents)
-    ? (documents ? state.chrome.addInset : state.chrome.trailingInset) : undefined
+    ? (documents || !workbenchVisible ? state.chrome.addInset : state.chrome.trailingInset) : undefined
   const stripEl = (
     <div ref={strip} class="insp-tab-strip" role="tablist" aria-label={chat ? t('chat') : t('workspaceTabs')} data-no-drag onKeyDown={(e) => {
       if (!(e.target instanceof HTMLElement) || !e.target.matches('[role="tab"]')) return

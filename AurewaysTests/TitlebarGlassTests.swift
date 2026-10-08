@@ -23,6 +23,35 @@ final class TitlebarGlassTests: XCTestCase {
         XCTAssertEqual(insets.addOnly, 50)
     }
 
+    func testClosedWorkbenchLeavesOnlyTheInspectorToggle() {
+        XCTAssertEqual(TitlebarMetrics.rightFrame(width: 1200, centerY: 26, compact: true), CGRect(x: 1158, y: 11, width: 30, height: 30))
+        let compact = TitlebarMetrics.rightButtonFrames(width: 30, compact: true)
+        XCTAssertEqual(compact.inspector.midX, 15, "inspector toggle centred in the circle")
+        let full = TitlebarMetrics.rightButtonFrames(width: 68, compact: false)
+        XCTAssertEqual(full.fileTree, CGRect(x: 2, y: 0, width: 32, height: 30))
+        XCTAssertEqual(full.inspector, CGRect(x: 34, y: 0, width: 32, height: 30))
+
+        let buttons = TitlebarButtons(frame: CGRect(x: 0, y: 0, width: 1200, height: 52))
+        buttons.layout(lights: lights, fullscreen: false, headerHeight: 52)
+        buttons.setRightVisible(true, add: false, compact: true)
+        XCTAssertEqual(buttons.rightGlass.frame, CGRect(x: 1158, y: 11, width: 30, height: 30))
+        XCTAssertFalse(buttons.isAddVisible)
+        XCTAssertFalse(buttons.isFileTreeVisible)
+        // Workbench opens: "+" and the file tree toggle come back, laid out natively.
+        buttons.setRightVisible(true, add: true, compact: false)
+        XCTAssertEqual(buttons.rightGlass.frame, CGRect(x: 1120, y: 11, width: 68, height: 30))
+        XCTAssertEqual(buttons.addButtonFrame, CGRect(x: 1082, y: 11, width: 30, height: 30))
+        XCTAssertTrue(buttons.isAddVisible)
+        XCTAssertTrue(buttons.isFileTreeVisible)
+        // Live resize: the group follows the right edge without a page message.
+        buttons.setFrameSize(NSSize(width: 1000, height: 52))
+        XCTAssertEqual(buttons.rightGlass.frame.maxX, 988)
+        XCTAssertEqual(buttons.addButtonFrame.maxX, 1000 - 12 - 68 - 8)
+        // Documents: no toggles, "+" alone at the edge.
+        buttons.setRightVisible(false, add: true)
+        XCTAssertEqual(buttons.addButtonFrame, CGRect(x: 958, y: 11, width: 30, height: 30))
+    }
+
     func testTabStripReportIsResizeInvariant() {
         // Page at 1000 pt: strip left 650, width 330, in a column with 37.5 % of
         // the free width before it and 25 % of it as its own width.
