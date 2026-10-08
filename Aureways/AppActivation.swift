@@ -1,12 +1,26 @@
 import AppKit
 import SwiftUI
 
-/// Menu bar status item icon (template image).
+/// Menu bar status item: the template icon, plus the lowest remaining quota next to
+/// it when the 菜单栏显示剩余额度 setting asks for it (default: only below 20%).
 struct MenuBarExtraLabel: View {
+    let model: AppModel
+    @AppStorage(QuotaIndicatorMode.defaultsKey) private var indicatorRaw = QuotaIndicatorMode.whenLow.rawValue
+
     var body: some View {
-        Image(nsImage: Self.templateImage)
-            .renderingMode(.template)
-            .accessibilityLabel("Aureways")
+        let mode = QuotaIndicatorMode(rawValue: indicatorRaw) ?? .whenLow
+        let ids = Set(model.agents.filter { model.isAgentEnabled($0) && model.availability[$0.id] == true }.map(\.id))
+        let text = mode.label(for: model.quotaStore.quotas.values.filter { ids.contains($0.harnessId) })
+        HStack(spacing: 3) {
+            Image(nsImage: Self.templateImage)
+                .renderingMode(.template)
+            if let text {
+                Text(text)
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text.map { "Aureways, " + "剩余额度 %@".localized($0) } ?? "Aureways")
     }
 
     private static let templateImage: NSImage = {
@@ -87,6 +101,32 @@ enum AppActivation {
             window.close()
         }
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    // Four-char codes spelled out ('aevt', 'quit', 'why?', 'spid') so this needs no Carbon import.
+    static let coreEventClass = AEEventClass(0x6165_7674)
+    static let quitEventID = AEEventID(0x7175_6974)
+    static let quitReasonKeyword = AEKeyword(0x7768_793F)
+    static let senderPIDKeyword = AEKeyword(0x7370_6964)
+
+    /// A quit Apple Event (`aevt/quit`) that should really end the process: one sent
+    /// for logout / restart / shutdown (it carries a `why?` reason), or one from any
+    /// sender other than the Dock. The Dock's 退出 keeps the old behaviour and only
+    /// resigns to the menu bar, like ⌘Q.
+    @MainActor
+    static func isExternalQuitRequest(_ event: NSAppleEventDescriptor?) -> Bool {
+        guard let event else { return false }
+        let hasReason = event.paramDescriptor(forKeyword: quitReasonKeyword) != nil
+        let senderPID = event.attributeDescriptor(forKeyword: senderPIDKeyword)?.int32Value ?? 0
+        let senderBundleID = senderPID > 0 ? NSRunningApplication(processIdentifier: pid_t(senderPID))?.bundleIdentifier : nil
+        return shouldQuit(eventClass: event.eventClass, eventID: event.eventID, hasQuitReason: hasReason, senderBundleID: senderBundleID)
+    }
+
+    /// Pure part of `isExternalQuitRequest` (unit tested).
+    static func shouldQuit(eventClass: AEEventClass, eventID: AEEventID, hasQuitReason: Bool, senderBundleID: String?) -> Bool {
+        guard eventClass == coreEventClass, eventID == quitEventID else { return false }
+        if hasQuitReason { return true }
+        return senderBundleID != "com.apple.dock"
     }
 
     /// 从菜单栏真正退出进程。

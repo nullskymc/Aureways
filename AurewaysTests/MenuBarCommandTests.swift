@@ -36,4 +36,19 @@ final class MenuBarCommandTests: XCTestCase {
         XCTAssertEqual(WebShellBridge.MenuBarCommand(message: "quit"), .quitApp)
         XCTAssertNil(WebShellBridge.MenuBarCommand(message: "bogus"))
     }
+
+    /// `tell application "Aureways" to quit` (and logout) must really quit; the
+    /// Dock's 退出 keeps hiding to the menu bar. Cancelling every quit event is
+    /// what made scripted quits fail with -128.
+    @MainActor
+    func testQuitAppleEventDecision() {
+        let aevt = AppActivation.coreEventClass
+        let quit = AppActivation.quitEventID
+        XCTAssertTrue(AppActivation.shouldQuit(eventClass: aevt, eventID: quit, hasQuitReason: false, senderBundleID: nil), "osascript")
+        XCTAssertTrue(AppActivation.shouldQuit(eventClass: aevt, eventID: quit, hasQuitReason: false, senderBundleID: "com.apple.ActivityMonitor"))
+        XCTAssertFalse(AppActivation.shouldQuit(eventClass: aevt, eventID: quit, hasQuitReason: false, senderBundleID: "com.apple.dock"))
+        XCTAssertTrue(AppActivation.shouldQuit(eventClass: aevt, eventID: quit, hasQuitReason: true, senderBundleID: "com.apple.dock"), "logout / shutdown")
+        XCTAssertFalse(AppActivation.shouldQuit(eventClass: aevt, eventID: AEEventID(0x6F64_6F63), hasQuitReason: false, senderBundleID: nil), "odoc is not a quit")
+        XCTAssertFalse(AppActivation.isExternalQuitRequest(nil), "menu / ⌘Q path has no Apple Event")
+    }
 }
