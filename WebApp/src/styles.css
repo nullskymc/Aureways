@@ -861,8 +861,8 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
    edge once instead of flooding every line with saturated green or red. */
 .diff-pane.status-a .dl.ins { background: color-mix(in oklch, var(--green) 5%, transparent); box-shadow: none; }
 .diff-pane.status-d .dl.del { background: color-mix(in oklch, var(--red) 5%, transparent); box-shadow: none; }
-.diff-pane.status-a .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
-.diff-pane.status-d .diff-pane-body { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
+.diff-pane.status-a .hunk { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
+.diff-pane.status-d .hunk { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
 .file-label { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .file-label .tree-icon { flex: none; }
 .file-label-name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; font: 600 12px var(--sans); color: var(--text); }
