@@ -84,13 +84,16 @@ release: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Release -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
 # The test host is the Debug app, which shares the bundle id (and so the
-# session DB and quota cache) with the installed build. Point the hosted app at
-# a scratch home so tests never read or write the real data.
-TEST_HOME ?= /tmp/aureways-test-home
+# session DB and quota cache) with the installed build. Redirect only the
+# app's own data directory, not the whole home: TEST_RUNNER_CFFIXED_USER_HOME
+# also rewrites HOME and USER, and a login shell started by the terminal tests
+# then reads startup files under a home that doesn't exist and exits before
+# running the command (GrokTerminalEndToEndTests failed that way in CI).
+TEST_DATA ?= /tmp/aureways-test-data
 
 test: web web-test
-	rm -rf "$(TEST_HOME)" && mkdir -p "$(TEST_HOME)"
-	TEST_RUNNER_CFFIXED_USER_HOME="$(TEST_HOME)" xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
+	rm -rf "$(TEST_DATA)" && mkdir -p "$(TEST_DATA)"
+	TEST_RUNNER_CFFIXED_USER_HOME_DIR="$(TEST_DATA)" xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in
 # /Applications (this one had no icon) wins over the just-built Debug app,
