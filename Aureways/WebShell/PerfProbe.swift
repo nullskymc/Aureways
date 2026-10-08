@@ -14,6 +14,13 @@ import QuartzCore
 final class PerfProbe: NSObject {
     static let defaultsKey = "AurewaysPerfProbe"
     private static var shared: PerfProbe?
+    /// Page → native messages by type while the probe runs (`role:type`).
+    private static var messages: [String: Int] = [:]
+    static var isRunning: Bool { shared != nil }
+
+    static func noteMessage(_ type: String, role: WebShellBridge.Role) {
+        messages["\(role):\(type)", default: 0] += 1
+    }
 
     static func startIfRequested(window: NSWindow, host: NSView) {
         guard shared == nil,
@@ -41,6 +48,7 @@ final class PerfProbe: NSObject {
     private var wallStart: Double = 0
     private var results: [[String: Any]] = []
     private var originalFrame: NSRect = .zero
+    private var messagesStart: [String: Int] = [:]
 
     private init(window: NSWindow, host: NSView, output: URL) {
         self.window = window
@@ -91,6 +99,7 @@ final class PerfProbe: NSObject {
         phaseStart = now
         stamps = []
         cpuStart = Self.cpuSeconds()
+        messagesStart = Self.messages
         wallStart = Date().timeIntervalSince1970
     }
 
@@ -127,6 +136,10 @@ final class PerfProbe: NSObject {
             "hitches": intervals.filter { $0 > nominal * 1.5 }.count,
             "droppedFrames": dropped,
             "appCPUPercent": (Self.cpuSeconds() - cpuStart) / max(wall - wallStart, 0.001) * 100,
+            "messages": Self.messages.compactMapValues { $0 }.reduce(into: [String: Int]()) { out, entry in
+                let delta = entry.value - (messagesStart[entry.key] ?? 0)
+                if delta > 0 { out[entry.key] = delta }
+            },
         ])
     }
 
