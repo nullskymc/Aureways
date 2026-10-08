@@ -511,8 +511,6 @@ kbd { font: 11px var(--sans); color: var(--text-3); letter-spacing: 0.02em; }
 /* ---- Diff View Pane (in Inspector active tab) -------------------------------- */
 .diff-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--main-bg); }
 .diff-pane-body { flex: 1; min-height: 0; overflow: auto; font: 12px/1.55 var(--mono); background: var(--code-bg); }
-.diff-pane-body .hunk { border-bottom: 1px solid var(--border); }
-.diff-pane-body .hunk:last-child { border-bottom: none; }
 
 /* ---- Composer extras ---------------------------------------------------------- */
 .mention-menu .slash-item { align-items: center; }
@@ -853,16 +851,41 @@ html.glass .native-titlebar .tab-strip { background: transparent; }
 .diff-pane > .diff-file-head { gap: 7px; height: 34px; padding: 0 6px 0 10px; background: color-mix(in oklch, var(--main-bg) 95%, var(--text) 5%); }
 .diff-file-head .diffstat { font-size: 11px; flex: none; }
 .diff-actions { display: flex; align-items: center; gap: 1px; flex: none; }
-.diff-pane .hunk-head { font-size: 10px; background: var(--fill-2); }
-.diff-pane .dl { font-size: 11px; line-height: 21px; }
-.diff-pane .dl.ins { box-shadow: inset 3px 0 var(--green); }
-.diff-pane .dl.del { box-shadow: inset 3px 0 var(--red); }
+.diff-pane .diff-pane-body { font-size: 11px; }
+/* Rows share one width (the widest line) when not wrapping, so tints reach the edge. */
+.diff-lines { min-width: 100%; width: max-content; padding-bottom: 16px; }
+.diff-lines.wrap { width: auto; }
+.diff-lines .dl { --row: transparent; min-width: 100%; padding: 0 12px 0 0; line-height: 20px; font-size: 11px; background: var(--row); }
+.diff-lines .dl.ins { --row: var(--ins-bg); }
+.diff-lines .dl.del { --row: var(--del-bg); }
+/* Gutter stays put while the code scrolls sideways; it paints the row tint over the code background. */
+.diff-lines .dl-no, .diff-lines .dl-sign { position: sticky; z-index: 1; align-self: stretch; background: linear-gradient(var(--row), var(--row)), var(--code-bg); }
+.diff-lines .dl-no { opacity: 1; color: color-mix(in oklch, var(--text-3) 75%, transparent); }
+.diff-lines .dl-no:nth-child(1) { left: 0; }
+.diff-lines .dl-no:nth-child(2) { left: 34px; }
+.diff-lines .dl-sign { left: 68px; }
+.diff-lines .dl.ins .dl-no:first-child { box-shadow: inset 3px 0 var(--green); }
+.diff-lines .dl.del .dl-no:first-child { box-shadow: inset 3px 0 var(--red); }
+.diff-lines .dl-text { white-space: pre; }
+.diff-lines.wrap .dl { min-width: 0; }
+.diff-lines.wrap .dl-text { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A whole-file add or delete is one colour already: tint it lightly and mark the
    edge once instead of flooding every line with saturated green or red. */
-.diff-pane.status-a .dl.ins { background: color-mix(in oklch, var(--green) 5%, transparent); box-shadow: none; }
-.diff-pane.status-d .dl.del { background: color-mix(in oklch, var(--red) 5%, transparent); box-shadow: none; }
-.diff-pane.status-a .hunk { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
-.diff-pane.status-d .hunk { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
+.diff-pane.status-a .diff-lines .dl.ins { --row: color-mix(in oklch, var(--green) 5%, transparent); }
+.diff-pane.status-d .diff-lines .dl.del { --row: color-mix(in oklch, var(--red) 5%, transparent); }
+.diff-pane.status-a .diff-lines .dl .dl-no:first-child { box-shadow: inset 2px 0 color-mix(in oklch, var(--green) 65%, transparent); }
+.diff-pane.status-d .diff-lines .dl .dl-no:first-child { box-shadow: inset 2px 0 color-mix(in oklch, var(--red) 65%, transparent); }
+/* Hunks: a gap before each, an "N unchanged lines" strip, then a header bar. */
+.diff-lines .hunk + .hunk { margin-top: 14px; border-top: 1px solid var(--border); }
+.diff-gap, .diff-lines .hunk-head { display: flex; align-items: center; min-width: 100%; padding: 0 12px; white-space: nowrap; }
+.diff-gap { height: 24px; font: 11px var(--sans); color: var(--text-3); background: var(--fill-2); border-bottom: 1px dashed var(--border-strong); }
+.diff-lines .hunk-head { height: 26px; font: 10.5px var(--mono); color: var(--text-3); background: color-mix(in oklch, var(--accent) 7%, var(--code-bg)); border-bottom: 1px solid var(--border); }
+.diff-lines .hunk:first-child .hunk-head:first-child { border-top: 0; }
+.diff-sticky { position: sticky; left: 12px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.hunk-range { color: color-mix(in oklch, var(--accent) 70%, var(--text-3)); }
+.hunk-ctx { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; }
+.diff-lines.wrap .diff-gap, .diff-lines.wrap .hunk-head { min-width: 0; }
+.diff-lines.wrap .hunk-ctx { max-width: 60vw; }
 .file-label { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .file-label .tree-icon { flex: none; }
 .file-label-name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; font: 600 12px var(--sans); color: var(--text); }

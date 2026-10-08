@@ -94,3 +94,23 @@ export function mergeSessionEdits(lists: DiffFile[][]): DiffFile[] {
   }
   return [...files.values()]
 }
+
+/** `@@ -a,b +c,d @@ context` → the range part and the enclosing function/context text. */
+export function splitHunkHeader(header: string): { range: string; context: string } {
+  const m = /^(@@ [^@]*@@)\s?(.*)$/.exec(header)
+  return m ? { range: m[1], context: m[2].trim() } : { range: header, context: '' }
+}
+
+/**
+ * Unchanged lines skipped before each hunk (old-file numbering). Unknown or
+ * overlapping ranges (e.g. separate edits merged from a chat) count as 0.
+ */
+export function unchangedBefore(hunks: DiffFile['hunks']): number[] {
+  let end = 1
+  return hunks.map((hunk, i) => {
+    const gap = hunk.oldStart > 0 ? hunk.oldStart - end : 0
+    end = hunk.oldStart + hunk.lines.filter((line) => line[0] !== '+').length
+    if (hunk.oldStart === 0) end = 1
+    return i === 0 && hunk.oldStart <= 1 ? 0 : Math.max(0, gap)
+  })
+}

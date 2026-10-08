@@ -1,3 +1,4 @@
+import { signal } from '@preact/signals'
 import { post } from '../bridge'
 import { t } from '../i18n'
 import { Icon } from '../components/Icon'
@@ -5,7 +6,18 @@ import { mentionFile } from '../components/Composer'
 import { app } from '../store'
 import type { DiffFile } from '../types'
 import { openFile } from './state'
-import { emptyBodyKey, fileIcon, fileStatus, splitPath, statusTitleKey, type ChangeStatus } from './diffModel'
+import { emptyBodyKey, fileIcon, fileStatus, splitHunkHeader, splitPath, statusTitleKey, unchangedBefore, type ChangeStatus } from './diffModel'
+
+const WRAP_KEY = 'aureways.diffWrap'
+function storedWrap(): boolean {
+  try { return globalThis.localStorage?.getItem(WRAP_KEY) !== '0' } catch { return true }
+}
+/** Soft wrap in diff tabs; on by default, remembered in this web view. */
+export const diffWrap = signal(storedWrap())
+export function setDiffWrap(on: boolean) {
+  diffWrap.value = on
+  try { globalThis.localStorage?.setItem(WRAP_KEY, on ? '1' : '0') } catch { /* private mode */ }
+}
 
 function trimHunkLines(lines: string[], last: boolean): string[] {
   if (last && lines.length > 1) {
@@ -52,6 +64,10 @@ export function DiffFileHead({ file, root }: { file: DiffFile; root: string }) {
       <DiffStat file={file} />
       <div class="flex1" />
       <span class="diff-actions">
+        <button class={'icon-btn tiny' + (diffWrap.value ? ' on' : '')} title={t('wrapLines')} aria-label={t('wrapLines')} aria-pressed={diffWrap.value}
+          onClick={() => setDiffWrap(!diffWrap.value)}>
+          <Icon name="text" size={12} />
+        </button>
         {status !== 'D' && (
           <button class="icon-btn tiny" title={t('edit')} onClick={() => openFile(file.path)}>
             <Icon name="pencil" size={12} />
@@ -72,14 +88,17 @@ export function DiffFileHead({ file, root }: { file: DiffFile; root: string }) {
 
 export function DiffHunks({ file }: { file: DiffFile }) {
   if (file.hunks.length === 0) return <div class="diff-note">{t(emptyBodyKey(file))}</div>
+  const gaps = unchangedBefore(file.hunks)
   return (
-    <>
+    <div class={'diff-lines' + (diffWrap.value ? ' wrap' : '')}>
       {file.hunks.map((h, i) => {
         let o = h.oldStart
         let n = h.newStart
+        const { range, context } = splitHunkHeader(h.header)
         return (
           <div key={i} class="hunk">
-            <div class="hunk-head">{h.header}</div>
+            {gaps[i] > 0 && <div class="diff-gap"><span class="diff-sticky"><Icon name="more" size={12} />{t(gaps[i] === 1 ? 'lineUnchanged' : 'linesUnchanged', gaps[i])}</span></div>}
+            <div class="hunk-head"><span class="diff-sticky"><span class="hunk-range">{range}</span>{context && <span class="hunk-ctx">{context}</span>}</span></div>
             {trimHunkLines(h.lines, i === file.hunks.length - 1).map((l, j) => {
               const sign = l[0]
               const on = sign === '+' ? '' : o++
@@ -97,7 +116,7 @@ export function DiffHunks({ file }: { file: DiffFile }) {
         )
       })}
       {file.truncated && <div class="diff-note">{t('diffTruncated')}</div>}
-    </>
+    </div>
   )
 }
 
