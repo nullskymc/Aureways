@@ -24,6 +24,7 @@ func encodeState() -> [String: Any] {
                 "fullscreen": chrome.fullscreen,
                 "titlebarHeight": chrome.titlebarHeight,
                 "leadingInset": chrome.leadingInset,
+                "newChatInset": chrome.newChatInset,
                 "trailingInset": chrome.trailingInset,
                 "addInset": chrome.addInset,
                 "nativeTitlebar": role == .main,

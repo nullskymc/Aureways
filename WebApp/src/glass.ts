@@ -37,6 +37,17 @@ function tabCapsule(el: HTMLElement, b: DOMRect, rect: GlassRect) {
   rect.x = Math.round((b.left - share * window.innerWidth) * 100) / 100
   rect.fw = Math.round(widthShare * 10000) / 10000
   rect.wb = Math.round((b.width - widthShare * window.innerWidth) * 100) / 100
+  // The column's Split right circle (native glass under the page's
+  // transparent button): its offset from the strip's right edge and size.
+  const split = el.parentElement?.querySelector<HTMLButtonElement>('.tab-split')
+  if (split) {
+    const s = split.getBoundingClientRect()
+    if (s.width > 0) {
+      rect.so = Math.round((s.left - b.right) * 2) / 2
+      rect.ss = Math.round(s.width)
+      if (split.disabled) rect.sd = 1
+    }
+  }
   const strip = el.querySelector<HTMLElement>('.insp-tab-strip')
   const tabs = [...el.querySelectorAll<HTMLElement>('.insp-tab')]
   const at = tabs.findIndex((tab) => tab.classList.contains('active'))
@@ -64,8 +75,8 @@ function same(a: GlassRect[], b: GlassRect[]) {
       const x = r[key]
       const y = o[key]
       if (typeof x === 'number' && typeof y === 'number') {
-        // Shares to 0.002, pixels to 1 px; tab index / count exactly.
-        const tolerance = r.k !== 'tabs' || key === 'ai' || key === 'n' ? 0 : key === 'f' || key === 'fw' ? 0.002 : 1
+        // Shares to 0.002, pixels to 1 px; tab index / count / split state exactly.
+        const tolerance = r.k !== 'tabs' || key === 'ai' || key === 'n' || key === 'sd' ? 0 : key === 'f' || key === 'fw' ? 0.002 : 1
         if (Math.abs(x - y) > tolerance) return false
       } else if (x !== y) return false
     }

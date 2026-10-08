@@ -28,9 +28,15 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
   const navigatorVisible = prefs.inspectorOpen.value && column.tabs.find((tab) => tab.id === column.active)?.kind !== 'term'
   const strip = useRef<HTMLDivElement>(null)
   const chatTitle = !documents && index === 0 && column.tabs.length === 1 && chat
-  // The chat title lines up with the content inset (16); with the sidebar
-  // closed it follows the native sidebar circle and New chat.
-  const pad = chatTitle ? (sidebarOpen ? 16 : leadingPad(state, 16)) : index > 0 || sidebarOpen ? 6 : leadingPad(state, 6)
+  const native = nativeTitlebarControls(state)
+  // Sidebar closed: column 0 clears the traffic lights and the native sidebar
+  // and New chat circles (or the page's own buttons without native controls).
+  const lead = (inset: number) => native ? (state.chrome.newChatInset || leadingPad(state)) + inset - 8 : leadingPad(state, inset)
+  // The chat title lines up with the content inset (16): from the sidebar's
+  // edge, or 16 after the New chat circle.
+  const pad = chatTitle ? (sidebarOpen ? 16 : lead(16)) : index > 0 || sidebarOpen ? 6 : lead(6)
+  // The current session's title, live (renames, agent auto-titles).
+  const title = session?.title?.trim() || t('newChat')
   useEffect(() => {
     const element = strip.current
     if (!element) return
@@ -47,8 +53,7 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
   // inspector capsule are native glass (TitlebarGlass.swift). A workbench
   // column's tabs sit in one slim full-width strip, Safari style, whose glass
   // and active-tab platter are drawn natively underneath (data-glass="tabs").
-  // The chat column has no tabs to manage: just its title.
-  const native = nativeTitlebarControls(state)
+  // The chat column has no tabs to manage: just the session's title.
   const lastVisible = pane.workbenchCollapsed ? index === 0 : index === pane.columns.length - 1
   // Clear the native right group: one circle in Documents ("+") or with the
   // workbench closed (inspector toggle); otherwise "+" and the two toggles.
@@ -79,23 +84,20 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
 
   return (
     <header class={'main-head tab-strip' + (chat ? ' chat-head' : '') + (native ? ' glass-tabs' : '')} style={{ paddingLeft: pad, paddingRight: padRight }}>
-      {index === 0 && !sidebarOpen && (
+      {index === 0 && !sidebarOpen && !native && (
         <span class="head-tools" data-no-drag>
-          {!native && (
-            <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value)}>
-              <Icon name="sidebar" size={15} />
-            </button>
-          )}
+          <button class="icon-btn" title={t('toggleSidebar')} onClick={() => (prefs.sidebarOpen.value = !prefs.sidebarOpen.value)}>
+            <Icon name="sidebar" size={15} />
+          </button>
           <button class="icon-btn" title={t('newChat')} onClick={() => { route.value = { name: 'main' }; selectTab('chat'); post('newSession') }}>
             <Icon name="compose" size={15} />
           </button>
         </span>
       )}
       {chatTitle
-        ? <span class="head-title chat-title" id={'tab-chat-' + column.id}>{t('chat')}</span>
+        ? <span class="head-title chat-title" id={'tab-chat-' + column.id} title={title}>{title}</span>
         : native && !chat ? <div class="tab-capsule" data-glass="tabs" data-no-drag>{stripEl}</div> : stripEl}
       {chat && session?.phase === 'connecting' && <span class="head-status" title={t('connecting', session.agentTitle)}><Spinner size={12} /></span>}
-      {chat && session?.phase === 'idle' && <button class="btn small" onClick={() => post('selectSession', { id: session.id })}>{t('open')}</button>}
       {addEl}
       {chat && !documents && !native && (
         <button class={'icon-btn small workbench-toggle' + (workbenchVisible ? ' on' : '')}
@@ -108,7 +110,8 @@ export function TabStrip({ state, sidebarOpen, session, column, index, documents
       {!chat && !native && <div class="tab-head-spacer" />}
       {!chat && (
         <span class="tab-head-actions" data-no-drag>
-          <button class="icon-btn small" title={t('splitRight')} disabled={index === pane.columns.length - 1 && pane.columns.length >= 3} onClick={() => moveTabRight(column.active)}><Icon name="split" size={14} /></button>
+          {/* Native: a transparent hit target over the strip's native glass circle. */}
+          <button class={native ? 'tab-split' : 'icon-btn small'} title={t('splitRight')} aria-label={t('splitRight')} disabled={index === pane.columns.length - 1 && pane.columns.length >= 3} onClick={() => moveTabRight(column.active)}><Icon name="split" size={14} /></button>
           {!documents && !native && <button class={'icon-btn small' + (navigatorVisible ? ' on' : '')} title={t('toggleFileTree')} aria-label={t('toggleFileTree')} aria-pressed={navigatorVisible} onClick={() => {
             if (column.tabs.find((tab) => tab.id === column.active)?.kind === 'term') openExplorer()
             else prefs.inspectorOpen.value = !prefs.inspectorOpen.value

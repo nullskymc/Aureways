@@ -5,16 +5,18 @@ import AppKit
 /// system Clear / Tinted setting and Reduce Transparency by itself.
 ///
 /// - `TitlebarButtons`: the sidebar toggle (one circle next to the traffic
-///   lights), the new-tab "+" (a circle) and the file tree + inspector toggles
-///   (one two-button capsule at the right edge). Fully native and laid out
-///   from the window edges, so live resize and sidebar toggles never wait for
-///   the page.
+///   lights) and, with the sidebar closed, New chat (a second circle in the
+///   same group); the new-tab "+" (a circle) and the file tree + inspector
+///   toggles (one two-button capsule at the right edge). Fully native and laid
+///   out from the window edges, so live resize and sidebar toggles never wait
+///   for the page.
 /// - `TabCapsuleLayer`: one slim strip under each workbench column's tabs,
 ///   Safari style: full column width, equal-width tabs, the active tab as a
-///   subtle platter in the glass's content (a system fill). The page draws
-///   the tabs transparently on top and reports each strip's geometry in a
-///   resize-invariant form (see `TabCapsule`), coalesced to one message per
-///   frame and only when it changes.
+///   subtle platter in the glass's content (a system fill), plus the column's
+///   Split right circle just after the strip. The page draws the tabs (and a
+///   transparent Split right hit target) on top and reports each strip's
+///   geometry in a resize-invariant form (see `TabCapsule`), coalesced to one
+///   message per frame and only when it changes.
 enum TitlebarMetrics {
     /// Circle diameter / capsule height for every title bar glass control.
     static let control: CGFloat = 30
@@ -42,6 +44,11 @@ enum TitlebarMetrics {
         return CGRect(x: x.rounded(), y: y.rounded(), width: control, height: control)
     }
 
+    /// New chat circle: right after the sidebar circle, in the same glass group.
+    static func newChatFrame(sidebar: CGRect) -> CGRect {
+        sidebar.offsetBy(dx: control + groupGap, dy: 0)
+    }
+
     /// Right group frame for a host width: the two-button capsule, or (`compact`,
     /// workbench closed) a single circle holding just the inspector toggle.
     static func rightFrame(width: CGFloat, centerY: CGFloat, compact: Bool = false) -> CGRect {
@@ -65,10 +72,13 @@ enum TitlebarMetrics {
     }
 
     /// Insets the page keeps clear for the native controls (published in `chrome`):
-    /// `trailing` with the toggles and "+", `addOnly` with one circle at the edge
-    /// (just "+" in Documents, or just the inspector toggle with the workbench closed).
-    static func insets(sidebar: CGRect, width: CGFloat) -> (leading: CGFloat, trailing: CGFloat, addOnly: CGFloat) {
-        (sidebar.maxX + clearance, trailing + rightCapsuleWidth + groupGap + control + clearance, trailing + control + clearance)
+    /// `leading` after the sidebar circle, `newChat` after the New chat circle
+    /// (sidebar closed), `trailing` with the toggles and "+", `addOnly` with one
+    /// circle at the edge (just "+" in Documents, or just the inspector toggle
+    /// with the workbench closed).
+    static func insets(sidebar: CGRect, width: CGFloat) -> (leading: CGFloat, newChat: CGFloat, trailing: CGFloat, addOnly: CGFloat) {
+        (sidebar.maxX + clearance, newChatFrame(sidebar: sidebar).maxX + clearance,
+         trailing + rightCapsuleWidth + groupGap + control + clearance, trailing + control + clearance)
     }
 }
 
@@ -94,6 +104,17 @@ struct TabCapsule: Equatable {
     /// Scrolled strip: active tab relative to the strip's left edge.
     var activeX: CGFloat?
     var activeWidth: CGFloat?
+    /// The column's Split right circle after the strip.
+    var split: Split?
+
+    /// Split right circle: `offset` from the strip's right edge to the circle,
+    /// `size` its diameter (vertically centred on the strip). Fixed page
+    /// metrics, so it follows the strip through live resize natively.
+    struct Split: Equatable {
+        var offset: CGFloat
+        var size: CGFloat
+        var enabled: Bool
+    }
 
     /// Inset of the tabs inside the strip (the page's strip padding).
     static let padding: CGFloat = 2
@@ -108,6 +129,13 @@ struct TabCapsule: Equatable {
     }
 
     /// Active tab platter in strip coordinates, clipped to the strip.
+    /// Split right circle in host coordinates.
+    func splitFrame(hostWidth: CGFloat, scale: CGFloat = 2) -> CGRect? {
+        guard let split, split.size > 0 else { return nil }
+        let strip = frame(hostWidth: hostWidth, scale: scale)
+        return CGRect(x: strip.maxX + split.offset, y: (y + (height - split.size) / 2).rounded(), width: split.size, height: split.size)
+    }
+
     func activeFrame(hostWidth: CGFloat, inset: CGFloat = TabCapsule.padding) -> CGRect? {
         let width = width(hostWidth: hostWidth)
         let inner: CGRect
@@ -125,7 +153,7 @@ struct TabCapsule: Equatable {
 
     /// Same tabs, possibly elsewhere or wider: what a sidebar toggle changes.
     func sameShape(as other: TabCapsule) -> Bool {
-        activeIndex == other.activeIndex && count == other.count && abs(height - other.height) < 1
+        activeIndex == other.activeIndex && count == other.count && split == other.split && abs(height - other.height) < 1
             && abs((activeX ?? 0) - (other.activeX ?? 0)) < 1 && abs((activeWidth ?? 0) - (other.activeWidth ?? 0)) < 1
     }
 }
@@ -137,6 +165,9 @@ final class TabCapsuleLayer: NSView {
     private let content = PassthroughFlippedView()
     private var capsules: [NSGlassEffectView] = []
     private var inners: [SelectionPlatter] = []
+    /// Split right circles (the page's button on top is a transparent hit target).
+    private var splits: [NSGlassEffectView] = []
+    private var splitIcons: [NSImageView] = []
     private(set) var strips: [TabCapsule] = []
     /// Last layout seen with the sidebar open / closed, for native toggles.
     private var remembered: [Bool: [TabCapsule]] = [:]
@@ -187,10 +218,26 @@ final class TabCapsuleLayer: NSView {
             content.addSubview(capsule)
             capsules.append(capsule)
             inners.append(inner)
+
+            let split = NSGlassEffectView()
+            let icon = NSImageView()
+            icon.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .regular))
+            icon.imageScaling = .scaleNone
+            icon.autoresizingMask = [.width, .height]
+            // The page's button carries the label, tooltip and click.
+            icon.setAccessibilityElement(false)
+            split.contentView = icon
+            split.isHidden = true
+            content.addSubview(split)
+            splits.append(split)
+            splitIcons.append(icon)
         }
         while capsules.count > strips.count {
             capsules.removeLast().removeFromSuperview()
             inners.removeLast()
+            splits.removeLast().removeFromSuperview()
+            splitIcons.removeLast()
         }
         relayout()
     }
@@ -214,8 +261,23 @@ final class TabCapsuleLayer: NSView {
             } else if !inner.isHidden {
                 inner.isHidden = true
             }
+            let split = splits[index]
+            if let circle = strip.splitFrame(hostWidth: bounds.width, scale: scale), let info = strip.split {
+                if split.frame != circle { split.frame = circle }
+                if split.cornerRadius != circle.height / 2 { split.cornerRadius = circle.height / 2 }
+                let iconFrame = CGRect(origin: .zero, size: circle.size)
+                if splitIcons[index].frame != iconFrame { splitIcons[index].frame = iconFrame }
+                let tint: NSColor = info.enabled ? .secondaryLabelColor : .tertiaryLabelColor
+                if splitIcons[index].contentTintColor != tint { splitIcons[index].contentTintColor = tint }
+                if split.isHidden { split.isHidden = false }
+            } else if !split.isHidden {
+                split.isHidden = true
+            }
         }
     }
+
+    /// Visible Split right circles, per strip (tests).
+    var splitFrames: [CGRect?] { splits.prefix(strips.count).map { $0.isHidden ? nil : $0.frame } }
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
@@ -227,15 +289,17 @@ final class TabCapsuleLayer: NSView {
 /// Native glass buttons in the title bar row (topmost; only the buttons take clicks).
 @MainActor
 final class TitlebarButtons: NSView {
-    enum Action { case sidebar, addTab, fileTree, inspector }
+    enum Action { case sidebar, newChat, addTab, fileTree, inspector }
     var onAction: ((Action) -> Void)?
 
     private let container = NSGlassEffectContainerView()
     private let content = PassthroughFlippedView()
     let sidebarGlass = NSGlassEffectView()
+    let newChatGlass = NSGlassEffectView()
     let rightGlass = NSGlassEffectView()
     let addGlass = NSGlassEffectView()
     private let sidebarButton: NSButton
+    private let newChatButton: NSButton
     private let addButton: NSButton
     private let fileTreeButton: NSButton
     private let inspectorButton: NSButton
@@ -244,6 +308,7 @@ final class TitlebarButtons: NSView {
 
     override init(frame frameRect: NSRect) {
         sidebarButton = Self.button(symbol: "sidebar.left", label: "切换侧边栏".localized)
+        newChatButton = Self.button(symbol: "square.and.pencil", label: "新对话".localized)
         addButton = Self.button(symbol: "plus", label: "新建标签页".localized)
         fileTreeButton = Self.button(symbol: "folder", label: "切换文件树".localized)
         inspectorButton = Self.button(symbol: "sidebar.right", label: "切换右侧标签区".localized)
@@ -262,6 +327,16 @@ final class TitlebarButtons: NSView {
         sidebarGlass.contentView = side
         sidebarGlass.cornerRadius = TitlebarMetrics.control / 2
         content.addSubview(sidebarGlass)
+
+        let compose = NSView(frame: side.bounds)
+        newChatButton.frame = compose.bounds
+        newChatButton.autoresizingMask = [.width, .height]
+        compose.addSubview(newChatButton)
+        newChatGlass.contentView = compose
+        newChatGlass.cornerRadius = TitlebarMetrics.control / 2
+        newChatGlass.isHidden = true
+        // Below the sidebar circle: it slides out from under it.
+        content.addSubview(newChatGlass, positioned: .below, relativeTo: sidebarGlass)
 
         let pair = NSView(frame: CGRect(x: 0, y: 0, width: TitlebarMetrics.rightCapsuleWidth, height: TitlebarMetrics.control))
         pair.autoresizingMask = [.width, .height]
@@ -288,7 +363,7 @@ final class TitlebarButtons: NSView {
         addGlass.isHidden = true
         content.addSubview(addGlass)
 
-        for button in [sidebarButton, addButton, fileTreeButton, inspectorButton] {
+        for button in [sidebarButton, newChatButton, addButton, fileTreeButton, inspectorButton] {
             button.target = self
             button.action = #selector(clicked(_:))
         }
@@ -314,6 +389,7 @@ final class TitlebarButtons: NSView {
     @objc private func clicked(_ sender: NSButton) {
         switch sender {
         case sidebarButton: onAction?(.sidebar)
+        case newChatButton: onAction?(.newChat)
         case addButton: onAction?(.addTab)
         case fileTreeButton: onAction?(.fileTree)
         default: onAction?(.inspector)
@@ -336,8 +412,53 @@ final class TitlebarButtons: NSView {
     func layout(lights: CGRect, fullscreen: Bool, headerHeight: CGFloat) {
         let side = TitlebarMetrics.sidebarFrame(lights: lights, fullscreen: fullscreen, headerHeight: headerHeight)
         if sidebarGlass.frame != side { sidebarGlass.frame = side }
+        placeNewChat()
         placeRight()
     }
+
+    private var newChatShown = false
+
+    /// Shown, New chat sits right of the sidebar circle; hidden, under it.
+    private func placeNewChat() {
+        let frame = newChatShown ? TitlebarMetrics.newChatFrame(sidebar: sidebarGlass.frame) : sidebarGlass.frame
+        if newChatGlass.frame != frame { newChatGlass.frame = frame }
+    }
+
+    /// New chat shows while the sidebar (with its own New chat row) is closed.
+    /// It slides out from under the sidebar circle natively.
+    func setNewChatVisible(_ visible: Bool) {
+        guard visible != newChatShown else { return }
+        newChatShown = visible
+        let animate = window != nil && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if visible, newChatGlass.isHidden {
+            newChatGlass.frame = sidebarGlass.frame
+            newChatGlass.alphaValue = animate ? 0 : 1
+            newChatGlass.isHidden = false
+        }
+        guard animate else {
+            newChatGlass.alphaValue = 1
+            settleNewChat()
+            return
+        }
+        let target = visible ? TitlebarMetrics.newChatFrame(sidebar: sidebarGlass.frame) : sidebarGlass.frame
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.allowsImplicitAnimation = true
+            newChatGlass.animator().frame = target
+            newChatGlass.animator().alphaValue = visible ? 1 : 0
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.settleNewChat() }
+        })
+    }
+
+    private func settleNewChat() {
+        placeNewChat()
+        if !newChatShown { newChatGlass.isHidden = true }
+    }
+
+    var isNewChatVisible: Bool { !newChatGlass.isHidden }
+    var newChatFrame: CGRect { newChatGlass.frame }
 
     private func placeRight() {
         let midY = sidebarGlass.frame.midY
@@ -405,12 +526,13 @@ final class TitlebarButtons: NSView {
             button.setAccessibilityValue(on ? "1" : "0")
         }
         sidebarButton.contentTintColor = .secondaryLabelColor
+        newChatButton.contentTintColor = .secondaryLabelColor
         addButton.contentTintColor = .secondaryLabelColor
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let visible = [(sidebarGlass, [sidebarButton]), (addGlass, [addButton]), (rightGlass, [fileTreeButton, inspectorButton])]
+        let visible = [(sidebarGlass, [sidebarButton]), (newChatGlass, [newChatButton]), (addGlass, [addButton]), (rightGlass, [fileTreeButton, inspectorButton])]
         for (glass, buttons) in visible where !glass.isHidden && glass.alphaValue > 0.5 && glass.frame.contains(local) {
             return buttons.first { !$0.isHidden && $0.alphaValue > 0.5 && $0.bounds.contains($0.convert(local, from: self)) }
         }

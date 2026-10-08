@@ -194,7 +194,8 @@ func userContentController(_ userContentController: WKUserContentController, did
                 let share = number("fw") ?? 0
                 return TabCapsule(base: x, share: number("f") ?? 0, y: y, widthBase: number("wb") ?? w, widthShare: share, height: h,
                                   activeIndex: (rect["ai"] as? NSNumber)?.intValue, count: (rect["n"] as? NSNumber)?.intValue,
-                                  activeX: number("ax"), activeWidth: number("aw"))
+                                  activeX: number("ax"), activeWidth: number("aw"),
+                                  split: number("ss").map { TabCapsule.Split(offset: number("so") ?? 0, size: $0, enabled: number("sd") != 1) })
             }
             onTabCapsules?(tabs, body["sidebar"] as? Bool ?? true)
             let panels = rects.filter { $0["k"] as? String != "tabs" }.compactMap { rect -> GlassLayerView.Panel? in

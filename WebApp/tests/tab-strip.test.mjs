@@ -107,6 +107,42 @@ test('native title bar: the workbench strip is full width with equal-width tabs;
   const chat = state.currentPane().columns[0]
   await flush(() => render(h(TabStrip, { state: native, sidebarOpen: true, session: null, column: chat, index: 0 }), root))
   assert.equal(root.querySelector('.tab-capsule, [role="tab"], .tab-add'), null)
-  assert.equal(root.querySelector('.chat-title').textContent, 'Chat')
+  assert.equal(root.querySelector('.chat-title').textContent, 'New chat')
   await flush(() => render(null, root))
+})
+
+test('glass report: each strip carries its native Split right circle (offset, size, disabled)', async () => {
+  const sent = []
+  window.webkit = { messageHandlers: { aureways: { postMessage(m) { sent.push(m) } } } }
+  const native = { ...model, chrome: { trafficLights: { x: 20, y: 19, w: 52, h: 14 }, fullscreen: false, titlebarHeight: 52, nativeTitlebar: true, glass: true, leadingInset: 122, newChatInset: 160, trailingInset: 126, addInset: 50 } }
+  app.value = { ...native, workspacePath: '/tabs-split' }
+  const pane = state.currentPane()
+  const editors = document.createElement('div')
+  editors.className = 'editors'
+  const column = document.createElement('div')
+  column.className = 'column'
+  editors.appendChild(column)
+  root.appendChild(editors)
+  await flush(() => render(h(TabStrip, { state: native, sidebarOpen: true, session: null, column: pane.columns[1], index: 1 }), column))
+  const box = (left, top, width, height) => () => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top })
+  column.getBoundingClientRect = box(500, 0, 700, 600)
+  const capsule = column.querySelector('.tab-capsule')
+  const split = column.querySelector('button.tab-split')
+  capsule.getBoundingClientRect = box(506, 13, 520, 26)
+  split.getBoundingClientRect = box(1032, 13, 26, 26)
+  window.innerWidth = 1200
+  const { scheduleGlass } = await import('../src/glass.ts')
+  scheduleGlass(1)
+  await new Promise(resolve => setTimeout(resolve, 5))
+  const tabs = sent.filter(m => m.type === 'glass').at(-1).rects.find(r => r.k === 'tabs')
+  assert.equal(tabs.so, 6, 'circle starts 6 px after the strip')
+  assert.equal(tabs.ss, 26)
+  assert.equal(tabs.sd, undefined, 'enabled')
+  split.disabled = true
+  scheduleGlass(1)
+  await new Promise(resolve => setTimeout(resolve, 5))
+  assert.equal(sent.filter(m => m.type === 'glass').at(-1).rects.find(r => r.k === 'tabs').sd, 1, 'disabled state is re-sent exactly')
+  await flush(() => render(null, column))
+  editors.remove()
+  delete window.webkit
 })
