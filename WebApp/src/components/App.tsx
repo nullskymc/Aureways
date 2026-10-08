@@ -54,9 +54,11 @@ export function App() {
       case 'openMarkdown':
         void import('../inspector/open').then((m) => m.pickMarkdown())
         break
-      case 'openSettings':
-        route.value = { name: 'settings' }
+      case 'openSettings': {
+        const section = typeof c.data?.section === 'string' ? c.data.section : undefined
+        route.value = section ? { name: 'settings', section } : { name: 'settings' }
         break
+      }
       case 'newChat':
         route.value = { name: 'main' }
         selectTab('chat')
