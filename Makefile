@@ -83,8 +83,14 @@ build: web
 release: web
 	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Release -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) build
 
+# The test host is the Debug app, which shares the bundle id (and so the
+# session DB and quota cache) with the installed build. Point the hosted app at
+# a scratch home so tests never read or write the real data.
+TEST_HOME ?= /tmp/aureways-test-home
+
 test: web web-test
-	xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
+	rm -rf "$(TEST_HOME)" && mkdir -p "$(TEST_HOME)"
+	TEST_RUNNER_CFFIXED_USER_HOME="$(TEST_HOME)" xcodebuild -project Aureways.xcodeproj -scheme $(SCHEME) -configuration Debug -derivedDataPath $(DERIVED) $(XCBUILD_FLAGS) test
 
 # Launch Services keys the Dock icon by bundle id. A stale copy in
 # /Applications (this one had no icon) wins over the just-built Debug app,
