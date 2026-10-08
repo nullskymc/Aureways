@@ -55,7 +55,8 @@ function freshWorkspace(): PaneState {
   const chat = newColumn([{ kind: 'chat', id: 'chat' }], 'chat')
   const workbench = newColumn([{ kind: 'changes', id: 'changes' }, { kind: 'explorer', id: 'explorer' }], 'explorer')
   workbench.size = 1.9
-  return { columns: [chat, workbench], focus: 1, workbenchCollapsed: false }
+  // Closed until asked for: the chat opens alone, the toggle brings the workbench back.
+  return { columns: [chat, workbench], focus: 0, workbenchCollapsed: true, workbenchFocus: workbench.id }
 }
 
 function workspaceKey() {
@@ -292,6 +293,28 @@ effect(() => {
     placeOn(DOCUMENTS, fileTab(normalizeFile(path)))
   }
 })
+
+/**
+ * Opening or switching to a session starts with the workbench closed (its
+ * tabs stay alive). Within the session the toggle, file links and the "+"
+ * menu open it as before.
+ */
+let lastSession: string | null | undefined
+effect(() => {
+  const id = app.value?.selectedSessionId
+  if (id === undefined || id === lastSession) return
+  lastSession = id
+  if (id) collapseWorkbenchForSession()
+})
+
+function collapseWorkbenchForSession() {
+  const pane = ensurePane(workspaceKey())
+  if (pane.workbenchCollapsed || pane.columns.length < 2) return
+  pane.workbenchFocus = pane.columns[Math.max(1, pane.focus)]?.id
+  pane.workbenchCollapsed = true
+  pane.focus = 0
+  bump()
+}
 
 function tabLiveElsewhere(id: string, except: Column) {
   for (const pane of panes.values()) {
