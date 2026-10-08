@@ -91,6 +91,7 @@ static func encode(_ item: TranscriptItem, runs: [UUID: ActivityRun]) -> [String
         }
         let diffs = call.diffs
         if !diffs.isEmpty {
+            let settled = !["", "pending", "in_progress", "running"].contains(call.status.lowercased())
             var budget = diffLineLimit
             row["diffs"] = diffs.map { diff -> [String: Any] in
                 let result = TextDiff.compare(old: diff.oldText, new: diff.newText)
@@ -105,7 +106,7 @@ static func encode(_ item: TranscriptItem, runs: [UUID: ActivityRun]) -> [String
                         "lines": lines.map { $0.prefix + $0.text },
                     ])
                 }
-                return [
+                var row: [String: Any] = [
                     "path": diff.path,
                     "added": result.added,
                     "removed": result.removed,
@@ -113,6 +114,13 @@ static func encode(_ item: TranscriptItem, runs: [UUID: ActivityRun]) -> [String
                     "isNew": diff.oldText == nil || diff.oldText?.isEmpty == true,
                     "hunks": hunks,
                 ]
+                // 片段在整份文件里的起始行（0 基），Web 加到 hunk 行号上显示真实行号。
+                if let offset = EditLineIndex.shared.offset(
+                    path: diff.path, oldText: diff.oldText, newText: diff.newText, settled: settled
+                ) {
+                    row["lineOffset"] = offset
+                }
+                return row
             }
         }
         if row["output"] == nil, diffs.isEmpty, let raw = call.rawInput,

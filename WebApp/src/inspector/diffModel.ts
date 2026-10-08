@@ -82,9 +82,31 @@ export function fileIcon(name: string): string {
 }
 
 /** Merges the edits a chat made to the same path into one reviewable file. */
+/**
+ * Moves a transcript edit's snippet-relative hunk numbers (and `@@` ranges) to
+ * whole-file line numbers using its native `lineOffset`.
+ */
+export function withLineOffset(file: DiffFile): DiffFile {
+  const offset = file.lineOffset
+  if (!offset) return file
+  const shift = (n: number) => n + offset
+  const { lineOffset: _, ...rest } = file
+  return {
+    ...rest,
+    hunks: file.hunks.map((h) => ({
+      ...h,
+      oldStart: shift(h.oldStart),
+      newStart: shift(h.newStart),
+      header: h.header.replace(/^@@ -(\d+)((?:,\d+)?) \+(\d+)((?:,\d+)?) @@/,
+        (_m, a, ac, b, bc) => `@@ -${shift(+a)}${ac} +${shift(+b)}${bc} @@`),
+    })),
+  }
+}
+
 export function mergeSessionEdits(lists: DiffFile[][]): DiffFile[] {
   const files = new Map<string, DiffFile>()
-  for (const list of lists) for (const file of list) {
+  for (const list of lists) for (const raw of list) {
+    const file = withLineOffset(raw)
     const prev = files.get(file.path)
     files.set(file.path, prev ? {
       ...file, isNew: prev.isNew || file.isNew,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DEMO_GIT_DIFF } from '../src/demoChanges.ts'
-import { splitHunkHeader, unchangedBefore, emptyBodyKey, fileIcon, fileStatus, mergeSessionEdits, parseUnifiedDiff, splitPath } from '../src/inspector/diffModel.ts'
+import { DEMO_GIT_DIFF, DEMO_SESSION_EDITS } from '../src/demoChanges.ts'
+import { splitHunkHeader, unchangedBefore, emptyBodyKey, fileIcon, fileStatus, mergeSessionEdits, parseUnifiedDiff, splitPath, withLineOffset } from '../src/inspector/diffModel.ts'
 
 const root = '/repo'
 const files = parseUnifiedDiff(DEMO_GIT_DIFF, root)
@@ -71,4 +71,26 @@ test('hunk headers split into range and context; skipped lines are counted betwe
   const h = (oldStart, lines) => ({ header: '@@', oldStart, newStart: oldStart, lines })
   assert.deepEqual(unchangedBefore([h(1, [' a', '-b', '+c']), h(1, [' x'])]), [0, 0])
   assert.deepEqual(splitHunkHeader('not a header'), { range: 'not a header', context: '' })
+})
+
+test('session edits move to whole-file line numbers with their native lineOffset', () => {
+  const edit = { path: '/r/a.ts', added: 1, removed: 1, truncated: false, isNew: false, lineOffset: 41,
+    hunks: [{ header: '@@ -1,3 +1,3 @@ fn', oldStart: 1, newStart: 1, lines: [' a', '-b', '+B', ' c'] }] }
+  const shifted = withLineOffset(edit)
+  assert.equal(shifted.hunks[0].header, '@@ -42,3 +42,3 @@ fn')
+  assert.equal(shifted.hunks[0].oldStart, 42)
+  assert.equal(shifted.hunks[0].newStart, 42)
+  assert.equal(shifted.lineOffset, undefined, 'applied once')
+  assert.equal(edit.hunks[0].oldStart, 1, 'input is not mutated')
+  // Not located (or new file): snippet-relative numbers are kept as they are.
+  const plain = { ...edit, lineOffset: undefined }
+  assert.equal(withLineOffset(plain), plain)
+  assert.equal(withLineOffset({ ...edit, lineOffset: 0 }).hunks[0].header, '@@ -1,3 +1,3 @@ fn')
+  assert.equal(withLineOffset({ ...edit, hunks: [{ header: '@@ -1 +1 @@', oldStart: 1, newStart: 1, lines: ['-b', '+B'] }] }).hunks[0].header, '@@ -42 +42 @@')
+
+  const merged = mergeSessionEdits([DEMO_SESSION_EDITS]).find(f => f.path.endsWith('/src/inspector/state.ts'))
+  assert.deepEqual(merged.hunks.map(h => h.header), ['@@ -42,5 +42,6 @@', '@@ -118,4 +118,4 @@'])
+  assert.deepEqual(unchangedBefore(merged.hunks), [41, 71])
+  assert.equal(merged.added, 3)
+  assert.equal(merged.removed, 2)
 })

@@ -79,6 +79,12 @@ final class WebShellBridge: NSObject {
         self.role = role
         super.init()
         guard role == .main else { return }
+        NotificationCenter.default.addObserver(
+            forName: EditLineIndex.didResolve, object: nil, queue: .main
+        ) { [weak self] note in
+            let path = note.userInfo?["path"] as? String
+            MainActor.assumeIsolated { self?.editLinesResolved(path: path) }
+        }
         terminals.onEmit = { [weak self] payload in self?.post(payload) }
         notifier.onActivate = { [weak self] sessionID in
             guard let self, let session = self.model.sessions.first(where: { $0.id == sessionID }) else { return }
@@ -489,6 +495,18 @@ final class WebShellBridge: NSObject {
         sentRuns = runs
         guard !ops.isEmpty else { return nil }
         return ["type": "patch", "sessionId": session.id.uuidString, "ops": ops]
+    }
+
+    /// 后台算出了某个文件编辑片段的真实行号：把含这个文件 diff 的工具行标成未发送，下一次 flush 重新 upsert。
+    private func editLinesResolved(path: String?) {
+        guard let path else { return }
+        var dirty = false
+        for (id, item) in sentItems {
+            guard case .tool(_, let call) = item, call.diffs.contains(where: { $0.path == path }) else { continue }
+            sentItems[id] = nil
+            dirty = true
+        }
+        if dirty { scheduleFlush() }
     }
 
     private static func appendDelta(old: TranscriptItem, new: TranscriptItem) -> String? {

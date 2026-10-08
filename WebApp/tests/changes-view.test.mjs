@@ -27,7 +27,7 @@ globalThis.MutationObserver = class { observe() {} disconnect() {} }
 globalThis.getComputedStyle = () => ({ color: 'rgb(0, 0, 0)' })
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 
-const { DEMO_GIT_DIFF, DEMO_UNTRACKED } = await import('../src/demoChanges.ts')
+const { DEMO_GIT_DIFF, DEMO_UNTRACKED, DEMO_SESSION_EDITS } = await import('../src/demoChanges.ts')
 window.webkit = { messageHandlers: { aureways: { postMessage(m) {
   if (m.type !== 'rpc') return
   const result = m.method === 'git.diff' ? { repo: true, root: '/repo', branch: 'main', diff: DEMO_GIT_DIFF, untracked: DEMO_UNTRACKED } : []
@@ -182,4 +182,38 @@ test('diff tab: soft wrap by default with a remembered toggle, hunk bars, unchan
   await flush(() => wrap().click())
   assert.equal(store.get('aureways.diffWrap'), '1')
   render(null, root)
+})
+
+test('this-chat edits show whole-file line numbers when the native side located them', async () => {
+  const { transcript } = await import('../src/store.ts')
+  const demo = '/Users/demo/Aureways'
+  transcript.items = [{ kind: 'tool', id: 'edits', callId: 'edits', title: 'Edited', fullTitle: '', toolKind: 'edit', status: 'completed', layout: 'edit', progress: false, diffs: DEMO_SESSION_EDITS }]
+  transcript.version.value++
+  await mount(false, demo)
+  const modes = [...root.querySelectorAll('.changes button')].filter(el => el.textContent === 'This chat')
+  assert.equal(modes.length, 1)
+  await flush(() => modes[0].click())
+  const row = root.querySelector(`.change-row[data-path="${demo}/src/inspector/state.ts"]`)
+  assert.ok(row, 'session file listed')
+  await flush(() => row.click())
+  const tab = diffTabs().find(t => t.file.path === demo + '/src/inspector/state.ts')
+  assert.ok(tab)
+  render(null, root)
+  await flush(() => render(h(DiffPane, { file: tab.file }), root))
+  const hunks = [...root.querySelectorAll('.diff-lines > .hunk')]
+  assert.deepEqual(hunks.map(el => el.querySelector('.hunk-range').textContent), ['@@ -42,5 +42,6 @@', '@@ -118,4 +118,4 @@'])
+  assert.deepEqual(hunks.map(el => el.querySelector('.diff-gap')?.textContent), ['41 unchanged lines', '71 unchanged lines'])
+  const numbers = (el) => [...el.querySelectorAll('.dl-no')].map(n => n.textContent)
+  assert.deepEqual(numbers(hunks[0].querySelector('.dl')), ['42', '42'])
+  assert.deepEqual(numbers(hunks[0].querySelectorAll('.dl.ins')[1]), ['', '44'])
+  assert.deepEqual(numbers(hunks[1].querySelector('.dl.del')), ['120', ''])
+  // An edit the native side could not locate keeps its snippet-relative numbers.
+  const other = tab.file && DEMO_SESSION_EDITS.find(f => f.path.endsWith('/components/index.ts'))
+  render(null, root)
+  await flush(() => render(h(DiffPane, { file: other }), root))
+  assert.equal(root.querySelector('.hunk-range').textContent, '@@ -1,3 +1,4 @@')
+  assert.deepEqual(numbers(root.querySelector('.dl')), ['1', '1'])
+  render(null, root)
+  transcript.items = []
+  transcript.version.value++
 })

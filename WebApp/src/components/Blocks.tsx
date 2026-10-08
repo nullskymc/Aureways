@@ -4,6 +4,7 @@ import { duration, t } from '../i18n'
 import { MarkdownView } from '../markdown/render'
 import { app, now } from '../store'
 import { openFile } from '../inspector/state'
+import { withLineOffset } from '../inspector/diffModel'
 import type { Attachment, DiffFile, Item, ToolFields } from '../types'
 import { Icon, Spinner } from './Icon'
 import { memo, shallowEqual } from './memo'
@@ -446,8 +447,9 @@ function trimHunkLines(lines: string[], last: boolean): string[] {
   return lines
 }
 
-export function DiffView({ file, collapsible = false }: { file: DiffFile; collapsible?: boolean }) {
+export function DiffView({ file: raw, collapsible = false }: { file: DiffFile; collapsible?: boolean }) {
   const [open, setOpen] = useState(true)
+  const file = withLineOffset(raw)
   return (
     <div class="diff">
       <div class="diff-head">

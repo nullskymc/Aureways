@@ -138,6 +138,12 @@ export interface DiffFile {
   /** Rename source, same form as `path`. */
   oldPath?: string
   binary?: boolean
+  /**
+   * Transcript edits only: lines before the edited snippet in the whole file
+   * (0-based), found natively after the edit lands. Hunk numbers are
+   * snippet-relative until shifted by this; absent = not located.
+   */
+  lineOffset?: number
 }
 
 export interface ToolFields {

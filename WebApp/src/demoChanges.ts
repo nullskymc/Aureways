@@ -40,6 +40,10 @@ export const DEMO_SESSION_EDITS: DiffFile[] = [
   { path: root + 'WebApp/src/reader/paths.ts', added: PATHS_TS.length, removed: 0, truncated: false, isNew: true, hunks: [{ header: `@@ -0,0 +1,${PATHS_TS.length} @@`, oldStart: 0, newStart: 1, lines: PATHS_TS.map((line) => '+' + line) }] },
   { path: root + 'src/components/index.ts', added: 2, removed: 1, truncated: false, isNew: false, hunks: [{ header: '@@ -1,3 +1,4 @@', oldStart: 1, newStart: 1, lines: [' export const a = 1', '-export const b = 2', '+export const b = 3', '+export const c = 4'] }] },
   { path: root + 'src/inspector/index.ts', added: 1, removed: 0, truncated: false, isNew: false, hunks: [{ header: '@@ -1,2 +1,3 @@', oldStart: 1, newStart: 1, lines: [' export * from "./Changes"', ' export * from "./DiffPane"', '+export * from "./FileTree"'] }] },
+  // Two separate edits to one file, located natively in the whole file (lineOffset):
+  // their snippet-relative "@@ -1,5" ranges show as real lines 42 and 118.
+  { path: root + 'src/inspector/state.ts', added: 2, removed: 1, truncated: false, isNew: false, lineOffset: 41, hunks: [{ header: '@@ -1,5 +1,6 @@', oldStart: 1, newStart: 1, lines: [' export function openDiff(file: DiffFile) {', "-  const id = 'diff:' + file.path", '+  const id = diffTabId(file.path)', '+  if (focusTab(id)) return', "   placeOn(workbench.value, { kind: 'diff', id, file })", ' }', ' '] }] },
+  { path: root + 'src/inspector/state.ts', added: 1, removed: 1, truncated: false, isNew: false, lineOffset: 117, hunks: [{ header: '@@ -1,4 +1,4 @@', oldStart: 1, newStart: 1, lines: [' export function closeTab(id: string) {', '   const tabs = workbench.value.tabs', '-  const next = tabs.filter((tab) => tab.id != id)', '+  const next = tabs.filter((tab) => tab.id !== id)', '   workbench.value = { ...workbench.value, tabs: next }'] }] },
   { path: root + 'src/components/Badge.tsx', added: 5, removed: 0, truncated: false, isNew: true, hunks: [{ header: '@@ -0,0 +1,5 @@', oldStart: 0, newStart: 1, lines: ['+import { h } from "preact"', '+', '+export function Badge() {', '+  return <span class="badge" />', '+}'] }] },
 ]
 
