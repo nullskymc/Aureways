@@ -81,7 +81,6 @@ export function fileIcon(name: string): string {
   return 'file'
 }
 
-/** Merges the edits a chat made to the same path into one reviewable file. */
 /**
  * Moves a transcript edit's snippet-relative hunk numbers (and `@@` ranges) to
  * whole-file line numbers using its native `lineOffset`.
@@ -103,20 +102,6 @@ export function withLineOffset(file: DiffFile): DiffFile {
   }
 }
 
-export function mergeSessionEdits(lists: DiffFile[][]): DiffFile[] {
-  const files = new Map<string, DiffFile>()
-  for (const list of lists) for (const raw of list) {
-    const file = withLineOffset(raw)
-    const prev = files.get(file.path)
-    files.set(file.path, prev ? {
-      ...file, isNew: prev.isNew || file.isNew,
-      added: prev.added + file.added, removed: prev.removed + file.removed,
-      hunks: [...prev.hunks, ...file.hunks], truncated: prev.truncated || file.truncated,
-    } : file)
-  }
-  return [...files.values()]
-}
-
 /** `@@ -a,b +c,d @@ context` → the range part and the enclosing function/context text. */
 export function splitHunkHeader(header: string): { range: string; context: string } {
   const m = /^(@@ [^@]*@@)\s?(.*)$/.exec(header)
@@ -125,7 +110,7 @@ export function splitHunkHeader(header: string): { range: string; context: strin
 
 /**
  * Unchanged lines skipped before each hunk (old-file numbering). Unknown or
- * overlapping ranges (e.g. separate edits merged from a chat) count as 0.
+ * overlapping ranges count as 0.
  */
 export function unchangedBefore(hunks: DiffFile['hunks']): number[] {
   let end = 1

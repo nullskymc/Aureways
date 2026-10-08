@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEMO_GIT_DIFF, DEMO_SESSION_EDITS } from '../src/demoChanges.ts'
-import { splitHunkHeader, unchangedBefore, emptyBodyKey, fileIcon, fileStatus, mergeSessionEdits, parseUnifiedDiff, splitPath, withLineOffset } from '../src/inspector/diffModel.ts'
+import { splitHunkHeader, unchangedBefore, emptyBodyKey, fileIcon, fileStatus, parseUnifiedDiff, splitPath, withLineOffset } from '../src/inspector/diffModel.ts'
 
 const root = '/repo'
 const files = parseUnifiedDiff(DEMO_GIT_DIFF, root)
@@ -45,15 +45,6 @@ test('empty bodies explain renames', () => {
   assert.equal(emptyBodyKey(byPath('Aureways/Views/WebShellRoot.swift')), 'renamedOnly')
 })
 
-test('session edits to one path merge into one file with every hunk', () => {
-  const edit = (line, isNew = false) => ({ path: '/repo/a.ts', added: 1, removed: 0, truncated: false, isNew, hunks: [{ header: '@@', oldStart: 1, newStart: 1, lines: ['+' + line] }] })
-  const merged = mergeSessionEdits([[edit('one', true)], [edit('two')]])
-  assert.equal(merged.length, 1)
-  assert.equal(merged[0].added, 2)
-  assert.equal(merged[0].isNew, true)
-  assert.deepEqual(merged[0].hunks.map(h => h.lines[0]), ['+one', '+two'])
-})
-
 test('file icons follow the file type', () => {
   assert.deepEqual(['a.swift', 'b.md', 'c.png', 'Makefile'].map(fileIcon), ['code', 'text', 'image', 'file'])
 })
@@ -73,7 +64,7 @@ test('hunk headers split into range and context; skipped lines are counted betwe
   assert.deepEqual(splitHunkHeader('not a header'), { range: 'not a header', context: '' })
 })
 
-test('session edits move to whole-file line numbers with their native lineOffset', () => {
+test('chat edits move to whole-file line numbers with their native lineOffset', () => {
   const edit = { path: '/r/a.ts', added: 1, removed: 1, truncated: false, isNew: false, lineOffset: 41,
     hunks: [{ header: '@@ -1,3 +1,3 @@ fn', oldStart: 1, newStart: 1, lines: [' a', '-b', '+B', ' c'] }] }
   const shifted = withLineOffset(edit)
@@ -88,9 +79,6 @@ test('session edits move to whole-file line numbers with their native lineOffset
   assert.equal(withLineOffset({ ...edit, lineOffset: 0 }).hunks[0].header, '@@ -1,3 +1,3 @@ fn')
   assert.equal(withLineOffset({ ...edit, hunks: [{ header: '@@ -1 +1 @@', oldStart: 1, newStart: 1, lines: ['-b', '+B'] }] }).hunks[0].header, '@@ -42 +42 @@')
 
-  const merged = mergeSessionEdits([DEMO_SESSION_EDITS]).find(f => f.path.endsWith('/src/inspector/state.ts'))
-  assert.deepEqual(merged.hunks.map(h => h.header), ['@@ -42,5 +42,6 @@', '@@ -118,4 +118,4 @@'])
-  assert.deepEqual(unchangedBefore(merged.hunks), [41, 71])
-  assert.equal(merged.added, 3)
-  assert.equal(merged.removed, 2)
+  const located = DEMO_SESSION_EDITS.filter(f => f.path.endsWith('/src/inspector/state.ts')).map(withLineOffset)
+  assert.deepEqual(located.map(f => f.hunks[0].header), ['@@ -42,5 +42,6 @@', '@@ -118,4 +118,4 @@'])
 })
